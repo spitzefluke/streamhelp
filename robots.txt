@@ -4,5 +4,6 @@ Allow: /
 Disallow: /overlay.html
 Disallow: /record.html
 Disallow: /admin.html
+Disallow: /console-touch.html
 
 Sitemap: https://streamhelp.de/sitemap.xml

@@ -75,7 +75,10 @@ function normalize(c) {
   const goal = Number(d.goal);
   return {
     keys: nine,
-    display: { cards: [pick(cards[0], 'alert'), pick(cards[1], 'spin')], goal: Number.isFinite(goal) && goal >= 1 && goal <= 999 ? Math.round(goal) : DEFAULT_DISPLAY.goal },
+    display: {
+      cards: [pick(cards[0], 'alert'), pick(cards[1], 'spin')], goal: Number.isFinite(goal) && goal >= 1 && goal <= 999 ? Math.round(goal) : DEFAULT_DISPLAY.goal,
+      ...(d.touch && typeof d.touch === 'object' ? { touch: d.touch } : {}), // Touch-Bildschirm (js/dash-console-touch.js) unverändert mitspeichern
+    },
     kit: normalizeKit(c?.kit),
     updated_by: c?.updated_by ?? '', updated_at: c?.updated_at ?? null,
   };
@@ -340,7 +343,7 @@ function editor() {
 }
 
 function resetDefaults() {
-  draft = { ...normalize({ keys: CONSOLE_DEFAULT_KEYS, display: DEFAULT_DISPLAY }), kit: cfg.kit };
+  draft = { ...normalize({ keys: CONSOLE_DEFAULT_KEYS, display: { ...DEFAULT_DISPLAY, touch: cfg.display.touch } }), kit: cfg.kit };
   paint();
 }
 

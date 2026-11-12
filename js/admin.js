@@ -2,6 +2,7 @@
 import { CONFIG } from './config.js';
 import { createApi, germanError, isDemo } from './api.js';
 import { renderConsole } from './dash-console.js';
+import { renderTouchAdmin } from './dash-console-touch.js';
 import { createExtrasApi } from './extras-api.js';
 import { setChannel } from './channel.js';
 import { DEFAULT_VARIANTS } from './defaults.js';
@@ -1682,6 +1683,7 @@ const VIEWS = {
   artists: ['Artists', 'Bewerbungen freischalten und Uploads prüfen'],
   security: ['Sicherheit', 'Datenbank-Check und Anmelde-Möglichkeiten'],
   console: ['StreamHelp Console', 'Tasten belegen, 3D-Modell, Technik-Baukasten und Release-Check'],
+  touch: ['Touch-Bildschirm', 'Console · Oberfläche des Touch-Displays einstellen und im Simulator testen'],
 };
 
 const viewFromHash = () => {
@@ -1701,8 +1703,9 @@ function showView(id, scroll = true) {
   const [title, sub] = VIEWS[id];
   $('#adm-title').textContent = title;
   $('#adm-sub').textContent = sub;
-  $('#adm-title-badge').hidden = id !== 'console';
+  $('#adm-title-badge').hidden = id !== 'console' && id !== 'touch';
   if (id === 'console') openConsole();
+  if (id === 'touch') openTouch();
   document.title = `${title} · StreamHelp-Admin`;
   if (location.hash.slice(1) !== id) history.replaceState(null, '', `#${id}`);
   if (scroll) window.scrollTo(0, 0);
@@ -1890,11 +1893,13 @@ function setConsoleTab(tab) {
 }
 
 function paintConsoleChannels() {
-  const sel = $('#cs-channel');
   const active = (state.channels ?? []).filter((c) => c.status === 'active' && !c.is_default);
-  const keep = sel.value;
-  sel.replaceChildren(new Option('Standard-Kanal', ''), ...active.map((c) => new Option(c.display_name || c.login, c.id)));
-  sel.value = active.some((c) => c.id === keep) ? keep : '';
+  const keep = csState.channel?.id ?? '';
+  for (const sel of [$('#cs-channel'), $('#tch-channel')]) {
+    if (!sel) continue;
+    sel.replaceChildren(new Option('Standard-Kanal', ''), ...active.map((c) => new Option(c.display_name || c.login, c.id)));
+    sel.value = active.some((c) => c.id === keep) ? keep : '';
+  }
 }
 
 async function openConsole() {
@@ -1932,8 +1937,28 @@ async function openConsole() {
   });
 }
 
+// Touch-Bildschirm (Unterpunkt der Console): gleiche Sitzung, gleicher Kanal
+async function openTouch() {
+  const slot = $('#touch-slot');
+  paintConsoleChannels();
+  let api;
+  try {
+    api = await consoleApi();
+  } catch (err) {
+    if (err.status === 401) { logout(err.message); return; }
+    slot.replaceChildren(mkEl('p', 'muted', `Touch-Bildschirm nicht verfügbar: ${germanError(err)}`));
+    return;
+  }
+  if (state.view !== 'touch') return;
+  const ch = csState.channel;
+  setChannel(ch ? { id: ch.id, login: ch.login, display_name: ch.display_name } : null);
+  renderTouchAdmin(slot, { api, extras: csState.extras, toast, germanError, channel: () => csState.channel });
+}
+
 document.querySelectorAll('[data-cs-tab]').forEach((b) => b.addEventListener('click', () => setConsoleTab(b.dataset.csTab)));
-$('#cs-channel')?.addEventListener('change', (e) => {
-  csState.channel = (state.channels ?? []).find((c) => c.id === e.target.value) ?? null;
-  openConsole();
-});
+for (const [id, open] of [['#cs-channel', openConsole], ['#tch-channel', openTouch]]) {
+  $(id)?.addEventListener('change', (e) => {
+    csState.channel = (state.channels ?? []).find((c) => c.id === e.target.value) ?? null;
+    open();
+  });
+}
