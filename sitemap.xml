@@ -1,52 +1,52 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Öffentliche Seiten von StreamHelp (Werkzeugseiten wie overlay.html, record.html, admin.html sind noindex) -->
+<!-- Automatisch erzeugt von tools/publish-site.mjs: alle Seiten ohne noindex -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://streamhelp.de/</loc>
-    <lastmod>2026-10-08</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/datenschutz.html</loc>
-    <lastmod>2026-10-08</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/nutzungsbedingungen.html</loc>
-    <lastmod>2026-10-23</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/impressum.html</loc>
-    <lastmod>2026-10-15</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/sponsoring.html</loc>
-    <lastmod>2026-10-29</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/pad.html</loc>
-    <lastmod>2026-11-11</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/pro.html</loc>
-    <lastmod>2026-10-29</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/ueber-uns.html</loc>
-    <lastmod>2026-11-04</lastmod>
-  </url>
-  <url>
-    <loc>https://streamhelp.de/cookies.html</loc>
-    <lastmod>2026-11-04</lastmod>
+    <lastmod>2026-11-12</lastmod>
   </url>
   <url>
     <loc>https://streamhelp.de/agb.html</loc>
-    <lastmod>2026-11-04</lastmod>
+    <lastmod>2026-11-12</lastmod>
   </url>
   <url>
-    <loc>https://streamhelp.de/widerruf.html</loc>
-    <lastmod>2026-11-04</lastmod>
+    <loc>https://streamhelp.de/cookies.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/datenschutz.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/impressum.html</loc>
+    <lastmod>2026-11-12</lastmod>
   </url>
   <url>
     <loc>https://streamhelp.de/kuendigen.html</loc>
-    <lastmod>2026-11-04</lastmod>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/nutzungsbedingungen.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/pad.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/pro.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/sponsoring.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/ueber-uns.html</loc>
+    <lastmod>2026-11-12</lastmod>
+  </url>
+  <url>
+    <loc>https://streamhelp.de/widerruf.html</loc>
+    <lastmod>2026-11-12</lastmod>
   </url>
 </urlset>
