@@ -27,8 +27,10 @@ const keyIndex = (c) => {
 export async function mountConsole3d(host, { objText, keys, onKey, onScreen }) {
   T ??= await import('./vendor/three-console.min.js');
   disposeConsole3d();
+  // Größe aus der Breite der Karte; ist sie gerade versteckt (anderer Reiter), passt fit() sie später an
+  const heightFor = (w) => Math.round(Math.min(640, Math.max(320, w * 0.56)));
   const width = host.clientWidth || 640;
-  const height = Math.round(Math.min(460, Math.max(300, width * 0.62)));
+  const height = heightFor(width);
   const renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   renderer.setSize(width, height);
@@ -151,7 +153,21 @@ export async function mountConsole3d(host, { objText, keys, onKey, onScreen }) {
   controls.maxDistance = 700;
   controls.update();
 
-  view = { renderer, scene, camera, controls, keys: keyParts, canvas, texture, host, onKey, onScreen, tip, keyInfo: [], hover: -1, presses: new Map(), fly: null, glowOn: true, areas: [], side: { x: whole.min.x, minX: whole.min.x, maxX: whole.max.x, minY: whole.min.y, maxY: whole.max.y, z0: whole.min.z, zc: (baseBox.min.z + baseBox.max.z) / 2, lidTop }, rearPlate, screen, ports: null, box: null, look, glow: null, capRough: 0.6 };
+  // Immer im richtigen Seitenverhältnis: beim Sichtbarwerden und wenn sich die Breite ändert
+  let shown = [width, height];
+  const ro = new ResizeObserver(() => {
+    const w = host.clientWidth;
+    if (!w) return; // versteckt
+    const h = heightFor(w);
+    if (w === shown[0] && h === shown[1]) return;
+    shown = [w, h];
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  });
+  ro.observe(host);
+
+  view = { renderer, scene, camera, controls, ro, keys: keyParts, canvas, texture, host, onKey, onScreen, tip, keyInfo: [], hover: -1, presses: new Map(), fly: null, glowOn: true, areas: [], side: { x: whole.min.x, minX: whole.min.x, maxX: whole.max.x, minY: whole.min.y, maxY: whole.max.y, z0: whole.min.z, zc: (baseBox.min.z + baseBox.max.z) / 2, lidTop }, rearPlate, screen, ports: null, box: null, look, glow: null, capRough: 0.6 };
   // Leuchten je Taste: additive Fläche unter der Kappe (wie RGB-Licht, das rundherum auf den Deckel fällt)
   const haloTex = glowTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)', 0.0);
   keyParts.forEach((parts) => {
@@ -984,6 +1000,7 @@ export const console3dActive = () => !!view;
 
 export function disposeConsole3d() {
   if (!view) return;
+  view.ro?.disconnect();
   view.renderer.setAnimationLoop(null);
   view.controls.dispose();
   view.scene.traverse(disposeMesh);

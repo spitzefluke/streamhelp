@@ -3086,7 +3086,7 @@ body.obs-page .obs-insp-head { padding-bottom: 8px; border-bottom: 1px solid var
 }
 .cs-3d-host:empty { display: grid; place-items: center; }
 .cs-3d-host:empty::before { content: "🎛️"; font-size: 40px; opacity: .35; }
-.cs-3d-host canvas { display: block; width: 100% !important; cursor: grab; }
+.cs-3d-host canvas { display: block; width: 100% !important; height: auto !important; cursor: grab; } /* Seitenverhältnis bleibt immer erhalten */
 .cs-3d-host canvas:active { cursor: grabbing; }
 .cs-3d-host { position: relative; }
 .cs-3d-host canvas:focus-visible { outline: 3px solid var(--acc, #9146ff); outline-offset: -3px; }
