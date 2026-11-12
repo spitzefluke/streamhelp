@@ -1,0 +1,59 @@
+// Die neueren Content-Ideen auf der Webseite: Kacheln, Dialoge, Laden.
+// app.js ruft setupExtras() einmal beim Start und loadExtras() nach dem Anmelden.
+import { X, buildTile, paintTile } from './extras-core.js';
+import { createExtrasApi } from './extras-api.js';
+import { forbidden, pause, subathon } from './extras-live.js';
+import { queue, quiz } from './extras-play.js';
+import { cards, tts } from './extras-fun.js';
+import { guard } from './extras-guard.js';
+import { obsWatch } from './extras-obswatch.js';
+import { giveaway } from './extras-giveaway.js';
+import { hotwords } from './extras-hotwords.js';
+import { poll } from './extras-poll.js';
+import { counter } from './extras-counter.js';
+import { gamewheel } from './extras-gamewheel.js';
+import { heart } from './extras-heart.js';
+import { chatcontrol } from './extras-chatcontrol.js';
+import { cup } from './extras-cup.js';
+import { bet } from './extras-bet.js';
+import { scratch } from './extras-scratch.js';
+import { emoterain } from './extras-emoterain.js';
+
+export const EXTRAS = [forbidden, subathon, pause, quiz, queue, tts, cards, giveaway, hotwords, poll, counter, gamewheel, heart, chatcontrol, cup, bet, scratch, emoterain];
+export const EXTRA_KINDS = EXTRAS.map((f) => f.kind);
+const byKind = Object.fromEntries(EXTRAS.map((f) => [f.kind, f]));
+
+// ctx: Helfer aus app.js (state, toast, germanError, buildActionTile, tileByKind, isLocked, openTile)
+export function setupExtras(ctx) {
+  X.ctx = ctx;
+  for (const f of EXTRAS) f.setup();
+  guard.setup();
+  obsWatch.setup();
+}
+
+// Nach dem Anmelden: Daten laden (im Hintergrund, fehlende Migration → Kachel bleibt ruhig)
+export async function loadExtras() {
+  X.api ??= createExtrasApi(X.ctx.state.api);
+  await Promise.all([...EXTRAS, guard, obsWatch].map((f) => f.load().catch((err) => console.warn(`${f.kind ?? 'guard/obs'}:`, err))));
+}
+
+export const buildExtraTile = (tile, i) => buildTile(byKind[tile.kind], tile, i);
+export const openExtra = (kind) => byKind[kind]?.open();
+export const extraIcon = (kind) => byKind[kind]?.icon;
+export const paintExtraTiles = () => EXTRAS.forEach((f) => paintTile(f));
+export const renderGuard = () => { guard.render(); obsWatch.refresh(); };
+// Für die Console (js/dash-console.js): Raid-Schutz abfragen und umschalten (ohne Zeitlimit)
+export const guardActive = () => guard.active();
+export async function guardSet(on) {
+  X.api ??= createExtrasApi(X.ctx.state.api);
+  guard.data = await X.api.guard.set(on, 0);
+  guard.render();
+  return guard.active();
+}
+// OBS verbunden? (Anleitung im OBS-Editor) – wirft, solange die Migration fehlt oder niemand angemeldet ist
+export function obsStatus() {
+  X.api ??= createExtrasApi(X.ctx.state.api);
+  return X.api.obsWatch.status();
+}
+// Kanalpunkte-Belohnungen Vorlesen und Karten-Pack (für die Übersicht im Dashboard)
+export const listRewards = async () => (X.api ? X.api.rewards.list() : []);

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZarCAVuYaXeVM/QfQ1s7IHoh5QQkGwjHI3hjDErSb/w=' 'sha256-1dpdyh6JXtFZbzfkXFZ/xgAWfAwTqYsvf8/76+dJgcM='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="same-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OBS-Overlay · StreamHelp</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
+  <link rel="stylesheet" href="css/overlay.css?v=39b38e9d78">
+  <link rel="stylesheet" href="css/prank-fx.css?v=82d09df5b9">
+  <link rel="stylesheet" href="css/bingo.css?v=41f5ca23ab">
+  <link rel="stylesheet" href="css/pet.css?v=810a0995fc">
+  <link rel="stylesheet" href="css/shop.css?v=e8584edd68">
+  <link rel="stylesheet" href="css/challenge.css?v=4c0dae8d37">
+  <link rel="stylesheet" href="css/overlay-extras.css?v=7159aa16d0">
+  <link rel="stylesheet" href="css/overlay-stage.css?v=b3d5700a0d">
+  <link rel="stylesheet" href="css/overlay-hack.css?v=467947a7c0">
+  <!-- versions:start (node tools/stamp-versions.mjs) -->
+  <script type="importmap">{
+    "imports": {
+      "./js/admin.js": "./js/admin.js?v=814d4cb5c3",
+      "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
+      "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
+      "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
+      "./js/api.js": "./js/api.js?v=8c9c607e1b",
+      "./js/app.js": "./js/app.js?v=22a0d3e4c6",
+      "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
+      "./js/avatar.js": "./js/avatar.js?v=136eccd608",
+      "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
+      "./js/bot-plus.js": "./js/bot-plus.js?v=ced2515118",
+      "./js/bot-reasons.js": "./js/bot-reasons.js?v=e2e03e6022",
+      "./js/bot-studio.js": "./js/bot-studio.js?v=44a852cd77",
+      "./js/brand-colors.js": "./js/brand-colors.js?v=4cadf11bf4",
+      "./js/challenge.js": "./js/challenge.js?v=e9003437a5",
+      "./js/channel.js": "./js/channel.js?v=9ca5d517e8",
+      "./js/config.js": "./js/config.js?v=9983d070cb",
+      "./js/consent.js": "./js/consent.js?v=c698a67e69",
+      "./js/dash-artist.js": "./js/dash-artist.js?v=28e15868ab",
+      "./js/dash-bot.js": "./js/dash-bot.js?v=4f62b52221",
+      "./js/dash-console-3d.js": "./js/dash-console-3d.js?v=95387bdaf5",
+      "./js/dash-console-kit.js": "./js/dash-console-kit.js?v=cefbc93725",
+      "./js/dash-console-rear.js": "./js/dash-console-rear.js?v=13223a0473",
+      "./js/dash-console-spec.js": "./js/dash-console-spec.js?v=0dae1af8e8",
+      "./js/dash-console-survey.js": "./js/dash-console-survey.js?v=5ab919de44",
+      "./js/dash-console-tips.js": "./js/dash-console-tips.js?v=ea2871823b",
+      "./js/dash-console.js": "./js/dash-console.js?v=5dcb0be18e",
+      "./js/dash-discord.js": "./js/dash-discord.js?v=9526da96a9",
+      "./js/dash-money.js": "./js/dash-money.js?v=27c4d95119",
+      "./js/dash-network.js": "./js/dash-network.js?v=fec34b21f7",
+      "./js/dash-obsdata.js": "./js/dash-obsdata.js?v=800b31c135",
+      "./js/dash-profile.js": "./js/dash-profile.js?v=d64a161e18",
+      "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
+      "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
+      "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
+      "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
+      "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
+      "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
+      "./js/extras-core.js": "./js/extras-core.js?v=11e697c4d7",
+      "./js/extras-counter.js": "./js/extras-counter.js?v=f5ef93b3a8",
+      "./js/extras-cup.js": "./js/extras-cup.js?v=9eff968373",
+      "./js/extras-emoterain.js": "./js/extras-emoterain.js?v=260fb52829",
+      "./js/extras-fun.js": "./js/extras-fun.js?v=dcf17541ef",
+      "./js/extras-gamewheel.js": "./js/extras-gamewheel.js?v=f9e4229236",
+      "./js/extras-giveaway.js": "./js/extras-giveaway.js?v=f10ed16401",
+      "./js/extras-guard.js": "./js/extras-guard.js?v=6ef5d043e0",
+      "./js/extras-heart.js": "./js/extras-heart.js?v=c35e588fc4",
+      "./js/extras-hotwords.js": "./js/extras-hotwords.js?v=fea8926ca1",
+      "./js/extras-live.js": "./js/extras-live.js?v=869fb7dfb4",
+      "./js/extras-obswatch.js": "./js/extras-obswatch.js?v=a9ba0e26f0",
+      "./js/extras-play.js": "./js/extras-play.js?v=24950909df",
+      "./js/extras-poll.js": "./js/extras-poll.js?v=9d625d0b37",
+      "./js/extras-scratch.js": "./js/extras-scratch.js?v=3e50c227be",
+      "./js/extras.js": "./js/extras.js?v=c66aa479c2",
+      "./js/frame-guard.js": "./js/frame-guard.js?v=3a391987bd",
+      "./js/games.js": "./js/games.js?v=1dbc5571d9",
+      "./js/help.js": "./js/help.js?v=a68e78522c",
+      "./js/i18n-en.js": "./js/i18n-en.js?v=6aa4228ba4",
+      "./js/i18n-es.js": "./js/i18n-es.js?v=4415200ab7",
+      "./js/i18n-fr.js": "./js/i18n-fr.js?v=c02e19d138",
+      "./js/i18n-it.js": "./js/i18n-it.js?v=6f5fce0431",
+      "./js/i18n-keys.js": "./js/i18n-keys.js?v=4343221a2f",
+      "./js/i18n-nl.js": "./js/i18n-nl.js?v=ed1615425c",
+      "./js/i18n-pl.js": "./js/i18n-pl.js?v=ad60fb1f50",
+      "./js/i18n-pt.js": "./js/i18n-pt.js?v=f06dc4f210",
+      "./js/i18n-ru.js": "./js/i18n-ru.js?v=bed6b319a5",
+      "./js/i18n-tr.js": "./js/i18n-tr.js?v=5386bb6cdd",
+      "./js/i18n.js": "./js/i18n.js?v=4550a5388d",
+      "./js/intro.js": "./js/intro.js?v=91b52e9132",
+      "./js/kuendigen.js": "./js/kuendigen.js?v=0908c3d587",
+      "./js/landing.js": "./js/landing.js?v=d63600a119",
+      "./js/launch.js": "./js/launch.js?v=0fd38405df",
+      "./js/library.js": "./js/library.js?v=18de8e88ef",
+      "./js/look-builder.js": "./js/look-builder.js?v=7fb22ef480",
+      "./js/obs-setup.js": "./js/obs-setup.js?v=3ab00b3752",
+      "./js/obs-ws.js": "./js/obs-ws.js?v=d1b1d7463c",
+      "./js/overlay-anniversary.js": "./js/overlay-anniversary.js?v=697507dd0e",
+      "./js/overlay-emoterain.js": "./js/overlay-emoterain.js?v=ccb1b9951d",
+      "./js/overlay-extras.js": "./js/overlay-extras.js?v=0c14352815",
+      "./js/overlay-hack.js": "./js/overlay-hack.js?v=5ca451921f",
+      "./js/overlay-modules.js": "./js/overlay-modules.js?v=6cf132f959",
+      "./js/overlay-stage.js": "./js/overlay-stage.js?v=1709d9784b",
+      "./js/overlay-usage.js": "./js/overlay-usage.js?v=c51b368be2",
+      "./js/overlay.js": "./js/overlay.js?v=cb7c070e07",
+      "./js/pad-page.js": "./js/pad-page.js?v=af20dc7ced",
+      "./js/pet-species.js": "./js/pet-species.js?v=ccc5a9c9c9",
+      "./js/pet.js": "./js/pet.js?v=d40129fa2c",
+      "./js/platform-gate.js": "./js/platform-gate.js?v=f7bbf2bf31",
+      "./js/platform-notices.js": "./js/platform-notices.js?v=2e1994fbf3",
+      "./js/prank-fx.js": "./js/prank-fx.js?v=1c40a17a79",
+      "./js/pro-page.js": "./js/pro-page.js?v=65432d25d3",
+      "./js/pro.js": "./js/pro.js?v=bb9c3d3509",
+      "./js/profile.js": "./js/profile.js?v=179c7737c3",
+      "./js/questions.js": "./js/questions.js?v=9749040be0",
+      "./js/random.js": "./js/random.js?v=15aa4d00fa",
+      "./js/record.js": "./js/record.js?v=1cd418223e",
+      "./js/rexi-sfx.js": "./js/rexi-sfx.js?v=a1036a43c2",
+      "./js/screen-holes.js": "./js/screen-holes.js?v=ebb20f0416",
+      "./js/secret-store.js": "./js/secret-store.js?v=086d5c4808",
+      "./js/security.js": "./js/security.js?v=f63e349e70",
+      "./js/shop.js": "./js/shop.js?v=fcc50151a8",
+      "./js/social-icons.js": "./js/social-icons.js?v=5a363186bc",
+      "./js/sponsor-files.js": "./js/sponsor-files.js?v=b7abefe613",
+      "./js/sponsoring.js": "./js/sponsoring.js?v=7572e11dab",
+      "./js/supabase-js.js": "./js/supabase-js.js?v=397c32fbeb",
+      "./js/theme-packs.js": "./js/theme-packs.js?v=90faabe1ce",
+      "./js/ticker.js": "./js/ticker.js?v=f42d43ff2c",
+      "./js/tour.js": "./js/tour.js?v=c499758325",
+      "./js/tts-voice.js": "./js/tts-voice.js?v=3a37b18618",
+      "./js/twitch-chat.js": "./js/twitch-chat.js?v=1b6eb8553c",
+      "./js/watch-import.js": "./js/watch-import.js?v=ee7e14f2c7",
+      "./js/wheel.js": "./js/wheel.js?v=d81e65a827",
+      "./js/youtube-chat.js": "./js/youtube-chat.js?v=bf81b00d4e",
+      "./js/youtube-connect.js": "./js/youtube-connect.js?v=dee2b757f5",
+      "./js/vendor/three-console.min.js": "./js/vendor/three-console.min.js?v=fdeadfdf0e",
+      "./js/vendor/yami-landing.js": "./js/vendor/yami-landing.js?v=3fa958ca19"
+    }
+  }</script>
+  <script type="module">import './js/overlay.js';</script>
+  <!-- versions:end -->
+</head>
+<!-- Als Browserquelle in OBS einbinden (1920 × 1080). Der Hintergrund ist
+     durchsichtig, sichtbar sind nur die beiden Karten. Optionen stehen in js/overlay.js,
+     die Adresse baut der OBS-Dialog im Dashboard. -->
+<body>
+
+  <!-- Ärgere den Streamer: Würfe landen auf seiner Kamera (Bereich per ?cam=) -->
+  <div class="ov-pranks" id="ov-pranks" aria-hidden="true">
+    <div class="ov-prank-feed" id="ov-prank-feed"></div>
+  </div>
+
+  <!-- Glücksrad: erscheint nur, wenn gedreht wird -->
+  <section class="ov-card ov-spin" id="ov-spin" aria-live="polite">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span id="ov-wlabel">Glücksrad</span>
+      <span class="ov-sep" aria-hidden="true">·</span>
+      <span class="ov-who" id="ov-who"></span>
+    </header>
+    <div class="ov-spin-body">
+      <div class="ov-wheel">
+        <span class="ov-pointer" id="ov-pointer" aria-hidden="true"></span>
+        <canvas id="ov-canvas" aria-hidden="true"></canvas>
+        <span class="ov-hub" aria-hidden="true"><img src="assets/favicon.svg" alt=""></span>
+      </div>
+      <div class="ov-text">
+        <p class="ov-variant" id="ov-variant"></p>
+        <p class="ov-status" id="ov-status">Das Rad dreht sich …</p>
+        <p class="ov-result" id="ov-result"></p>
+        <p class="ov-bonus" id="ov-bonus" hidden></p>
+        <p class="ov-detail" id="ov-detail"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Als Nächstes: wechselt durch die kommenden Content-Ideen -->
+  <section class="ov-card ov-next" id="ov-next" hidden>
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span id="ov-nlabel">Als Nächstes</span>
+      <span class="ov-sep" aria-hidden="true">·</span>
+      <span id="ov-next-date"></span>
+    </header>
+    <div class="ov-next-body" id="ov-next-body">
+      <p class="ov-next-title" id="ov-next-title"></p>
+      <div class="ov-countdown" id="ov-countdown">
+        <span><b></b><i>Tage</i></span>
+        <span><b></b><i>Std</i></span>
+        <span><b></b><i>Min</i></span>
+        <span><b></b><i>Sek</i></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fortnite-Bingo: die aktuelle Karte mit den abgehakten Items -->
+  <section class="ov-card ov-bingo" id="ov-bingo" hidden>
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span id="ov-blabel">Fortnite-Bingo</span>
+      <span class="ov-sep" aria-hidden="true">·</span>
+      <span class="ov-who" id="ov-bingo-progress"></span>
+    </header>
+    <div class="ov-bingo-body">
+      <p class="ov-bingo-bet" id="ov-bingo-bet" hidden></p>
+      <div class="bingo-grid" id="ov-bingo-grid"></div>
+      <div class="ov-bingo-win" id="ov-bingo-win" aria-hidden="true">Bingo!</div>
+    </div>
+  </section>
+
+  <!-- Unangenehme Fragen: die Frage, die der Streamer gerade beantworten muss -->
+  <section class="ov-card ov-quest" id="ov-quest" hidden aria-live="polite">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span>Unangenehme Frage</span>
+      <span class="ov-sep" aria-hidden="true">·</span>
+      <span class="qcard-author"></span>
+    </header>
+    <div class="ov-quest-body">
+      <p class="qcard-text"></p>
+      <p class="qcard-result" hidden></p>
+    </div>
+  </section>
+
+  <!-- Kisten-Shop: die Runde des Streamers (Goldbarren, gekaufte Items, gefunden), im Koop-Duell das Tauziehen -->
+  <section class="ov-card ov-shop" id="ov-shop" hidden aria-live="polite">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span>Kisten-Shop</span>
+      <span class="ov-sep" aria-hidden="true">·</span>
+      <span class="ov-who" id="ov-shop-status"></span>
+    </header>
+    <div class="ov-shop-body">
+      <div class="ov-shop-top">
+        <span class="ov-shop-coins" id="ov-shop-coins"></span>
+        <span class="ov-shop-score" id="ov-shop-score"></span>
+      </div>
+      <div class="tug ov-shop-tug" id="ov-shop-tug" hidden></div>
+      <ul class="loadout ov-shop-list" id="ov-shop-list"></ul>
+      <ol class="shop-board ov-shop-board" id="ov-shop-board" hidden></ol>
+    </div>
+  </section>
+
+  <!-- Win-Challenge: aktuelle Stufe, Siege, Leben, Fortschritt -->
+  <section class="ov-card ov-challenge" id="ov-challenge" hidden aria-live="polite">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span id="ov-ch-title">Win-Challenge</span>
+      <span class="ov-sep" aria-hidden="true">·</span>
+      <span class="ov-who" id="ov-ch-step"></span>
+    </header>
+    <div class="ov-ch-body">
+      <div class="ov-ch-stage">
+        <span class="ov-ch-icon" id="ov-ch-icon" aria-hidden="true"></span>
+        <span class="ov-ch-name"><b id="ov-ch-name"></b><small id="ov-ch-vs"></small></span>
+      </div>
+      <div class="ov-ch-row">
+        <span class="ov-ch-pips" id="ov-ch-pips"></span>
+        <span class="ch-hearts ov-ch-hearts" id="ov-ch-hearts"></span>
+      </div>
+      <div class="ov-ch-track" id="ov-ch-track" aria-hidden="true"></div>
+    </div>
+  </section>
+  <!-- Große Effekte der Win-Challenge (Stufe geschafft, Challenge geschafft/gescheitert) -->
+  <div class="ov-ch-fx" id="ov-ch-fx"></div>
+
+  <!-- Alerts: springt nur bei neuen Followern, Abos, Resubs, verschenkten Abos und Bits auf -->
+  <section class="ov-card ov-alert" id="ov-alert" aria-live="polite">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span>Alert</span>
+    </header>
+    <div class="ov-al-show">
+      <div class="ov-al-media" id="ov-al-media" aria-hidden="true"></div>
+      <span class="ov-al-icon" id="ov-al-icon"></span>
+      <span class="ov-al-title" id="ov-al-title"></span>
+      <b class="ov-al-name" id="ov-al-name"></b>
+      <span class="ov-al-sub" id="ov-al-sub-text"></span>
+    </div>
+    <div class="ov-al-fx" id="ov-al-fx" aria-hidden="true"></div>
+    <i class="ov-al-timer" aria-hidden="true"></i>
+  </section>
+
+  <!-- Letzter Follower, letztes Abo, letzte Bits: eigene, dauerhaft sichtbare Karte -->
+  <section class="ov-card ov-recent" id="ov-recent">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span>Zuletzt</span>
+    </header>
+    <div class="ov-rc-body">
+      <p class="ov-rc-row" id="ov-rc-follow-row"><span>💜 Letzter Follower</span><b id="ov-al-follow">–</b></p>
+      <p class="ov-rc-row" id="ov-rc-sub-row"><span>⭐ Letztes Abo</span><b id="ov-al-sub">–</b></p>
+      <p class="ov-rc-row" id="ov-rc-bits-row"><span>💎 Letzte Bits</span><b id="ov-al-bits">–</b></p>
+    </div>
+  </section>
+
+  <!-- Twitch-Chat: liest den Chat des Kanals anonym mit (js/twitch-chat.js) -->
+  <section class="ov-card ov-chat" id="ov-chat" aria-label="Twitch-Chat">
+    <header class="ov-head">
+      <span class="ov-dot" aria-hidden="true"></span>
+      <span>Chat</span>
+    </header>
+    <div class="chat-status" id="ov-chat-status" hidden></div>
+    <div class="chat-list" id="ov-chat-list" aria-live="off"></div>
+  </section>
+
+  <!-- Laufband: andere Seiten und Socials, immer an (verschiebbar im OBS-Dialog) -->
+  <section class="ov-card ov-ticker" id="ov-ticker" aria-label="Laufband">
+    <span class="ticker-label" id="ov-ticker-label">Mehr vom Streamer</span>
+    <div class="ticker-view"><div class="ticker-track" id="ov-ticker-track"></div></div>
+  </section>
+
+  <!-- Der Stream-Dino läuft unten durchs Bild -->
+  <div class="ov-pet" id="ov-pet" aria-hidden="true"></div>
+
+</body>
+</html>

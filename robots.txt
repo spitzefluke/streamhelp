@@ -1,0 +1,8 @@
+# StreamHelp (streamhelp.de) – Werkzeugseiten gehören nicht in Suchmaschinen.
+User-agent: *
+Allow: /
+Disallow: /overlay.html
+Disallow: /record.html
+Disallow: /admin.html
+
+Sitemap: https://streamhelp.de/sitemap.xml

@@ -1,0 +1,2972 @@
+// Datenzugriff: Supabase (Live) oder localStorage (Demo).
+// Beide Varianten haben dieselbe Schnittstelle, damit app.js nichts davon wissen muss.
+import { CONFIG } from './config.js';
+import { alertFeed, channelFetch, current as channel, rtSpec, storageFolder } from './channel.js';
+import { BOARD } from './prank-fx.js';
+import { DEFAULT_TILES, DEFAULT_VARIANTS, DEFAULT_IDEAS } from './defaults.js';
+import { betLines, drawCard, fullBetLines } from './bingo.js';
+import { randomInt, shuffled } from './random.js';
+import { COSTUMES, DEFAULT_PET } from './pet.js';
+import { advanceStage, isSpecies } from './pet-species.js';
+import { DEFAULT_STAGE } from './questions.js';
+import { DEFAULT_TICKER } from './ticker.js';
+import { DEFAULT_SHOP } from './shop.js';
+import { DEFAULT_CHALLENGE, applyResult, gotoStage, resetChallenge, saveChallenge, undoChallenge } from './challenge.js';
+import { DEMO_ARTIST_ID, demoSeedPath } from './artist-files.js';
+
+// Demo: Beispiel-Designs eines Artists in der Design-Bibliothek (Dateien aus assets/, js/artist-files.js)
+const DEMO_GALLERY = (() => {
+  const artist = { name: 'PixelPinsel', slug: 'pixel-pinsel', links: ['https://example.com/pixelpinsel'] };
+  const at = '2026-10-20T12:00:00.000Z';
+  const x = (n, kind, title, description, tags, extra = {}, uses = 0) => ({
+    asset: { id: `${DEMO_ARTIST_ID.slice(0, 24)}${String(n).padStart(12, '0')}`, kind, title, description, tags, file: demoSeedPath(n), extra, uses, created_at: at, approved_at: at },
+    artist,
+  });
+  return [
+    x(1, 'alert', 'Vinyl-Dreher', 'Schallplatte für entspannte Follows.', ['lofi', 'musik'], {}, 12),
+    x(2, 'background', 'Nachtcafé', 'Ruhiger Szenen-Hintergrund für Pausen.', ['lofi', 'chill'], {}, 8),
+    x(3, 'look', 'Neon-Gassen', 'Cyberpunk-Look mit Chip-Alert.', ['cyberpunk', 'neon'], { base: 'cyberpunk', accent: '#fcee0a', alert: demoSeedPath(4) }, 5),
+    x(5, 'card', 'Kirschblüte', 'Sammelkarte im Manga-Stil.', ['manga'], { rarity: 'epic', emoji: '🌸' }, 3),
+  ];
+})();
+
+export const isDemo = !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY;
+
+export function createApi() {
+  return isDemo ? createLocalApi() : createSupabaseApi();
+}
+
+// Supabase-Fehlermeldungen auf Deutsch
+const ERRORS = [
+  [/could not find the '(species|stage|hatch_feeds|grow_days|stage_feeds|good_days)' column|column [\w.]*"?(species|stage|hatch_feeds|grow_days)"? (of relation "pet" )?does not exist/i, 'In der Datenbank fehlen die neuen Haustiere (Tierwahl, Ei → Baby → Erwachsen): supabase/migrations/20261021000000_pet_species.sql im SQL Editor ausführen.'],
+  [/pet_species_check/i, 'Dieses Tier gibt es nicht.'],
+  [/pet_hatch_feeds_check/i, 'Schlüpfen nach 5 bis 500 × Füttern.'],
+  [/pet_grow_days_check/i, 'Wachsen nach 1 bis 30 Streams.'],
+  // Supabase konnte den Code von Twitch & Co. nicht gegen ein Token tauschen: fast immer passt
+  // das Client-Secret in Supabase nicht (mehr) zur App beim Anbieter
+  [/unable to exchange external code/i, 'Der Anbieter hat die Anmeldung nicht bestätigt. In Supabase unter Authentication → Providers → Twitch stimmt das Client-Secret nicht (mehr) mit der Twitch-App überein – z. B. nach „Neues Secret“ in der Twitch-Konsole. Secret neu eintragen, dann klappt es wieder.'],
+  [/could not find the function '?public\.(profile_get|profile_save|schedule_save|public_profile)/i, 'In der Datenbank fehlen Profil und Zeitplan: supabase/migrations/20261129000000_profile_schedule.sql im SQL Editor ausführen.'],
+  [/invalid login credentials/i, 'E-Mail oder Passwort ist falsch.'],
+  [/already registered|already been registered/i, 'Diese E-Mail ist bereits registriert.'],
+  [/password should be at least (\d+)/i, 'Das Passwort ist zu kurz.'],
+  [/password is known to be weak|weak.?password|pwned/i, 'Dieses Passwort ist bekannt geworden oder zu leicht zu erraten – bitte ein anderes nehmen.'],
+  [/email not confirmed/i, 'Bitte bestätige zuerst den Link in deiner E-Mail.'],
+  [/rate limit|too many/i, 'Zu viele Versuche. Bitte kurz warten.'],
+  [/unable to validate email|invalid.*email/i, 'Diese E-Mail-Adresse ist ungültig.'],
+  [/function ?not ?found|function \S+ not found|\bnot found\b.*function/i, 'Die Edge Function gibt es in Supabase (noch) nicht. Sie wird beim Merge automatisch hochgeladen (GitHub → Actions → „Edge Functions deployen“).'],
+  [/failed to send a request to the edge function/i, 'Keine Antwort von der Edge Function. Bitte gleich noch einmal versuchen; bleibt es dabei, Werbeblocker ausschalten und in Supabase die Logs der Function ansehen.'],
+  [/column "kind"|twitch_bot/i, 'In der Datenbank fehlt die Erweiterung für den Chat-Bot: supabase/migrations/20260923120000_chat_bot.sql im SQL Editor ausführen.'],
+  [/relation "public\.(pranks|sounds|prank_settings)"|could not find the (table|function) '?public\.(pranks|sounds|prank_settings|send_prank)|bucket not found/i, 'In der Datenbank fehlt „Ärgere den Streamer“: supabase/migrations/20260924000000_pranks.sql im SQL Editor ausführen.'],
+  [/bingo_player_cards/i, 'In der Datenbank fehlen die eigenen Bingo-Karten: supabase/migrations/20260925000000_channel_points.sql im SQL Editor ausführen.'],
+  [/relation "public\.(questions|question_stage)"|could not find the (table|function) '?public\.(questions|question_stage|question_show|question_resolve|question_hide)/i, 'In der Datenbank fehlen „Unangenehme Fragen“: supabase/migrations/20260928000000_questions_pet.sql im SQL Editor ausführen.'],
+  [/feed_command|pet_feed_command/i, 'In der Datenbank fehlt der Chat-Befehl für den Dino: supabase/migrations/20260930000000_live_overlay.sql im SQL Editor ausführen.'],
+  [/relation "public\.overlay_config"|could not find the (table|function) '?public\.(overlay_config|overlay_access|overlay_save|overlay_allow_admins)/i, 'In der Datenbank fehlt das Live-Overlay: supabase/migrations/20260930000000_live_overlay.sql im SQL Editor ausführen.'],
+  [/could not find the function '?public\.(shop_join_lobby|shop_leave_lobby|shop_start_lobby|shop_lobby_tick)|column .*(started_at|vs_at|chests_until)/i, 'In der Datenbank fehlt das Koop-Duell im Kisten-Shop: supabase/migrations/20261002000000_shop_versus.sql im SQL Editor ausführen.'],
+  [/relation "public\.win_challenge"|could not find the (table|function) '?public\.(win_challenge|challenge_)/i, 'In der Datenbank fehlt die Win-Challenge: supabase/migrations/20261003000000_win_challenge.sql im SQL Editor ausführen.'],
+  [/could not find the function '?public\.shop_lobby_by_(code|id)/i, 'In der Datenbank fehlt eine Sicherheits-Anpassung für den Kisten-Shop: supabase/migrations/20261008000000_shop_lobby_access.sql im SQL Editor ausführen.'],
+  [/relation "public\.shop_|could not find the (table|function) '?public\.(shop_)/i, 'In der Datenbank fehlt der Kisten-Shop: supabase/migrations/20261001000000_loot_shop.sql im SQL Editor ausführen.'],
+  [/relation "public\.(alert_config|alert_media)"|could not find the table '?public\.(alert_config|alert_media)/i, 'In der Datenbank fehlt der Alert-Designer: supabase/migrations/20261018000000_overlay_designs.sql im SQL Editor ausführen.'],
+  [/relation "public\.alert_sounds"|could not find the table '?public\.alert_sounds|stream_alerts_kind_check/i, 'In der Datenbank fehlen Bits und eigene Alert-Sounds: supabase/migrations/20261009000000_alert_bits_sounds.sql im SQL Editor ausführen.'],
+  [/relation "public\.stream_alerts"|could not find the (table|function) '?public\.(stream_alerts|alert_test|alerts_status)/i, 'In der Datenbank fehlen die Alerts: supabase/migrations/20261005000000_stream_alerts.sql im SQL Editor ausführen.'],
+  [/column .*bonus|'bonus' column/i, 'In der Datenbank fehlt das zweite Glücksrad: supabase/migrations/20261007000000_wheel_bonus.sql im SQL Editor ausführen.'],
+  [/could not find the function '?public\.wheel_variants_save/i, 'In der Datenbank fehlt das Bearbeiten des Glücksrads: supabase/migrations/20261006000000_wheel_edit.sql im SQL Editor ausführen.'],
+  [/relation "public\.ticker"|could not find the table '?public\.ticker/i, 'In der Datenbank fehlt das Laufband: supabase/migrations/20260929000000_ticker.sql im SQL Editor ausführen.'],
+  [/could not find the '(costume|costume_command|costume_cooldown|costume_changed_at|frenzy_at)' column|column [\w.]*"?(costume|costume_command|costume_cooldown|frenzy_at)"? (of relation "pet" )?does not exist|could not find the function '?public\.(pet_frenzy|pet_costume)|pet_events_kind_check/i, 'In der Datenbank fehlen Rexis Kostüme und der Heißhunger-Knopf: supabase/migrations/20261011000000_pet_costume.sql im SQL Editor ausführen.'],
+  [/could not find the function '?public\.(streamer_info|my_access|overlay_allow_mods)|relation "public\.channel_mods"|could not find the table '?public\.channel_mods|column [\w.]*"?mods_enabled/i, 'In der Datenbank fehlen Streameransicht und Mods-Freigabe: supabase/migrations/20261012000000_streamer_mods.sql im SQL Editor ausführen.'],
+  [/relation "public\.(pet|pet_events)"|could not find the (table|function) '?public\.(pet|pet_events|pet_action|pet_say)\b/i, 'In der Datenbank fehlt der Dino: supabase/migrations/20260928000000_questions_pet.sql im SQL Editor ausführen.'],
+  [/column .*bet\b|'bet' column/i, 'In der Datenbank fehlt die Tipprunde: supabase/migrations/20260926120000_bingo_bet.sql im SQL Editor ausführen.'],
+  [/column .*\b(vault|image_key)\b|'(vault|image_key)' column/i, 'In der Datenbank fehlt der Item-Tresor fürs Bingo: supabase/migrations/20261022000000_bingo_vault.sql im SQL Editor ausführen.'],
+  [/column .*amount|'amount' column/i, 'In der Datenbank fehlt die Zahl im Icon fürs Bingo: supabase/migrations/20260926000000_bingo_amount.sql im SQL Editor ausführen.'],
+  [/column .*rarity|'rarity' column/i, 'In der Datenbank fehlt die Seltenheit fürs Bingo: supabase/migrations/20260925120000_bingo_rarity.sql im SQL Editor ausführen.'],
+  [/relation "public\.bingo_(items|card)"|could not find the (table|function) '?public\.bingo_/i, 'In der Datenbank fehlt das Fortnite-Bingo: supabase/migrations/20260924120000_bingo.sql im SQL Editor ausführen.'],
+  [/exceeded the maximum allowed size|payload too large|entity too large/i, 'Die Datei ist zu groß (höchstens 1 MB).'],
+  [/mime type|invalid.*content.?type/i, 'Dieses Dateiformat geht nicht. Bitte MP3, OGG, WAV oder M4A nehmen.'],
+  [/row-level security/i, 'Das ist gerade nicht erlaubt.'],
+  [/failed to fetch|networkerror/i, 'Keine Verbindung zum Server.'],
+  [/provider is not enabled|unsupported provider/i, 'Diese Anmelde-Möglichkeit ist noch nicht eingerichtet.'],
+  [/access.denied|user denied|cancel/i, 'Anmeldung abgebrochen.'],
+  [/email.*(not|kein).*(provided|available)|missing email/i, 'Der Anbieter hat keine E-Mail-Adresse geliefert. Bitte eine andere Möglichkeit wählen.'],
+];
+// Funktion gibt es (noch) nicht in der Datenbank – Migration fehlt
+export function missingFunction(error) {
+  return error?.code === 'PGRST202' || /could not find the function/i.test(error?.message ?? '');
+}
+
+export function germanError(err) {
+  const msg = err?.message ?? String(err);
+  return ERRORS.find(([re]) => re.test(msg))?.[1] ?? msg;
+}
+
+// ------------------------------------------------------------
+// Supabase
+// ------------------------------------------------------------
+async function createSupabaseApi() {
+  const { createClient } = await import('./supabase-js.js');
+  // Jede Anfrage trägt den Kanal (Header x-channel, js/channel.js)
+  const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { global: { fetch: channelFetch } });
+  const unwrap = ({ data, error }) => { if (error) throw error; return data; };
+
+  // Edge Function aufrufen. Kommt gar keine Antwort (Netzwerk, Kaltstart-Aussetzer, Werbeblocker),
+  // versucht es die Seite bei twitch-oauth (nur Einstellungen und Prüfungen) einmal von selbst neu –
+  // nicht bei spin oder bingo-bet, die würden sonst doppelt drehen bzw. starten.
+  const RETRY_ON_NO_ANSWER = new Set(['twitch-oauth', 'stream-tools']);
+  async function invoke(name, body, headers) {
+    const opts = headers ? { body, headers } : { body };
+    let { data, error } = await sb.functions.invoke(name, opts);
+    if (error?.name === 'FunctionsFetchError' && RETRY_ON_NO_ANSWER.has(name)) {
+      await new Promise((r) => setTimeout(r, 1200));
+      ({ data, error } = await sb.functions.invoke(name, opts));
+    }
+    if (!error) return data;
+    if (error.name === 'FunctionsFetchError') {
+      throw new Error(`Keine Antwort von der Edge Function „${name}“. Meist ein kurzer Aussetzer bei Supabase – bitte gleich noch einmal versuchen. `
+        + `Bleibt es dabei: Werbeblocker für diese Seite ausschalten und in Supabase unter Edge Functions → ${name} → Logs nachsehen.`);
+    }
+    if (error.name === 'FunctionsRelayError') {
+      throw new Error(`Supabase konnte die Edge Function „${name}“ gerade nicht erreichen. Bitte gleich noch einmal versuchen.`);
+    }
+    // Antwort mit Fehlercode: unsere Functions schicken {error}, Supabase selbst {message} oder {msg}
+    let message = error.message;
+    const status = error.context?.status;
+    try {
+      const j = await error.context.json();
+      message = j.error ?? j.message ?? j.msg ?? message;
+    } catch { /* keine JSON-Antwort */ }
+    if (status === 404 && /not found/i.test(message)) message = `Function ${name} not found`;
+    else if ([502, 503, 504, 546].includes(status) && message === error.message) {
+      message = `Die Edge Function „${name}“ hat nicht rechtzeitig geantwortet (Status ${status}). Bitte gleich noch einmal versuchen; sonst in Supabase unter Edge Functions → ${name} → Logs nachsehen.`;
+    }
+    throw new Error(message);
+  }
+
+  return {
+    demo: false,
+    // Für die neueren Content-Ideen (js/extras-api.js)
+    raw: { sb, unwrap, invoke },
+    // authError: warum aus dem Rückweg vom Anbieter-Login keine Sitzung wurde
+    // (sonst landet man ohne Hinweis wieder auf der Startseite)
+    authError: '',
+    async getUser() {
+      const { error: initError } = await sb.auth.initialize();
+      const { data, error } = await sb.auth.getSession();
+      this.authError = (initError ?? error)?.message ?? '';
+      return data.session?.user ?? null;
+    },
+    onAuthChange(cb) {
+      sb.auth.onAuthStateChange((_event, session) => cb(session?.user ?? null));
+    },
+    // captchaToken: Bot-Schutz (Cloudflare Turnstile), nur wenn in js/config.js eingerichtet
+    async signIn(email, password, captchaToken) {
+      unwrap(await sb.auth.signInWithPassword({ email, password, options: captchaToken ? { captchaToken } : {} }));
+    },
+    async signUp(username, email, password, captchaToken) {
+      const data = unwrap(await sb.auth.signUp({
+        email,
+        password,
+        options: { data: { username }, emailRedirectTo: location.origin + location.pathname, ...(captchaToken ? { captchaToken } : {}) },
+      }));
+      return { needsConfirmation: !data.session };
+    },
+    // Welche Social-Logins sind in Supabase eingeschaltet?
+    async authProviders() {
+      const res = await fetch(`${CONFIG.SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: CONFIG.SUPABASE_ANON_KEY } });
+      if (!res.ok) return {};
+      return (await res.json()).external ?? {};
+    },
+    async signInWithProvider(provider) {
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: location.origin + location.pathname, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+      try { sessionStorage.setItem('zd_oauth_login', provider); } catch { /* egal */ }
+      location.href = data.url;
+    },
+    // Einmal-Code aus admin.html einlösen → echte Sitzung als StreamHelp-Admin
+    async adminSiteLogin(tokenHash) {
+      unwrap(await sb.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' }));
+    },
+    async signOut() { await sb.auth.signOut(); },
+
+    // ---------- Sicherheit (Migration …_security.sql) ----------
+    // Zwei-Faktor-Anmeldung mit Authenticator-App (TOTP, eingebaut in Supabase Auth)
+    async mfaStatus() {
+      const { data: aal, error } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error) throw error;
+      const { data: f, error: e2 } = await sb.auth.mfa.listFactors();
+      if (e2) throw e2;
+      return { current: aal.currentLevel, next: aal.nextLevel, factors: (f?.totp ?? []).filter((x) => x.status === 'verified') };
+    },
+    async mfaEnroll() {
+      // Nie bestätigte Versuche aufräumen – sonst lehnt Supabase einen neuen ab
+      const { data: f } = await sb.auth.mfa.listFactors();
+      for (const x of (f?.all ?? []).filter((x) => x.factor_type === 'totp' && x.status !== 'verified')) {
+        await sb.auth.mfa.unenroll({ factorId: x.id });
+      }
+      const data = unwrap(await sb.auth.mfa.enroll({ factorType: 'totp', issuer: 'StreamHelp', friendlyName: `StreamHelp ${Date.now().toString(36)}` }));
+      return { id: data.id, qr: data.totp.qr_code, secret: data.totp.secret };
+    },
+    async mfaVerify(factorId, code) {
+      unwrap(await sb.auth.mfa.challengeAndVerify({ factorId, code }));
+    },
+    async mfaUnenroll(factorId) {
+      unwrap(await sb.auth.mfa.unenroll({ factorId }));
+      await sb.auth.refreshSession();
+    },
+    async mySessions() { return unwrap(await sb.rpc('my_sessions')); },
+    async revokeSession(id) { return unwrap(await sb.rpc('session_revoke', { p_id: id })); },
+    async signOutOthers() { unwrap(await sb.auth.signOut({ scope: 'others' })); },
+    async modRights() { return unwrap(await sb.rpc('mod_rights_list')); },
+    async setModRights(twitchUserId, denied) { return unwrap(await sb.rpc('mod_rights_set', { p_twitch_user_id: twitchUserId, p_denied: denied })); },
+    async auditLog({ before = null, role = null, limit = 60 } = {}) {
+      return unwrap(await sb.rpc('audit_list', { p_limit: limit, p_before: before, p_role: role }));
+    },
+    async channelExport() { return unwrap(await sb.rpc('channel_export')); },
+
+    // ---------- Startseite: KI-Hilfe, Kontakt, Showcase (Migration …_contact_showcase.sql) ----------
+    async helpAsk(question, lang, history) { return invoke('help-chat', { question, lang, history }); },
+    async contactSend(m) {
+      return unwrap(await sb.rpc('contact_send', {
+        p_name: m.name, p_email: m.email, p_topic: m.topic, p_message: m.message, p_lang: m.lang, p_website: m.website,
+      }));
+    },
+    async showcaseList() { return unwrap(await sb.rpc('showcase_list')); },
+    async channelShowcase() { return unwrap(await sb.rpc('channel_showcase')); },
+    async setChannelShowcase(on) { return unwrap(await sb.rpc('channel_showcase_set', { p_on: on })); },
+    // Profil & Zeitplan, öffentliche Seite profil.html (Migration …_profile_schedule.sql)
+    async profileGet() { return unwrap(await sb.rpc('profile_get')); },
+    async profileSave(p) {
+      return unwrap(await sb.rpc('profile_save', {
+        p_bio: p.bio, p_links: p.links, p_tz: p.tz, p_away_until: p.away_until || null, p_away_note: p.away_note, p_public: p.is_public ?? null,
+      }));
+    },
+    async scheduleSave(slots) { return unwrap(await sb.rpc('schedule_save', { p_slots: slots })); },
+    async publicProfile(login) { return unwrap(await sb.rpc('public_profile', { p_login: login })); },
+    // Markenfarbe fürs öffentliche Profil (Migration …_brand_color.sql); null = Standard
+    async profileAccentSave(accent) { return unwrap(await sb.rpc('profile_accent_save', { p_accent: accent || null })); },
+    // Sponsoring-Börse (Migration …_sponsoring.sql): Firmen über die Edge Function (ohne Login, Verwaltungs-Link),
+    // Streamer über die Datenbank
+    async sponsoringSubmit(offer, logo, website2 = '') { return invoke('sponsoring', { action: 'submit', offer, logo: logo || undefined, website2 }); },
+    async sponsoringManage(token) { return invoke('sponsoring', { action: 'manage', token }); },
+    async sponsoringDecide(token, applicationId, decision, note = '') { return invoke('sponsoring', { action: 'decide', token, application_id: applicationId, decision, note }); },
+    async sponsoringClose(token) { return invoke('sponsoring', { action: 'close', token }); },
+    async sponsoringOffers() { return unwrap(await sb.rpc('sponsoring_offers')); },
+    async sponsoringApply(offerId, message, share) { return unwrap(await sb.rpc('sponsoring_apply', { p_offer: offerId, p_message: message ?? '', p_share: !!share })); },
+    async sponsoringWithdraw(offerId) { return unwrap(await sb.rpc('sponsoring_withdraw', { p_offer: offerId })); },
+    // Trinkgeld, Sponsoren, Pro (Migration …_tips_sponsors_pro.sql). Der Ko-fi-Token geht nur hin, nie zurück.
+    async tipGet() { return unwrap(await sb.rpc('tip_get')); },
+    async tipSave(p) {
+      return unwrap(await sb.rpc('tip_save', { p_links: p.links ?? [], p_alert: !!p.alert, p_thank: !!p.thank, p_thank_text: p.thank_text ?? '', p_min_cents: p.min_cents | 0 }));
+    },
+    async tipKofiToken(token) { return unwrap(await sb.rpc('tip_kofi_token', { p_token: token ?? '' })); },
+    async sponsorAdminList() { return unwrap(await sb.rpc('sponsor_admin_list')); },
+    async sponsorSave(x) {
+      return unwrap(await sb.rpc('sponsor_save', { p_id: x.id ?? null, p_name: x.name ?? '', p_text: x.text ?? '', p_code: x.code ?? '', p_url: x.url ?? '', p_active: x.active !== false }));
+    },
+    async sponsorDelete(id) { return unwrap(await sb.rpc('sponsor_delete', { p_id: id })); },
+    async proStatus() { return unwrap(await sb.rpc('pro_status')); },
+    // Hat der Kanal Pro? (Migration …_pro_features.sql, für alle lesbar)
+    async channelHasPro() { return unwrap(await sb.rpc('channel_has_pro')); },
+    // Raid-Netzwerk und Freunde werben (Migration …_raid_network.sql); geraidet wird über die Edge Function
+    async raidNetworkGet() { return unwrap(await sb.rpc('raid_network_get')); },
+    async raidNetworkSave(p) {
+      return unwrap(await sb.rpc('raid_network_save', {
+        p_enabled: !!p.enabled, p_language: p.language ?? 'de', p_note: p.note ?? '', p_announce: !!p.announce, p_welcome: !!p.welcome, p_raid_text: p.raid_text ?? '',
+      }));
+    },
+    async raidStart(login) { return invoke('stream-tools', { action: 'raid_start', login }); },
+    async raidCancel() { return invoke('stream-tools', { action: 'raid_cancel' }); },
+    async referralGet() { return unwrap(await sb.rpc('referral_get')); },
+    async referralClaim(ref) { return unwrap(await sb.rpc('referral_claim', { p_ref: ref })); },
+    // Discord: Webhook, Live-Meldung, Rückblick, Ankündigungen (Migration …_discord.sql). Die Webhook-Adresse
+    // geht nur an die Edge Function (prüft sie bei Discord) – zurück kommt nie mehr als ihr Name.
+    // Console (Entwurf, nur Plattform-Admins; Migration …_console.sql)
+    async consoleGet() { return unwrap(await sb.rpc('console_get')); },
+    async consoleSave(keys, display) { return unwrap(await sb.rpc('console_save', { p_keys: keys, p_display: display })); },
+    async consoleKitSave(kit) { return unwrap(await sb.rpc('console_kit_save', { p_kit: kit })); },
+    // 3D-Modell im privaten Bucket console-private (…_console_kit.sql); null = noch keins
+    async consoleModelGet() {
+      const { data, error } = await sb.storage.from('console-private').download('model.obj');
+      if (error) {
+        if (/not.?found|bucket/i.test(`${error.message} ${error.statusCode ?? ''}`) || error.statusCode === '404' || error.status === 404) return null;
+        throw error;
+      }
+      return data.text();
+    },
+    async consoleModelUpload(file) {
+      unwrap(await sb.storage.from('console-private').upload('model.obj', file, { contentType: 'text/plain', upsert: true, cacheControl: '60' }));
+    },
+    async discordGet() { return unwrap(await sb.rpc('discord_get')); },
+    async discordSave(p) {
+      return unwrap(await sb.rpc('discord_save', {
+        p_on_live: !!p.on_live, p_on_recap: !!p.on_recap, p_on_ideas: !!p.on_ideas, p_live_text: p.live_text ?? '', p_mention: p.mention ?? '',
+      }));
+    },
+    async discordConnect(url) { return invoke('stream-tools', { action: 'discord_connect', url }); },
+    async discordDisconnect() { return unwrap(await sb.rpc('discord_disconnect')); },
+    async discordPost(kind, tile, auto = false) { return invoke('stream-tools', { action: 'discord_post', kind, tile, auto }); },
+    // Artists: Bewerbung, Uploads, Design-Bibliothek (Migration …_artists.sql)
+    async artistMe() { return unwrap(await sb.rpc('artist_me')); },
+    async artistApply(p) { return unwrap(await sb.rpc('artist_apply', { p_name: p.name, p_slug: p.slug, p_bio: p.bio, p_links: p.links })); },
+    // Datei in den eigenen Ordner laden; liefert den Pfad für artistSubmit
+    async artistUpload(file) {
+      const { data } = await sb.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (!uid) throw new Error('Bitte anmelden.');
+      const ext = (/\.([a-z0-9]{2,4})$/i.exec(file.name)?.[1] ?? '').toLowerCase().replace('jpeg', 'jpg');
+      const path = `${uid}/${crypto.randomUUID()}.${ext}`;
+      const up = await sb.storage.from('artist-assets').upload(path, file, { contentType: file.type, cacheControl: '31536000', upsert: false });
+      if (up.error && /bucket not found/i.test(up.error.message)) throw new Error('relation "core.artists" does not exist');
+      unwrap(up);
+      return path;
+    },
+    async artistSubmit(p) {
+      try {
+        return unwrap(await sb.rpc('artist_asset_submit', {
+          p_kind: p.kind, p_title: p.title, p_description: p.description, p_tags: p.tags, p_file: p.file, p_extra: p.extra ?? {}, p_rights: !!p.rights,
+        }));
+      } catch (err) {
+        // Nicht angenommen: hochgeladene Dateien wieder weg
+        await sb.storage.from('artist-assets').remove([p.file, p.extra?.alert].filter(Boolean)).catch(() => {});
+        throw err;
+      }
+    },
+    async artistDelete(id) {
+      const files = unwrap(await sb.rpc('artist_asset_delete', { p_id: id })) ?? [];
+      if (files.length) {
+        const { error } = await sb.storage.from('artist-assets').remove(files);
+        if (error) console.warn('Artist-Dateien nicht gelöscht:', error);
+      }
+    },
+    async artistGallery(kind = null) { return unwrap(await sb.rpc('artist_gallery', { p_kind: kind })); },
+    async artistUse(id) { return unwrap(await sb.rpc('artist_asset_use', { p_id: id })); },
+    async artistReport(id, reason) { return unwrap(await sb.rpc('artist_asset_report', { p_id: id, p_reason: reason })); },
+    // Dashboard → Statistik (Migration …_dashboard.sql)
+    async channelStats(days) { return unwrap(await sb.rpc('channel_stats', { p_days: days })); },
+    // Statistik → OBS & Daten (Migration …_overlay_usage.sql)
+    async overlayUsage(days) { return unwrap(await sb.rpc('overlay_usage_stats', { p_days: days })); },
+    async getProfile(user) {
+      const { data } = await sb.from('profiles').select('username, is_admin').eq('id', user.id).maybeSingle();
+      return data ?? { username: user.user_metadata?.username ?? user.email.split('@')[0], is_admin: false };
+    },
+    async getTiles() {
+      return unwrap(await sb.from('tiles').select('*').order('position'));
+    },
+    async updateTile(id, patch) {
+      return unwrap(await sb.from('tiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select().single());
+    },
+    async getVariants() {
+      return unwrap(await sb.from('wheel_variants').select('*').order('position'));
+    },
+    // Admins: alle Varianten auf einmal speichern (Reihenfolge = Position, fehlende werden gelöscht)
+    async saveVariants(variants) {
+      return unwrap(await sb.rpc('wheel_variants_save', { p_variants: variants }));
+    },
+    // Admins: Kosten der Glücksrad-Belohnung auf Twitch ändern
+    async setWheelCost(cost) {
+      return invoke('twitch-oauth', { action: 'wheel_cost', cost });
+    },
+    // Vorschläge aus der Community. Die Tabellen kamen erst später dazu –
+    // fehlen sie noch, liefert die Abfrage einen Fehler und app.js blendet
+    // den Bereich aus.
+    async getIdeas(limit = 12) {
+      return unwrap(await sb.from('ideas_ranked')
+        .select('id, text, author, votes, voted')
+        .order('votes', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit));
+    },
+    async addIdea(text) {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      const profile = await this.getProfile(user);
+      const row = unwrap(await sb.from('ideas')
+        .insert({ text, author: profile.username, user_id: user.id })
+        .select('id, text, author')
+        .single());
+      return { ...row, votes: 0, voted: false };
+    },
+    async voteIdea(id, on) {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      if (on) unwrap(await sb.from('idea_votes').insert({ idea_id: id, user_id: user.id }));
+      else unwrap(await sb.from('idea_votes').delete().eq('idea_id', id).eq('user_id', user.id));
+    },
+    async getSpins(limit = 15) {
+      return unwrap(await sb.from('spins').select('*').order('created_at', { ascending: false }).limit(limit));
+    },
+    // Ist die Datenbank fürs OBS-Overlay vorbereitet (Migration …_overlay.sql)?
+    async overlayReady() {
+      const { error } = await sb.from('overlay_spins').select('id', { head: true }).limit(1);
+      return !error;
+    },
+    // ---------- OBS-Overlay live (overlay_config) ----------
+    async getOverlayConfig() {
+      return unwrap(await sb.from('overlay_config').select('params, admins_can_edit, updated_by, updated_at').eq('id', 1).maybeSingle());
+    },
+    async overlayAccess() { return unwrap(await sb.rpc('overlay_access')); },
+    async saveOverlayConfig(params) { return unwrap(await sb.rpc('overlay_save', { p_params: params })); },
+    async allowAdminsOverlay(on) { return unwrap(await sb.rpc('overlay_allow_admins', { p_on: on })); },
+    // Overlay-Vorlagen (…_overlay_presets.sql); fehlt die Migration: null
+    async getOverlayPresets() {
+      const { data, error } = await sb.from('overlay_presets').select('id, name, params, updated_at').order('name');
+      return error ? null : data;
+    },
+    async saveOverlayPreset(name, params) { return unwrap(await sb.rpc('overlay_preset_save', { p_name: name, p_params: params })); },
+    async deleteOverlayPreset(id) { return unwrap(await sb.rpc('overlay_preset_delete', { p_id: id })); },
+    // ---------- Kanäle (Plattform, Migration …_platform.sql) ----------
+    // Kanal suchen (Twitch-Login oder ID, null = Standard-Kanal). {platform:false}, solange die Migration fehlt.
+    async resolveChannel(key) {
+      const { data, error } = await sb.rpc('channel_info', { p_key: key ?? null });
+      if (error) {
+        if (missingFunction(error)) return { platform: false, channel: null };
+        throw error;
+      }
+      return { platform: true, channel: data };
+    },
+    // Alle freigeschalteten Kanäle (Startseite, Kanal wechseln)
+    async channelsList() {
+      const { data, error } = await sb.rpc('channels_list');
+      return error ? [] : data ?? [];
+    },
+    // Sammelpool für krebskranke Kinder (Edge Function charity, …_charity_pool.sql); null = aus oder nicht eingerichtet
+    async charityPool() {
+      const data = await invoke('charity', {});
+      return data?.enabled ? data : null;
+    },
+    // Zahlen für den Balken auf der Startseite (Summen über alle Kanäle); null = Migration fehlt
+    async platformStats() {
+      const { data, error } = await sb.rpc('platform_stats');
+      if (error) { if (missingFunction(error)) return null; throw error; }
+      return data && typeof data === 'object' && 'streamers' in data ? data : null;
+    },
+    // Mein eigener Kanal (auch wenn er noch auf die Freischaltung wartet) oder null
+    async channelMine() {
+      const { data, error } = await sb.rpc('channel_mine');
+      return error ? null : data;
+    },
+    async channelApply(note = '') { return unwrap(await sb.rpc('channel_apply', { p_note: note })); },
+    // Hinweise vom StreamHelp-Team (Migration …_channel_moderation.sql)
+    async channelWarningSeen() { return unwrap(await sb.rpc('channel_warning_seen')); },
+    async platformUpdates() {
+      const { data, error } = await sb.rpc('platform_updates_mine');
+      if (error) { if (missingFunction(error)) return []; throw error; }
+      return data ?? [];
+    },
+    async platformUpdatesRead(id = null) { return unwrap(await sb.rpc('platform_updates_read', { p_id: id })); },
+    // Zuschauer oder Streamer? null = noch nie gefragt, 'unknown' = Migration fehlt (dann nicht fragen)
+    async accountType() {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) return 'unknown';
+      const { data, error } = await sb.from('profiles').select('account_type').eq('id', user.id).maybeSingle();
+      return error ? 'unknown' : data?.account_type ?? null;
+    },
+    async setAccountType(type) { unwrap(await sb.rpc('profile_set_type', { p_type: type })); },
+    // Mit Twitch angemeldet? (Streamer brauchen das – so ist klar, dass der Kanal ihnen gehört)
+    async hasTwitchLogin() {
+      const { data } = await sb.auth.getSession();
+      const user = data.session?.user;
+      return !!user?.identities?.some((i) => i.provider === 'twitch') || user?.app_metadata?.provider === 'twitch';
+    },
+    // ---------- Streamer und Mods ----------
+    // Name des verbundenen Kanals – auch ohne Anmeldung (Anmeldeseite, Overlay)
+    async streamerInfo() { return unwrap(await sb.rpc('streamer_info')); },
+    // Meine Rechte: Admin (auch als freigegebener Mod), Mod, Streamer, Freigabe an?
+    async myAccess() { return unwrap(await sb.rpc('my_access')); },
+    async getMods() { return unwrap(await sb.from('channel_mods').select('*').order('display_name')); },
+    async syncMods() { return invoke('twitch-oauth', { action: 'sync_mods' }); },
+    async allowModsOverlay(on) { return unwrap(await sb.rpc('overlay_allow_mods', { p_on: on })); },
+    async spin(variantId, announce) {
+      return invoke('spin', { variant_id: variantId, announce });
+    },
+
+    // ---------- Ärgere den Streamer ----------
+    // Fehlt die Migration …_pranks.sql, schlägt getPrankSettings fehl und
+    // app.js zeigt statt der Aktionen einen Hinweis.
+    async getPrankSettings() {
+      // throw_cost/sound_cost kamen mit …_channel_points.sql, panel_sound* mit …_panel_sounds.sql,
+      // Bits und Abo-Sounds mit …_panel_bits_subs.sql – fehlen sie noch, trotzdem laden
+      // Bits-Extras (Wurf, sofort füttern) mit …_ext_plus.sql
+      const plus = await sb.from('prank_settings')
+        .select('enabled, cooldown_seconds, allow_uploads, throw_cost, sound_cost, panel_sounds, panel_sound_cooldown, panel_sound_gap, panel_sub_sounds, panel_sub_cooldown, panel_bits, panel_bits_sku, panel_bits_throw, panel_bits_throw_sku, panel_bits_feed, panel_bits_feed_sku').eq('id', 1).single();
+      if (!plus.error) return plus.data;
+      const all = await sb.from('prank_settings')
+        .select('enabled, cooldown_seconds, allow_uploads, throw_cost, sound_cost, panel_sounds, panel_sound_cooldown, panel_sound_gap, panel_sub_sounds, panel_sub_cooldown, panel_bits, panel_bits_sku').eq('id', 1).single();
+      if (!all.error) return all.data;
+      const full = await sb.from('prank_settings')
+        .select('enabled, cooldown_seconds, allow_uploads, throw_cost, sound_cost, panel_sounds, panel_sound_cooldown, panel_sound_gap').eq('id', 1).single();
+      if (!full.error) return full.data;
+      const { data, error } = await sb.from('prank_settings').select('enabled, cooldown_seconds, allow_uploads, throw_cost, sound_cost').eq('id', 1).single();
+      if (!error) return data;
+      return unwrap(await sb.from('prank_settings').select('enabled, cooldown_seconds, allow_uploads').eq('id', 1).single());
+    },
+    async updatePrankSettings(patch) {
+      return unwrap(await sb.from('prank_settings')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq('id', 1)
+        .select('*')
+        .single());
+    },
+    // Kanalpunkte-Belohnungen fürs Ärgern auf Twitch anlegen bzw. abgleichen (nur Admins)
+    async syncPrankRewards() {
+      return invoke('twitch-oauth', { action: 'sync_pranks' });
+    },
+    async getPranks(limit = 12) {
+      return unwrap(await sb.from('pranks').select('*').order('created_at', { ascending: false }).limit(limit));
+    },
+    // Pause, An/Aus und Name prüft die Datenbank (send_prank), nicht der Browser.
+    async sendPrank(kind, item, soundId = null) {
+      const { data, error } = await sb.rpc('send_prank', { p_kind: kind, p_item: item, p_sound: soundId });
+      if (error) {
+        const err = new Error(error.message);
+        const wait = /^cooldown:(\d+)$/.exec(error.hint ?? '');
+        if (wait) err.wait = Number(wait[1]);
+        if (error.hint === 'paused') err.paused = true;
+        throw err;
+      }
+      return data;
+    },
+    // Kanal-Jubiläum (…_channel_anniversary.sql): die Edge Function sammelt die Kanaldaten
+    async startAnniversary(start = '') { return invoke('stream-tools', { action: 'anniversary', start: start || undefined }); },
+    onPrank(cb) {
+      sb.channel('pranks-feed')
+        .on('postgres_changes', rtSpec('pranks', 'INSERT'), (p) => cb(p.new))
+        .subscribe();
+    },
+    soundUrl(path) {
+      return `${CONFIG.SUPABASE_URL}/storage/v1/object/public/sounds/${path.split('/').map(encodeURIComponent).join('/')}`;
+    },
+    async getSounds() {
+      const { data: session } = await sb.auth.getSession();
+      const uid = session.session?.user?.id;
+      // Nummern wie in der Edge Function (pranks.ts, soundList): 1–9 eingebaut, ab 10 der älteste eigene Sound
+      const rows = unwrap(await sb.from('sounds')
+        .select('id, name, path, duration, author, user_id, created_at')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(500));
+      return rows.map((r, i) => ({ ...r, no: BOARD.length + 1 + i, mine: r.user_id === uid, url: this.soundUrl(r.path) })).reverse();
+    },
+    // Sounds mit eigener Belohnung auf Twitch (Migration …_sound_rewards.sql; fehlt sie: leer)
+    async getSoundRewards() {
+      const { data, error } = await sb.from('prank_sound_rewards').select('id, board, sound_id, enabled, cost, reward_id, error').order('id');
+      if (error) return null;
+      return data;
+    },
+    async setSoundReward(target, patch) {
+      const col = target.board ? 'board' : 'sound_id';
+      const key = target.board ?? target.sound_id;
+      const { data: found } = await sb.from('prank_sound_rewards').select('id').eq(col, key).maybeSingle();
+      if (found) {
+        return unwrap(await sb.from('prank_sound_rewards').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', found.id).select('*').single());
+      }
+      return unwrap(await sb.from('prank_sound_rewards').insert({ [col]: key, ...patch }).select('*').single());
+    },
+    async uploadSound(file, name, duration) {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      const ext = (/\.([a-z0-9]{2,4})$/i.exec(file.name)?.[1] ?? 'mp3').toLowerCase();
+      const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+      unwrap(await sb.storage.from('sounds').upload(path, file, {
+        contentType: file.type || 'audio/mpeg',
+        cacheControl: '31536000',
+        upsert: false,
+      }));
+      const { data, error } = await sb.from('sounds')
+        .insert({ name, path, duration, user_id: user.id })
+        .select('id, name, path, duration, author, user_id, created_at')
+        .single();
+      if (error) {
+        await sb.storage.from('sounds').remove([path]).catch(() => {});
+        throw error;
+      }
+      return { ...data, mine: true, url: this.soundUrl(path) };
+    },
+    async deleteSound(sound) {
+      unwrap(await sb.from('sounds').delete().eq('id', sound.id));
+      const { error } = await sb.storage.from('sounds').remove([sound.path]);
+      if (error) console.warn('Sound-Datei nicht gelöscht:', error);
+    },
+
+    // ---------- Fortnite-Bingo ----------
+    // Bilder liegen im Storage (alte Karten können noch Lootpool-Adressen haben: ohne Bild)
+    bingoUrl(path) {
+      if (path.startsWith('https://')) return '';
+      return `${CONFIG.SUPABASE_URL}/storage/v1/object/public/bingo/${path.split('/').map(encodeURIComponent).join('/')}`;
+    },
+    async getBingo() {
+      const [items, card] = await Promise.all([
+        sb.from('bingo_items').select('*').order('created_at'),
+        sb.from('bingo_card').select('*').eq('id', 1).maybeSingle(),
+      ]);
+      return {
+        items: unwrap(items).filter((i) => !i.path.startsWith('https://')).map((i) => ({ ...i, url: this.bingoUrl(i.path) })),
+        card: unwrap(card),
+      };
+    },
+    // rarities: ein Bild in mehreren Seltenheiten – ein Eintrag je Seltenheit, jeder mit eigener
+    // Datei-Kopie (Löschen des einen nimmt das Bild der anderen nicht mit). Alle teilen den Fingerabdruck.
+    async addBingoItem(blob, name, { rarity = null, amount = null, imageKey = null, rarities = null, category = null } = {}) {
+      const ext = blob.type === 'image/webp' ? 'webp' : 'png';
+      const path = `${storageFolder()}${crypto.randomUUID()}.${ext}`;
+      unwrap(await sb.storage.from('bingo').upload(path, blob, { contentType: blob.type, cacheControl: '31536000', upsert: false }));
+      const list = rarities?.length ? rarities : [rarity];
+      const first = await this.insertBingoItem({ name, path, rarity: list[0], amount, image_key: imageKey, category });
+      const made = [first];
+      for (const r of list.slice(1)) made.push(await this.copyBingoItem(first, { rarity: r }));
+      return made;
+    },
+    // Dasselbe Bild noch einmal, z. B. mit anderer Zahl. Die Datei wird kopiert,
+    // damit Löschen des einen Eintrags das Bild des anderen nicht mitnimmt.
+    async copyBingoItem(item, patch = {}) {
+      const path = `${storageFolder()}${crypto.randomUUID()}.${item.path.split('.').pop()}`;
+      unwrap(await sb.storage.from('bingo').copy(item.path, path));
+      return this.insertBingoItem({ name: item.name, path, rarity: item.rarity, amount: item.amount, image_key: item.image_key ?? null, category: item.category ?? null, ...patch });
+    },
+    async insertBingoItem({ name, path, rarity, amount, image_key = null, category = null }) {
+      // Leere Felder nicht mitschicken – so klappt das Hochladen auch, solange einzelne
+      // Migrationen (…_bingo_rarity.sql, …_bingo_amount.sql, …_bingo_vault.sql, …_bingo_categories.sql) noch fehlen.
+      const row = { name, path, ...(rarity ? { rarity } : {}), ...(amount ? { amount } : {}), ...(image_key ? { image_key } : {}), ...(category ? { category } : {}) };
+      const { data, error } = await sb.from('bingo_items').insert(row).select('*').single();
+      if (error) {
+        await sb.storage.from('bingo').remove([path]).catch(() => {});
+        throw error;
+      }
+      return { ...data, url: this.bingoUrl(path) };
+    },
+    async updateBingoItem(id, patch) {
+      unwrap(await sb.from('bingo_items').update(patch).eq('id', id));
+    },
+    async deleteBingoItem(item) {
+      unwrap(await sb.from('bingo_items').delete().eq('id', item.id));
+      const { error } = await sb.storage.from('bingo').remove([item.path]);
+      if (error) console.warn('Bingo-Bild nicht gelöscht:', error);
+    },
+    async newBingoCard(size, free) {
+      return unwrap(await sb.rpc('bingo_new_card', { p_size: size, p_free: free }));
+    },
+    // Tipprunde über eine Twitch-Vorhersage: action = start | check | cancel
+    async bingoBet(action, seconds) {
+      return invoke('bingo-bet', { action, seconds });
+    },
+    async toggleBingo(index) {
+      return unwrap(await sb.rpc('bingo_toggle', { p_index: index }));
+    },
+    async updateBingoCard(patch) {
+      return unwrap(await sb.from('bingo_card').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', 1).select().single());
+    },
+    // Eigene Bingo-Karte (nur für einen selbst sichtbar)
+    async getMyBingo() {
+      return unwrap(await sb.from('bingo_player_cards').select('size, cells, marked, created_at').maybeSingle());
+    },
+    async saveMyBingo(card) {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      return unwrap(await sb.from('bingo_player_cards')
+        .upsert({ user_id: user.id, size: card.size, cells: card.cells, marked: card.marked, created_at: card.created_at, updated_at: new Date().toISOString() })
+        .select('size, cells, marked, created_at')
+        .single());
+    },
+    // ---------- Games (Migration …_games.sql) – null, solange die Migration fehlt ----------
+    async getStreamGames() {
+      const { data, error } = await sb.from('stream_games').select('active, current, auto, live_category, live_game, live_at').eq('id', 1).maybeSingle();
+      return error ? null : data ?? {};
+    },
+    async saveStreamGames({ active, current, auto }) {
+      return unwrap(await sb.rpc('games_save', { p_active: active, p_current: current ?? '', p_auto: !!auto }));
+    },
+    onStreamGames(cb) {
+      sb.channel('stream-games')
+        .on('postgres_changes', rtSpec('stream_games', '*'), (p) => { if (p.new) cb(p.new); })
+        .subscribe();
+    },
+    onBingo(cb) {
+      sb.channel('bingo-feed')
+        .on('postgres_changes', rtSpec('bingo_card', '*'), (p) => cb(p.new))
+        .subscribe();
+    },
+    // ---------- Unangenehme Fragen ----------
+    // Zuschauer sehen nur ihre eigenen Fragen, Admins alle (RLS).
+    async getQuestions() {
+      return unwrap(await sb.from('questions').select('*').order('created_at', { ascending: false }).limit(300));
+    },
+    async askQuestion(text, anonymous) {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      return unwrap(await sb.from('questions').insert({ text, anonymous, user_id: user.id }).select('*').single());
+    },
+    async deleteQuestion(id) {
+      unwrap(await sb.from('questions').delete().eq('id', id));
+    },
+    async reviewQuestion(id, status) {
+      return unwrap(await sb.from('questions').update({ status, reviewed_at: new Date().toISOString() }).eq('id', id).select('*').single());
+    },
+    async getQuestionStage() {
+      return unwrap(await sb.from('question_stage').select('*').eq('id', 1).maybeSingle());
+    },
+    async showQuestion(id) { return unwrap(await sb.rpc('question_show', { p_id: id })); },
+    async resolveQuestion(outcome) { return unwrap(await sb.rpc('question_resolve', { p_outcome: outcome })); },
+    async hideQuestion() { return unwrap(await sb.rpc('question_hide')); },
+    async savePunishments(punishments) {
+      return unwrap(await sb.from('question_stage').update({ punishments }).eq('id', 1).select('*').single());
+    },
+    onQuestions(cb) {
+      sb.channel('questions-feed')
+        .on('postgres_changes', rtSpec('questions', '*'), (p) => cb(p))
+        .subscribe();
+    },
+    onQuestionStage(cb) {
+      sb.channel('question-stage')
+        .on('postgres_changes', rtSpec('question_stage', 'UPDATE'), (p) => cb(p.new))
+        .subscribe();
+    },
+    // ---------- Kisten-Shop ----------
+    async getShopSettings() {
+      return unwrap(await sb.from('shop_settings').select('items, prices, shop_seconds').eq('id', 1).maybeSingle());
+    },
+    async saveShopSettings(patch) {
+      return unwrap(await sb.from('shop_settings').update(patch).eq('id', 1).select('items, prices, shop_seconds').single());
+    },
+    // Liefert { run, chests } – alle vier Kisten zum Aufdecken
+    async openChest(chest, code = null, stream = false) {
+      return unwrap(await sb.rpc('shop_open_chest', { p_chest: chest, p_code: code, p_stream: stream }));
+    },
+    async shopBuy(runId, name) { return unwrap(await sb.rpc('shop_buy', { p_run: runId, p_name: name })); },
+    async shopDoneShopping(runId) { return unwrap(await sb.rpc('shop_done_shopping', { p_run: runId })); },
+    async shopMark(runId, index, found) { return unwrap(await sb.rpc('shop_mark', { p_run: runId, p_index: index, p_found: found })); },
+    async shopFinish(runId) { return unwrap(await sb.rpc('shop_finish', { p_run: runId })); },
+    async getMyShopRun() {
+      const { data: session } = await sb.auth.getSession();
+      const user = session.session?.user;
+      if (!user) return null;
+      return unwrap(await sb.from('shop_runs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle());
+    },
+    async createShopLobby() { return unwrap(await sb.rpc('shop_create_lobby')); },
+    async closeShopLobby(code) { return unwrap(await sb.rpc('shop_close_lobby', { p_code: code })); },
+    async joinShopLobby(code) { return unwrap(await sb.rpc('shop_join_lobby', { p_code: code })); },
+    async leaveShopLobby(code) { unwrap(await sb.rpc('shop_leave_lobby', { p_code: code })); },
+    async startShopLobby(code) { return unwrap(await sb.rpc('shop_start_lobby', { p_code: code })); },
+    // Läuft eine Zeit ab (Kisten, Shop), schiebt das die Runde in die nächste Phase
+    async tickShopLobby(code) { return unwrap(await sb.rpc('shop_lobby_tick', { p_code: code })); },
+    // Gelesen wird über Funktionen (Migration …_shop_lobby_access.sql): per Code für alle
+    // Angemeldeten, per ID nur für Ersteller, Mitspieler und Admins
+    async getShopLobby(code) {
+      return unwrap(await sb.rpc('shop_lobby_by_code', { p_code: code.trim() }).maybeSingle());
+    },
+    async getShopLobbyById(id) {
+      return unwrap(await sb.rpc('shop_lobby_by_id', { p_id: id }).maybeSingle());
+    },
+    async getLobbyRuns(lobbyId) {
+      return unwrap(await sb.from('shop_runs').select('*').eq('lobby_id', lobbyId).order('score', { ascending: false }));
+    },
+    onShopRuns(cb) {
+      sb.channel('shop-runs')
+        .on('postgres_changes', rtSpec('shop_runs', '*'), (p) => cb(p.eventType === 'DELETE' ? null : p.new))
+        .subscribe();
+    },
+    // ---------- Win-Challenge ----------
+    async getChallenge() { return unwrap(await sb.from('win_challenge').select('*').eq('id', 1).maybeSingle()); },
+    async challengeAccess() { return unwrap(await sb.rpc('challenge_access')); },
+    async saveChallenge({ title, lives, stages }) {
+      return unwrap(await sb.rpc('challenge_save', { p_title: title, p_lives: lives, p_stages: stages }));
+    },
+    async challengeResult(win) { return unwrap(await sb.rpc('challenge_result', { p_win: win })); },
+    async challengeUndo() { return unwrap(await sb.rpc('challenge_undo')); },
+    async challengeGoto(index) { return unwrap(await sb.rpc('challenge_goto', { p_index: index })); },
+    async challengeReset() { return unwrap(await sb.rpc('challenge_reset')); },
+    async challengeAllowAdmins(on) { return unwrap(await sb.rpc('challenge_allow_admins', { p_on: on })); },
+    // Namen der Admins (Mods) – als Vorschläge für die Gegner
+    async getModNames() {
+      return (unwrap(await sb.from('profiles').select('username').eq('is_admin', true).order('username')) ?? []).map((p) => p.username);
+    },
+    onChallenge(cb) {
+      sb.channel('win-challenge')
+        .on('postgres_changes', rtSpec('win_challenge', 'UPDATE'), (p) => cb(p.new))
+        .subscribe();
+    },
+    // ---------- Laufband im Overlay ----------
+    async getTicker() {
+      return unwrap(await sb.from('ticker').select('items').eq('id', 1).maybeSingle())?.items ?? null;
+    },
+    async saveTicker(items) {
+      return unwrap(await sb.from('ticker').update({ items }).eq('id', 1).select('items').single()).items;
+    },
+    // ---------- Stream-Dino ----------
+    async getPet() {
+      return unwrap(await sb.from('pet').select('*').eq('id', 1).maybeSingle());
+    },
+    async getPetEvents(limit = 20) {
+      return unwrap(await sb.from('pet_events').select('*').order('created_at', { ascending: false }).limit(limit));
+    },
+    async petAction(kind) { return unwrap(await sb.rpc('pet_action', { p_kind: kind })); },
+    async petSay(text) { return unwrap(await sb.rpc('pet_say', { p_text: text })); },
+    // Heißhunger per Knopf (on = false beendet ihn) und Kostüm wechseln – nur Admins
+    async petFrenzy(on = true) { return unwrap(await sb.rpc('pet_frenzy', { p_on: on })); },
+    async petCostume(costume) { return unwrap(await sb.rpc('pet_costume', { p_costume: costume })); },
+    async updatePet(patch) {
+      return unwrap(await sb.from('pet').update(patch).eq('id', 1).select('*').single());
+    },
+    onPet(cb) {
+      sb.channel('pet-feed')
+        .on('postgres_changes', rtSpec('pet', 'UPDATE'), (p) => cb(p.new))
+        .subscribe();
+    },
+    onPetEvents(cb) {
+      sb.channel('pet-events')
+        .on('postgres_changes', rtSpec('pet_events', 'INSERT'), (p) => cb(p.new))
+        .subscribe();
+    },
+    onSpin(cb) {
+      sb.channel('spins-feed')
+        .on('postgres_changes', rtSpec('spins', 'INSERT'), (p) => cb(p.new))
+        .subscribe();
+    },
+    // ---------- Alerts im Overlay (Follower, Abos) ----------
+    async getAlerts(limit = 10) {
+      return unwrap(await sb.from('stream_alerts').select('*').order('created_at', { ascending: false }).limit(limit));
+    },
+    onAlerts: (cb) => alertFeed(sb, 'stream-alerts', cb),
+    async testAlert(kind) { return unwrap(await sb.rpc('alert_test', { p_kind: kind })); },
+    async alertsStatus() { return unwrap(await sb.rpc('alerts_status')); },
+    // Twitch-Abos für die Alerts prüfen und fehlende neu anlegen (nur Admins)
+    async checkAlertSubscriptions() { return invoke('twitch-oauth', { action: 'alerts_check' }); },
+    // Gesundheitscheck (Migration …_streamhelp.sql): Rechte, Abos, Bot – repariert, was geht.
+    // Ohne force höchstens einmal pro Minute wirklich bei Twitch (sonst letzter Stand).
+    async twitchHealth(force = false) { return invoke('twitch-oauth', { action: 'health', force }); },
+    async getTwitchHealth() {
+      const { data, error } = await sb.from('twitch_health').select('*').eq('id', 1).maybeSingle();
+      if (error) { console.warn('twitch_health:', error.message); return null; }
+      return data;
+    },
+    onTwitchHealth(cb) {
+      sb.channel('twitch-health')
+        .on('postgres_changes', rtSpec('twitch_health', '*'), (p) => cb(p.new))
+        .subscribe();
+    },
+    // Eigene Alert-Sounds (nur Admins laden hoch), Bucket "alert-sounds"
+    alertSoundUrl(path) {
+      return `${CONFIG.SUPABASE_URL}/storage/v1/object/public/alert-sounds/${path.split('/').map(encodeURIComponent).join('/')}`;
+    },
+    async getAlertSounds() {
+      const rows = unwrap(await sb.from('alert_sounds').select('id, name, path, duration, created_at').order('created_at', { ascending: false }));
+      return rows.map((r) => ({ ...r, url: this.alertSoundUrl(r.path) }));
+    },
+    async uploadAlertSound(file, name, duration) {
+      const ext = (/\.([a-z0-9]{2,4})$/i.exec(file.name)?.[1] ?? 'mp3').toLowerCase();
+      const path = `${storageFolder()}${crypto.randomUUID()}.${ext}`;
+      const up = await sb.storage.from('alert-sounds').upload(path, file, {
+        contentType: file.type || 'audio/mpeg',
+        cacheControl: '31536000',
+        upsert: false,
+      });
+      // „Bucket not found“ hieße sonst „Ärgern fehlt“
+      if (up.error && /bucket not found/i.test(up.error.message)) throw new Error('relation "public.alert_sounds" does not exist');
+      unwrap(up);
+      const { data, error } = await sb.from('alert_sounds')
+        .insert({ name, path, duration })
+        .select('id, name, path, duration, created_at')
+        .single();
+      if (error) {
+        await sb.storage.from('alert-sounds').remove([path]).catch(() => {});
+        throw error;
+      }
+      return { ...data, url: this.alertSoundUrl(path) };
+    },
+    async deleteAlertSound(sound) {
+      unwrap(await sb.from('alert_sounds').delete().eq('id', sound.id));
+      const { error } = await sb.storage.from('alert-sounds').remove([sound.path]);
+      if (error) console.warn('Alert-Sound-Datei nicht gelöscht:', error);
+    },
+    // Alert-Designer (Migration …_overlay_designs.sql)
+    async getAlertConfig() {
+      return (unwrap(await sb.from('alert_config').select('config').eq('id', 1).maybeSingle()))?.config ?? {};
+    },
+    async saveAlertConfig(config) {
+      const rows = unwrap(await sb.from('alert_config').update({ config, updated_at: new Date().toISOString() }).eq('id', 1).select('id'));
+      if (!rows?.length) throw new Error('Nur der Streamer, Admins und freigegebene Mods dürfen die Alerts gestalten.');
+    },
+    alertMediaUrl(path) {
+      return `${CONFIG.SUPABASE_URL}/storage/v1/object/public/alert-media/${path.split('/').map(encodeURIComponent).join('/')}`;
+    },
+    async getAlertMedia() {
+      const rows = unwrap(await sb.from('alert_media').select('id, name, path, kind, created_at').order('created_at', { ascending: false }));
+      return rows.map((r) => ({ ...r, url: this.alertMediaUrl(r.path) }));
+    },
+    async uploadAlertMedia(file, name) {
+      const ext = (/\.([a-z0-9]{2,4})$/i.exec(file.name)?.[1] ?? '').toLowerCase().replace('jpeg', 'jpg');
+      const kind = /^video\//.test(file.type) ? 'video' : 'image';
+      const path = `${storageFolder()}${crypto.randomUUID()}.${ext}`;
+      const up = await sb.storage.from('alert-media').upload(path, file, { contentType: file.type, cacheControl: '31536000', upsert: false });
+      if (up.error && /bucket not found/i.test(up.error.message)) throw new Error('relation "public.alert_media" does not exist');
+      unwrap(up);
+      const { data, error } = await sb.from('alert_media').insert({ name, path, kind }).select('id, name, path, kind, created_at').single();
+      if (error) {
+        await sb.storage.from('alert-media').remove([path]).catch(() => {});
+        throw error;
+      }
+      return { ...data, url: this.alertMediaUrl(path) };
+    },
+    async deleteAlertMedia(media) {
+      unwrap(await sb.from('alert_media').delete().eq('id', media.id));
+      const { error } = await sb.storage.from('alert-media').remove([media.path]);
+      if (error) console.warn('Alert-Datei nicht gelöscht:', error);
+    },
+    async twitchStatus() {
+      return unwrap(await sb.rpc('twitch_status'));
+    },
+    // YouTube verbinden und mit Twitch live schalten (Migration …_live_sync.sql, Edge Function youtube)
+    async youtubeStatus() { return unwrap(await sb.rpc('youtube_status')); },
+    async youtubeSave(p) { return unwrap(await sb.rpc('youtube_settings_save', { p })); },
+    async youtubeConnect() {
+      const { url } = await invoke('youtube', { action: 'start' });
+      location.href = url;
+    },
+    youtubeDisconnect: () => invoke('youtube', { action: 'disconnect' }),
+    youtubeStreamKey: () => invoke('youtube', { action: 'stream_key' }),
+    youtubeGoLive: () => invoke('youtube', { action: 'go_live' }),
+    youtubeEndLive: () => invoke('youtube', { action: 'end_live' }),
+    // channelId: für diesen Kanal verbinden statt für den gerade offenen (eigener Kanal, der noch wartet)
+    async twitchConnect({ channelId } = {}) {
+      const { url } = await invoke('twitch-oauth', { action: 'start' }, channelId ? { 'x-channel': channelId } : undefined);
+      location.href = url;
+    },
+    async twitchDisconnect() {
+      await invoke('twitch-oauth', { action: 'disconnect' });
+    },
+    // Eigene Chat-Befehle und Watchtime (Migration …_chat_bot_commands.sql)
+    botCommands: {
+      list: async () => unwrap(await sb.from('bot_commands').select('*').order('command')),
+      async save(c) {
+        const row = { command: c.command, response: c.response, enabled: c.enabled, mod_only: c.mod_only, cooldown_seconds: c.cooldown_seconds };
+        // Mehr Einstellungen (Migration …_chat_bot_plus.sql) – nur mitschicken, wenn gesetzt
+        for (const k of ['aliases', 'permission', 'user_cooldown', 'reply_type', 'live_only']) if (c[k] !== undefined) row[k] = c[k];
+        if (c.id) return unwrap(await sb.from('bot_commands').update({ ...row, updated_at: new Date().toISOString() }).eq('id', c.id).select('*').single());
+        return unwrap(await sb.from('bot_commands').insert(row).select('*').single());
+      },
+      remove: async (id) => unwrap(await sb.from('bot_commands').delete().eq('id', id)),
+    },
+    // Chat-Bot: Einstellungen, Auto-Nachrichten, Song-Wünsche (Migration …_chat_bot_plus.sql)
+    botPlus: {
+      get: async () => unwrap(await sb.rpc('bot_settings_get')),
+      save: async (p) => unwrap(await sb.rpc('bot_settings_save', { p })),
+      timers: {
+        list: async () => unwrap(await sb.from('bot_timers').select('id, text, interval_min, min_lines, enabled, sent, last_at, position').order('position').order('id')),
+        async save(t) {
+          const row = { text: t.text, interval_min: t.interval_min, min_lines: t.min_lines, enabled: t.enabled };
+          if (t.id) return unwrap(await sb.from('bot_timers').update(row).eq('id', t.id).select('id, text, interval_min, min_lines, enabled, sent, last_at, position').single());
+          return unwrap(await sb.from('bot_timers').insert({ ...row, position: Date.now() % 1000000 }).select('id, text, interval_min, min_lines, enabled, sent, last_at, position').single());
+        },
+        remove: async (id) => unwrap(await sb.from('bot_timers').delete().eq('id', id)),
+      },
+      // Stichwort-Antworten und die letzten Clips (Migration …_bot_more.sql)
+      faq: {
+        list: async () => unwrap(await sb.from('bot_faq').select('id, keywords, answer, match_all, cooldown, enabled, hits, last_at, position').order('position').order('id')),
+        async save(f) {
+          const row = { keywords: f.keywords, answer: f.answer, match_all: !!f.match_all, cooldown: f.cooldown, enabled: f.enabled };
+          if (f.id) return unwrap(await sb.from('bot_faq').update(row).eq('id', f.id).select('id').single());
+          return unwrap(await sb.from('bot_faq').insert({ ...row, position: Date.now() % 1000000 }).select('id').single());
+        },
+        remove: async (id) => unwrap(await sb.from('bot_faq').delete().eq('id', id)),
+      },
+      clips: async () => unwrap(await sb.from('bot_clips').select('clip_id, who, created_at').order('created_at', { ascending: false }).limit(8)),
+      songs: {
+        list: async () => unwrap(await sb.from('bot_songs').select('id, video_id, title, seconds, who, source, status, position, played_at')
+          .in('status', ['queued', 'playing']).order('position').order('id').limit(200)),
+        history: async () => unwrap(await sb.from('bot_songs').select('id, video_id, title, seconds, who, status, played_at')
+          .in('status', ['done', 'skipped']).order('played_at', { ascending: false, nullsFirst: false }).limit(15)),
+        control: async (action, id = null) => unwrap(await sb.rpc('bot_song_control', { p_action: action, p_id: id })),
+        add: (url) => invoke('stream-tools', { action: 'song_add', url }),
+        on(cb) {
+          sb.channel('bot-songs').on('postgres_changes', rtSpec('bot_songs', '*'), () => cb()).subscribe();
+        },
+      },
+    },
+    async watchTop(limit = 10) { return unwrap(await sb.rpc('watch_top', { p_limit: limit })); },
+    // Watchtime-Import und Twitch-Daten (Migration …_watchtime_import.sql)
+    async watchInfo() { return unwrap(await sb.rpc('watch_info')); },
+    async watchImport(rows, source) { return unwrap(await sb.rpc('watch_import', { p_rows: rows, p_source: source })); },
+    async watchImportClear() { return unwrap(await sb.rpc('watch_import_clear')); },
+    async watchDates() { return invoke('stream-tools', { action: 'watch_dates' }); },
+    async watchState() { return unwrap(await sb.from('watch_state').select('*').eq('id', 1).maybeSingle()); },
+    // Chat-Bot-Konto: zwei Plattform-Bots (Migration …_bot_stats.sql). Verbinden/Trennen nur der Plattform-Admin,
+    // wählen der Streamer, Protokoll und Test Streamer und freigegebene Mods.
+    async botConnect(slot = 1) {
+      const { url } = await invoke('twitch-oauth', { action: 'bot_start', slot });
+      location.href = url;
+    },
+    async botDisconnect(slot = 1) { return invoke('twitch-oauth', { action: 'bot_disconnect', slot }); },
+    async botSelect(slot) { return invoke('twitch-oauth', { action: 'bot_select', slot }); },
+    async botTest() { return invoke('twitch-oauth', { action: 'bot_test' }); },
+    async botLog(limit = 50) { return unwrap(await sb.rpc('bot_log_list', { p_limit: limit })); },
+    // Statistik: laufender Stream und die letzten Streams (…_bot_stats.sql)
+    async channelSessions(limit = 10) { return unwrap(await sb.rpc('channel_sessions', { p_limit: limit })); },
+    // Jede Watchtime-Zählung (höchstens jede Minute) meldet sich hier – für Watchtime und Statistik live
+    onWatchState(cb) {
+      const ch = sb.channel(`watch-state-${Math.random().toString(36).slice(2, 8)}`)
+        .on('postgres_changes', rtSpec('watch_state', '*'), (p) => cb(p.new))
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+  };
+}
+
+// ------------------------------------------------------------
+// Demo (localStorage)
+// ------------------------------------------------------------
+function createLocalApi() {
+  const store = {
+    get(key, fallback) {
+      try { const v = localStorage.getItem(`zd_${key}`); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(`zd_${key}`, JSON.stringify(value)); } catch { /* privater Modus */ }
+    },
+  };
+  let listeners = [];
+  let spinListeners = [];
+  const prankListeners = [];
+  const bingoListeners = [];
+  let current = null;
+  let nextId = Date.now();
+
+  async function hash(text) {
+    if (!crypto?.subtle) return text;
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  const emit = () => listeners.forEach((cb) => cb(current));
+
+  function makeSpin(variant, source, requestedBy) {
+    const index = randomInt(variant.segments.length);
+    const seg = variant.segments[index];
+    const spin = {
+      id: nextId++,
+      created_at: new Date().toISOString(),
+      source,
+      variant_id: variant.id,
+      variant_name: variant.name,
+      segment_index: index,
+      result: seg.label,
+      detail: seg.detail,
+      requested_by: requestedBy,
+    };
+    // Zweites Rad (z. B. Seltenheit beim Waffen-Lotto)
+    if (variant.bonus?.segments?.length) {
+      const b = randomInt(variant.bonus.segments.length);
+      Object.assign(spin, {
+        bonus_name: variant.bonus.name, bonus_index: b,
+        bonus_result: variant.bonus.segments[b].label, bonus_detail: variant.bonus.segments[b].detail ?? '',
+      });
+    }
+    store.set('spins', [spin, ...store.get('spins', [])].slice(0, 30));
+    return spin;
+  }
+
+  const demoVariants = () => store.get('wheel_variants', null) ?? DEFAULT_VARIANTS;
+  // Gespeicherte Kacheln plus neue Standard-Kacheln (neue Content-Ideen kommen so auch in alte Demos)
+  function demoTiles() {
+    const saved = store.get('tiles', null);
+    if (!saved) return DEFAULT_TILES;
+    const missing = DEFAULT_TILES.filter((d) => !saved.some((t) => t.id === d.id));
+    return missing.length ? [...saved, ...missing].sort((a, b) => a.position - b.position) : saved;
+  }
+  // Dieselben Regeln wie wheel_variants_save in der Datenbank
+  function cleanVariants(variants) {
+    if (!Array.isArray(variants) || !variants.length) throw new Error('Mindestens eine Variante wird gebraucht.');
+    if (variants.length > 8) throw new Error('Höchstens 8 Varianten.');
+    const ids = new Set();
+    return variants.map((v, i) => {
+      const id = String(v.id ?? '').trim() || `v-${(nextId++).toString(36)}`;
+      if (ids.has(id)) throw new Error('Eine Variante ist doppelt.');
+      ids.add(id);
+      const name = String(v.name ?? '').trim();
+      if (!name || name.length > 40) throw new Error('Jede Variante braucht einen Namen (höchstens 40 Zeichen).');
+      const description = String(v.description ?? '').trim();
+      if (description.length > 160) throw new Error('Die Beschreibung ist zu lang (höchstens 160 Zeichen).');
+      if (!/^#[0-9a-f]{6}$/i.test(v.color ?? '')) throw new Error('Ungültige Farbe.');
+      const segs = Array.isArray(v.segments) ? v.segments : [];
+      if (segs.length < 2 || segs.length > 16) throw new Error('Jede Variante braucht 2 bis 16 Ergebnisse.');
+      const segments = segs.map((s) => {
+        const label = String(s.label ?? '').trim();
+        const detail = String(s.detail ?? '').trim();
+        if (!label || label.length > 32) throw new Error('Jedes Ergebnis braucht einen Titel (höchstens 32 Zeichen).');
+        if (detail.length > 200) throw new Error('Eine Erklärung ist zu lang (höchstens 200 Zeichen).');
+        return { label, detail };
+      });
+      let bonus = null;
+      if (v.bonus) {
+        const bname = String(v.bonus.name ?? '').trim();
+        if (!bname || bname.length > 40) throw new Error('Das zweite Rad braucht einen Namen (höchstens 40 Zeichen).');
+        const bsegs = Array.isArray(v.bonus.segments) ? v.bonus.segments : [];
+        if (bsegs.length < 2 || bsegs.length > 16) throw new Error('Das zweite Rad braucht 2 bis 16 Ergebnisse.');
+        bonus = {
+          name: bname,
+          segments: bsegs.map((s) => {
+            const label = String(s.label ?? '').trim();
+            const detail = String(s.detail ?? '').trim();
+            if (!label || label.length > 32) throw new Error('Jedes Ergebnis im zweiten Rad braucht einen Titel (höchstens 32 Zeichen).');
+            if (detail.length > 200) throw new Error('Eine Erklärung ist zu lang (höchstens 200 Zeichen).');
+            if (s.color && !/^#[0-9a-f]{6}$/i.test(s.color)) throw new Error('Ungültige Farbe im zweiten Rad.');
+            return { label, detail, ...(s.color ? { color: s.color.toLowerCase() } : {}) };
+          }),
+        };
+      }
+      return { id, position: i + 1, name, description, color: v.color.toLowerCase(), segments, bonus };
+    });
+  }
+
+  // Demo: Profil, Plan und die nächsten Termine (14 Tage) aus diesem Browser
+  function demoProfile() {
+    const p = store.get('profile', {});
+    const slots = store.get('schedule', []);
+    const awayUntil = p.away_until || null;
+    const upcoming = [];
+    const now = new Date();
+    for (let d = -1; d <= 14; d++) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+      const iso = ((day.getDay() + 6) % 7) + 1;
+      const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+      if (awayUntil && ymd <= awayUntil) continue;
+      for (const s of slots.filter((x) => x.weekday === iso)) {
+        const [hh, mm] = s.start.split(':').map(Number);
+        const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm);
+        if (at.getTime() + s.minutes * 60_000 > now.getTime()) upcoming.push({ at: at.toISOString(), minutes: s.minutes, title: s.title, game: s.game });
+      }
+    }
+    upcoming.sort((a, b) => a.at.localeCompare(b.at));
+    return {
+      login: 'streamhelp', display_name: 'StreamHelp', can_publish: true,
+      is_public: !!p.is_public, bio: p.bio ?? '', links: p.links ?? [], tz: p.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      away_until: awayUntil, away_note: p.away_note ?? '', accent: p.accent ?? null,
+      slots: [...slots].sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start)), upcoming: upcoming.slice(0, 8),
+    };
+  }
+
+  // Ordner des Demo-Artists (wie <user-id> live): aus der E-Mail abgeleitet
+  function demoArtistFolder(email) {
+    let h = 0;
+    for (const ch of String(email)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return `dddddddd-0000-4000-8000-${h.toString(16).padStart(12, '0').slice(-12)}`;
+  }
+
+  let demoConsoleModel = null; // 3D-Modell der Console (nur im Arbeitsspeicher)
+  async function requireAdmin() {
+    const u = store.get('users', {})[current?.email];
+    if (!u?.is_admin) throw new Error('Nur Admins dürfen das.');
+  }
+  function saveCard(card) {
+    const next = { ...card, updated_at: new Date().toISOString() };
+    store.set('bingo_card', next);
+    setTimeout(() => bingoListeners.forEach((cb) => cb(next)), 30);
+    return next;
+  }
+
+  // Fragen und Dino im Demo-Modus: in localStorage, Overlay im selben Browser liest mit
+  const demoListeners = {};
+  // Chat-Bot-Einstellungen wie in …_chat_bot_plus.sql (Standardwerte)
+  const BOT_DEFAULTS = {
+    info_on: true, info_cooldown: 15, so_text: 'Schaut unbedingt bei {target} vorbei – zuletzt lief {game}: https://twitch.tv/{login} 💜',
+    greet_mode: 'off', greet_text: 'Willkommen im Chat, {user}! Schön, dass du da bist 💜', greet_back_text: 'Hey {user}, schön dass du wieder da bist! 👋',
+    thank_follow: false, thank_follow_text: 'Danke fürs Folgen, {user}! 💜', thank_sub: true, thank_sub_text: 'Danke für dein Abo, {user}! 🎉',
+    thank_resub_text: 'Danke für {months} Monate, {user}! 🎉', thank_gift_text: '{user} verschenkt {amount} Abos – vielen Dank! 🎁',
+    thank_bits: true, thank_bits_min: 100, thank_bits_text: 'Danke für {amount} Bits, {user}! 💎', thank_raid: true,
+    thank_raid_text: 'RAID! Willkommen {user} und alle {amount} Leute! 🚀', raid_shoutout: true,
+    mod_on: false, mod_links: true, mod_link_allow: ['twitch.tv', 'clips.twitch.tv', 'youtube.com', 'youtu.be'], mod_caps: true, mod_caps_pct: 70,
+    mod_caps_min: 15, mod_spam: true, mod_repeat: 12, mod_emotes: 15, mod_words: [], mod_action: 'delete', mod_timeout: 60, mod_warn: true,
+    mod_exempt_vip: true, mod_exempt_sub: false, mod_permit_seconds: 60,
+    song_on: false, song_who: 'everyone', song_max_user: 2, song_max_queue: 30, song_max_minutes: 8, song_cooldown: 30, timer_gap: 120,
+    live_on: true, live_text: '🔴 {streamer} ist jetzt live mit {game}! Willkommen im Stream – schön, dass ihr da seid 💜',
+    clip_on: true, clip_who: 'everyone', clip_cooldown: 30, clip_user_cooldown: 120,
+    ads_on: true, ads_warn_text: '⏰ In {in} kommt Werbung ({duration}) – kurz Getränk holen! Mit Abo seht ihr keine Werbung 💜',
+    ads_start_text: '📺 Werbepause ({duration}) – wir sind gleich zurück!', ads_end_text: '✅ Die Werbung ist vorbei – weiter geht\'s!',
+    hype_on: true, hype_start_text: '🚂 HYPE-TRAIN! Alle einsteigen – jedes Abo und jedes Bit bringt uns weiter!',
+    hype_level_text: '🚂 Hype-Train Stufe {level} erreicht! Weiter so! 🔥',
+    hype_end_text: '🚂 Der Hype-Train ist angekommen: Stufe {level}! Danke an alle, die mitgefahren sind 💜',
+    goal_on: true, goal_text: '🎯 Ziel erreicht: {goal} ({current}/{target}) – danke euch allen! 🎉',
+    faq_on: true, faq_gap: 15, stats_on: true, stats_cooldown: 30,
+  };
+  const emitDemo = (key, payload) => setTimeout(() => (demoListeners[key] ?? []).forEach((cb) => cb(payload)), 30);
+  const isAdminNow = () => !!store.get('users', {})[current?.email]?.is_admin;
+  const demoStage = () => ({ ...DEFAULT_STAGE, ...store.get('question_stage', {}) });
+  function saveStage(patch) {
+    const next = { ...demoStage(), ...patch, updated_at: new Date().toISOString() };
+    store.set('question_stage', next);
+    emitDemo('question_stage', next);
+    return next;
+  }
+  function savePet(pet) {
+    const next = { ...pet, updated_at: new Date().toISOString() };
+    store.set('pet', next);
+    emitDemo('pet', next);
+    return next;
+  }
+  // Kisten-Shop im Demo-Modus
+  const demoChests = () => shuffled([45 + randomInt(21), 90 + randomInt(31), 140 + randomInt(31), 200 + randomInt(41)]);
+  const shopScore = (items) => { const f = items.filter((i) => i.found).length; return f + (items.length && f === items.length ? 10 : 0); };
+  function saveRuns(runs) {
+    store.set('shop_runs', runs.slice(0, 200));
+  }
+  function updateRun(id, fn) {
+    const runs = store.get('shop_runs', []);
+    const run = runs.find((r) => r.id === id && r.user_id === current?.email);
+    if (!run) throw new Error('Diese Runde gibt es nicht.');
+    const next = { ...fn(run), updated_at: new Date().toISOString() };
+    saveRuns(runs.map((r) => (r.id === id ? next : r)));
+    emitDemo('shop_runs', next);
+    return next;
+  }
+  // Koop-Runden im Demo-Modus: gleiche Phasen wie shop_lobby_advance in der Datenbank
+  const LOBBY_CHEST_MS = 45000;
+  const demoLobbies = () => store.get('shop_lobbies', []);
+  const findLobby = (code) => demoLobbies().find((l) => l.code === String(code ?? '').trim().toUpperCase());
+  const saveLobby = (lobby) => store.set('shop_lobbies', demoLobbies().map((l) => (l.id === lobby.id ? lobby : l)));
+  const pubLobby = (l) => (l ? { ...l, chests: l.shop_until ? l.chests : null } : null);
+  function saveLobbyRuns(runs) {
+    saveRuns(runs);
+    emitDemo('shop_runs', null);
+  }
+  function advanceLobby(id) {
+    const l = demoLobbies().find((x) => x.id === id);
+    if (!l?.started_at || l.ended_at) return;
+    let runs = store.get('shop_runs', []);
+    const inLobby = () => runs.filter((r) => r.lobby_id === id);
+    const now = Date.now();
+    const iso = new Date().toISOString();
+    if (!l.shop_until) {
+      if (inLobby().some((r) => r.status === 'choosing')) {
+        if (now < Date.parse(l.chests_until)) return;
+        for (const r of inLobby().filter((x) => x.status === 'choosing')) {
+          const taken = new Set(inLobby().map((x) => x.chest).filter((c) => c != null));
+          const free = [0, 1, 2, 3].filter((c) => !taken.has(c));
+          const pick = free[randomInt(free.length)];
+          runs = runs.map((x) => (x.id === r.id ? { ...x, chest: pick, coins: l.chests[pick], status: 'opened', updated_at: iso } : x));
+        }
+      }
+      const secs = ({ ...DEFAULT_SHOP, ...store.get('shop_settings', {}) }).shop_seconds;
+      l.shop_until = new Date(now + (secs + 3) * 1000).toISOString();
+      runs = runs.map((x) => (x.lobby_id === id && x.status === 'opened' ? { ...x, status: 'shopping', shop_until: l.shop_until, updated_at: iso } : x));
+    } else if (!l.vs_at) {
+      if (inLobby().some((r) => r.status === 'shopping') && now <= Date.parse(l.shop_until) + 3000) return;
+      l.vs_at = iso;
+      runs = runs.map((x) => (x.lobby_id === id && ['shopping', 'playing'].includes(x.status) ? { ...x, status: 'playing', updated_at: iso } : x));
+    } else if (inLobby().every((r) => r.status === 'done')) {
+      Object.assign(l, { ended_at: iso, open: false });
+    } else {
+      return;
+    }
+    saveLobby(l);
+    saveLobbyRuns(runs);
+  }
+  function lobbyOfRun(run) {
+    return run.lobby_id ? demoLobbies().find((l) => l.id === run.lobby_id) : null;
+  }
+  // Mitspieler in anderen Tabs
+  addEventListener('storage', (e) => {
+    if (e.key === 'zd_shop_runs') (demoListeners.shop_runs ?? []).forEach((cb) => cb(null));
+  });
+  async function changeChallenge(fn) {
+    await requireAdmin();
+    const ch = { ...DEFAULT_CHALLENGE, ...store.get('win_challenge', {}) };
+    const next = { ...fn(ch, store.get('users', {})[current.email]?.username ?? ''), updated_at: new Date().toISOString() };
+    store.set('win_challenge', next);
+    emitDemo('win_challenge', next);
+    return next;
+  }
+  function addPetEvent(ev) {
+    const row = { id: nextId++, created_at: new Date().toISOString(), ...ev };
+    store.set('pet_events', [row, ...store.get('pet_events', [])].slice(0, 40));
+    emitDemo('pet_events', row);
+    return row;
+  }
+
+  // Beispiel-Kanäle für die Demo (Plattform)
+  function demoChannels() {
+    return store.get('channels', null) ?? [
+      { id: 'demo-default', login: (CONFIG.CHANNEL || 'streamhelp').toLowerCase(), display_name: CONFIG.CHANNEL || 'StreamHelp', avatar_url: '', status: 'active', is_default: true },
+      { id: 'demo-retro', login: 'retrolena', display_name: 'RetroLena', avatar_url: '', status: 'active', is_default: false },
+    ];
+  }
+  function demoChannelPublic(c) {
+    return { id: c.id, login: c.login, display_name: c.display_name, avatar_url: c.avatar_url ?? '', is_default: !!c.is_default,
+      status: c.status, is_owner: !!c.owner && c.owner === current?.email };
+  }
+
+  const sessionEmail = store.get('session', null);
+  const users = store.get('users', {});
+  if (sessionEmail && users[sessionEmail]) current = { id: sessionEmail, email: sessionEmail };
+
+  return {
+    demo: true,
+    // Für die neueren Content-Ideen (js/extras-api.js)
+    raw: {
+      store,
+      me: () => current,
+      name: () => store.get('users', {})[current?.email]?.username ?? current?.email ?? 'Zuschauer',
+      isAdmin: () => isAdminNow(),
+      requireAdmin,
+    },
+    async getUser() { return current; },
+    onAuthChange(cb) { listeners.push(cb); },
+    async signIn(email, password) {
+      const u = store.get('users', {})[email.toLowerCase()];
+      if (!u || u.pass !== await hash(password)) throw new Error('E-Mail oder Passwort ist falsch.');
+      current = { id: email.toLowerCase(), email: email.toLowerCase() };
+      store.set('session', current.email);
+      store.set('session_aal', 'aal1');
+      store.set('session_at', new Date().toISOString());
+      emit();
+    },
+    async signUp(username, email, password) {
+      const all = store.get('users', {});
+      const key = email.toLowerCase();
+      if (all[key]) throw new Error('Diese E-Mail ist bereits registriert.');
+      // Im Demo-Modus wird der erste Account zum Admin, damit man das Bearbeiten testen kann.
+      all[key] = { username, pass: await hash(password), is_admin: Object.keys(all).length === 0 };
+      store.set('users', all);
+      current = { id: key, email: key };
+      store.set('session', key);
+      emit();
+      return { needsConfirmation: false };
+    },
+    async authProviders() {
+      return { twitch: true, discord: true, google: true, spotify: true, github: true };
+    },
+    async signInWithProvider() {
+      throw new Error('Im Demo-Modus nicht verfügbar. Social-Logins brauchen Supabase.');
+    },
+    async adminSiteLogin(email) {
+      if (!store.get('users', {})[email]) throw new Error('Admin-Account nicht gefunden.');
+      current = { id: email, email };
+      store.set('session', email);
+    },
+    async signOut() {
+      current = null;
+      store.set('session', null);
+      store.set('session_aal', 'aal1');
+      emit();
+    },
+
+    // ---------- Sicherheit (Demo): Der Zwei-Faktor-Code ist hier immer 123456 ----------
+    async mfaStatus() {
+      const f = store.get(`mfa_${current?.email}`, null);
+      const factors = f?.verified ? [{ id: f.id, factor_type: 'totp', status: 'verified', created_at: f.created_at }] : [];
+      const aal = factors.length && store.get('session_aal', 'aal1') === 'aal2' ? 'aal2' : 'aal1';
+      return { current: aal, next: factors.length ? 'aal2' : 'aal1', factors, demo: true };
+    },
+    async mfaEnroll() {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const f = { id: `demo-${Date.now().toString(36)}`, verified: false, created_at: new Date().toISOString() };
+      store.set(`mfa_${current.email}`, f);
+      return { id: f.id, qr: '', secret: 'DEMO MODE CODE 123456', demo: true };
+    },
+    async mfaVerify(factorId, code) {
+      const f = store.get(`mfa_${current?.email}`, null);
+      if (!f || f.id !== factorId) throw new Error('Bitte die Einrichtung neu starten.');
+      if (String(code ?? '').replace(/\s+/g, '') !== '123456') throw new Error('Der Code passt nicht. (Demo: 123456)');
+      store.set(`mfa_${current.email}`, { ...f, verified: true });
+      store.set('session_aal', 'aal2');
+    },
+    async mfaUnenroll() { store.set(`mfa_${current?.email}`, null); },
+    async mySessions() {
+      const aal = store.get('session_aal', 'aal1');
+      const others = store.get('demo_sessions', [
+        { id: 'demo-phone', created_at: new Date(Date.now() - 3 * 86400_000).toISOString(), last_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+          user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile Safari', ip: '84.150.12.7', aal: 'aal1' },
+      ]);
+      return [{ id: 'demo-this', created_at: store.get('session_at', new Date().toISOString()), last_at: new Date().toISOString(),
+        user_agent: navigator.userAgent, ip: '', aal, current: true }, ...others.map((x) => ({ ...x, current: false }))];
+    },
+    async revokeSession(id) {
+      const list = (await this.mySessions()).filter((x) => !x.current && x.id !== id);
+      store.set('demo_sessions', list);
+      return true;
+    },
+    async signOutOthers() { store.set('demo_sessions', []); },
+    async modRights() {
+      const denied = store.get('mod_rights', {});
+      return (await this.getMods()).map((m) => ({ ...m, denied: denied[m.twitch_user_id] ?? [] }));
+    },
+    async setModRights(twitchUserId, list) {
+      await requireAdmin();
+      const all = store.get('mod_rights', {});
+      all[twitchUserId] = [...new Set(list)].sort();
+      store.set('mod_rights', all);
+      const log = store.get('audit_log', []);
+      log.unshift({ id: Date.now(), at: new Date().toISOString(), actor_name: store.get('users', {})[current.email]?.username ?? '', role: 'owner',
+        action: 'mod_rights_set', tables: ['mod_rights'], ops: ['update'], detail: {} });
+      store.set('audit_log', log.slice(0, 100));
+      return { twitch_user_id: twitchUserId, denied: all[twitchUserId] };
+    },
+    async auditLog({ before = null, role = null } = {}) {
+      await requireAdmin();
+      const ago = (m) => new Date(Date.now() - m * 60_000).toISOString();
+      const sample = [
+        { id: 5, at: ago(12), actor_name: 'Lena_Mod', role: 'mod', action: 'giveaway_draw', tables: ['giveaway', 'giveaway_winners'], ops: ['update', 'insert'], detail: {} },
+        { id: 4, at: ago(35), actor_name: 'Lena_Mod', role: 'mod', action: 'site_guard_set', tables: ['site_guard'], ops: ['update'], detail: {} },
+        { id: 3, at: ago(80), actor_name: 'Kai_Mod', role: 'mod', action: 'wheel_cost', tables: [], ops: [], detail: { cost: 500 } },
+        { id: 2, at: ago(240), actor_name: 'Kai_Mod', role: 'mod', action: 'bingo_new_card', tables: ['bingo_card'], ops: ['update'], detail: {} },
+        { id: 1, at: ago(1500), actor_name: 'Du', role: 'owner', action: 'overlay_save', tables: ['overlay_config'], ops: ['update'], detail: {} },
+      ];
+      return [...store.get('audit_log', []), ...sample]
+        .filter((x) => (before === null || x.id < before) && (!role || x.role === role));
+    },
+    // Demo: keine KI – die Seite antwortet aus den FAQ
+    async helpAsk() { return { fallback: true }; },
+    async contactSend(m) {
+      if (String(m.message ?? '').trim().length < 10) throw new Error('Bitte schreib etwas mehr (mindestens 10 Zeichen).');
+      const list = store.get('contact_messages', []);
+      list.unshift({ id: Date.now(), created_at: new Date().toISOString(), name: m.name, email: m.email, topic: m.topic,
+        message: m.message, lang: m.lang, channel: '', status: 'new' });
+      store.set('contact_messages', list.slice(0, 100));
+      return true;
+    },
+    async showcaseList() {
+      const on = store.get('showcase', true);
+      return on ? [{ login: 'streamhelp', display_name: 'StreamHelp', avatar_url: '', live: true, category: 'Fortnite', profile: !!store.get('profile', {}).is_public },
+        { login: 'retrolena', display_name: 'RetroLena', avatar_url: '', live: false, category: '' }] : [];
+    },
+    async channelShowcase() { return store.get('showcase', true); },
+    async setChannelShowcase(on) { await requireAdmin(); store.set('showcase', !!on); return !!on; },
+    // Demo: Profil und Zeitplan in diesem Browser; Termine in der Zeitzone des Browsers
+    async profileGet() {
+      await requireAdmin();
+      return demoProfile();
+    },
+    async profileSave(p) {
+      await requireAdmin();
+      const links = (Array.isArray(p.links) ? p.links : []).slice(0, 8)
+        .filter((l) => /^https:\/\/[^\s<>"'\\]{3,}$/.test(l?.url ?? '') && l.url.length <= 300)
+        .map((l) => ({ label: String(l.label ?? '').trim().slice(0, 30), url: l.url.trim() }));
+      const old = store.get('profile', {});
+      store.set('profile', {
+        ...old, bio: String(p.bio ?? '').trim().slice(0, 300), links, tz: p.tz || 'Europe/Berlin',
+        away_until: p.away_until || null, away_note: String(p.away_note ?? '').trim().slice(0, 120),
+        is_public: p.is_public ?? old.is_public ?? false,
+      });
+      return demoProfile();
+    },
+    // Sponsoring-Börse im Demo-Modus: Angebote, Bewerbungen und Logos in localStorage (wie live: Freigabe im
+    // Admin-Bereich mit Passwort „demo“). Der eigene Kanal hat hier Ø 12 Zuschauer.
+    async sponsoringSubmit(offer, logo, website2 = '') {
+      if (website2) return { id: 'x', token: '0'.repeat(64) };
+      const o = offer ?? {};
+      const email = String(o.contact_email ?? '').trim().toLowerCase();
+      if (String(o.company ?? '').trim().length < 2) throw new Error('Bitte den Firmennamen angeben (2–80 Zeichen).');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Bitte eine gültige E-Mail-Adresse angeben.');
+      if (String(o.title ?? '').trim().length < 3) throw new Error('Bitte einen Titel angeben (3–100 Zeichen).');
+      if (String(o.description ?? '').trim().length < 10) throw new Error('Bitte das Angebot beschreiben (mindestens 10 Zeichen).');
+      if (o.accept_terms !== true) throw new Error('Bitte die Bedingungen für Firmen bestätigen.');
+      for (const u of [o.website, o.link]) if (u && !/^https:\/\/[^\s<>"'\\]{3,}$/.test(String(u).trim())) throw new Error('Links müssen mit https:// beginnen.');
+      const id = crypto.randomUUID();
+      const token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join('');
+      let logo_path = null;
+      if (logo) {
+        const ext = /^data:image\/(png|jpeg|webp);/.exec(logo)?.[1];
+        if (!ext) throw new Error('Logo: bitte PNG, JPG oder WebP.');
+        logo_path = `${id}.${ext === 'jpeg' ? 'jpg' : ext}`;
+        store.set('sponsor_logos', { ...store.get('sponsor_logos', {}), [logo_path]: logo });
+      }
+      const num = (v, d) => (v === '' || v == null || !Number.isFinite(Number(v)) ? d : Math.round(Number(v)));
+      const offers = store.get('sponsor_offers', []);
+      offers.unshift({
+        id, token, company: String(o.company).trim().slice(0, 80), contact_email: email, website: String(o.website ?? '').trim(),
+        title: String(o.title).trim().slice(0, 100), description: String(o.description).trim().slice(0, 1500), reward: String(o.reward ?? '').trim().slice(0, 200),
+        category: ['gaming', 'hardware', 'software', 'food', 'fashion', 'education', 'services', 'other'].includes(o.category) ? o.category : 'other',
+        terms_accepted_at: new Date().toISOString(),
+        pay_mode: o.pay_mode === 'streamhelp' ? 'streamhelp' : 'direct', amount_cents: num(o.amount_cents, null),
+        min_viewers: Math.max(0, num(o.min_viewers, 0)), max_viewers: num(o.max_viewers, null), slots: Math.min(100, Math.max(1, num(o.slots, 10))),
+        ends_on: /^\d{4}-\d{2}-\d{2}$/.test(o.ends_on ?? '') ? o.ends_on : null,
+        overlay_text: String(o.overlay_text ?? '').trim().slice(0, 100), code: String(o.code ?? '').trim().slice(0, 40), link: String(o.link ?? '').trim(),
+        logo_path, every_min: Math.min(120, Math.max(5, num(o.every_min, 15))), show_sec: Math.min(60, Math.max(5, num(o.show_sec, 12))),
+        status: 'pending', admin_note: '', created_at: new Date().toISOString(),
+      });
+      store.set('sponsor_offers', offers);
+      return { id, token };
+    },
+    async sponsoringManage(token) {
+      const o = store.get('sponsor_offers', []).find((x) => x.token === token);
+      if (!o) throw new Error('Unbekannter Verwaltungs-Link.');
+      const taken = store.get('sponsor_applications', []).filter((a) => a.offer_id === o.id && a.status === 'accepted').length;
+      const { token: _t, ...offer } = o;
+      return { offer: { ...offer, taken }, applications: store.get('sponsor_applications', []).filter((a) => a.offer_id === o.id && a.status !== 'withdrawn') };
+    },
+    async sponsoringDecide(token, applicationId, decision, note = '') {
+      const o = store.get('sponsor_offers', []).find((x) => x.token === token);
+      if (!o) throw new Error('Unbekannter Verwaltungs-Link.');
+      const apps = store.get('sponsor_applications', []);
+      const a = apps.find((x) => x.id === applicationId && x.offer_id === o.id);
+      if (!a) throw new Error('Diese Bewerbung gibt es nicht.');
+      let sponsors = store.get('sponsors', []);
+      if (decision === 'accept') {
+        if (o.status !== 'active') throw new Error('Das Angebot ist nicht (mehr) freigegeben.');
+        if (apps.filter((x) => x.offer_id === o.id && x.status === 'accepted').length >= o.slots) throw new Error('Alle Plätze sind vergeben.');
+        Object.assign(a, { status: 'accepted', company_note: note, decided_at: new Date().toISOString() });
+        sponsors = sponsors.filter((x) => x.offer_id !== o.id);
+        sponsors.push({ id: Date.now(), name: o.company, text: o.overlay_text, code: o.code, url: o.link, active: true,
+          offer_id: o.id, logo_path: o.logo_path, every_min: o.every_min, show_sec: o.show_sec });
+      } else if (decision === 'decline') Object.assign(a, { status: 'declined', company_note: note, decided_at: new Date().toISOString() });
+      else if (decision === 'end') { a.status = 'ended'; sponsors = sponsors.filter((x) => x.offer_id !== o.id); }
+      store.set('sponsor_applications', apps);
+      store.set('sponsors', sponsors);
+      return this.sponsoringManage(token);
+    },
+    async sponsoringClose(token) {
+      const offers = store.get('sponsor_offers', []);
+      const o = offers.find((x) => x.token === token);
+      if (!o) throw new Error('Unbekannter Verwaltungs-Link.');
+      o.status = 'closed';
+      store.set('sponsor_offers', offers);
+      store.set('sponsor_applications', store.get('sponsor_applications', []).map((a) => (a.offer_id === o.id && ['pending', 'accepted'].includes(a.status)
+        ? { ...a, status: a.status === 'accepted' ? 'ended' : 'declined' } : a)));
+      store.set('sponsors', store.get('sponsors', []).filter((x) => x.offer_id !== o.id));
+      return this.sponsoringManage(token);
+    },
+    async sponsoringOffers() {
+      await requireAdmin();
+      const size = { avg: 12, peak: 25, streams: 6 };
+      const apps = store.get('sponsor_applications', []);
+      const pub = (o) => { const { token: _t, contact_email: _e, ...rest } = o; return { ...rest, taken: apps.filter((a) => a.offer_id === o.id && a.status === 'accepted').length }; };
+      const offers = store.get('sponsor_offers', []);
+      const mine = apps.filter((a) => a.mine && a.status !== 'withdrawn');
+      return {
+        size,
+        offers: offers.filter((o) => o.status === 'active' && size.avg >= o.min_viewers && (o.max_viewers == null || size.avg <= o.max_viewers)
+          && !mine.some((a) => a.offer_id === o.id) && pub(o).taken < o.slots).map(pub),
+        mine: mine.map((a) => ({ offer: pub(offers.find((o) => o.id === a.offer_id) ?? {}), status: a.status, message: a.message, company_note: a.company_note ?? '', created_at: a.created_at })),
+      };
+    },
+    async sponsoringApply(offerId, message, share) {
+      await requireAdmin();
+      const apps = store.get('sponsor_applications', []);
+      if (apps.some((a) => a.mine && a.offer_id === offerId && a.status !== 'withdrawn')) throw new Error('Du hast dich schon beworben.');
+      const ch = demoChannels().find((c) => c.owner === current?.email) ?? { login: 'streamer', display_name: 'Streamer' };
+      apps.push({ id: Date.now(), offer_id: offerId, mine: true, login: ch.login, display_name: ch.display_name, avatar_url: '',
+        message: String(message ?? '').trim().slice(0, 500), stats: share ? { avg: 12, peak: 25, streams: 6, login: ch.login } : null,
+        status: 'pending', company_note: '', pay_status: 'open', created_at: new Date().toISOString() });
+      store.set('sponsor_applications', apps);
+      return this.sponsoringOffers();
+    },
+    async sponsoringWithdraw(offerId) {
+      await requireAdmin();
+      store.set('sponsor_applications', store.get('sponsor_applications', []).map((a) => (a.mine && a.offer_id === offerId && ['pending', 'accepted'].includes(a.status)
+        ? { ...a, status: a.status === 'accepted' ? 'ended' : 'withdrawn' } : a)));
+      store.set('sponsors', store.get('sponsors', []).filter((x) => x.offer_id !== offerId));
+      return this.sponsoringOffers();
+    },
+    // Trinkgeld und Sponsoren im Demo-Modus: in localStorage; Ko-fi gibt es hier nicht, der Test-Alert geht
+    async tipGet() {
+      await requireAdmin();
+      const t = store.get('tips', {});
+      return {
+        channel_id: 'demo', kofi: !!t.kofi, links: t.links ?? [], alert: t.alert ?? true, thank: t.thank ?? true,
+        thank_text: t.thank_text || '💶 Danke {name} für {amount} Trinkgeld! {message}', min_cents: t.min_cents ?? 0, last_at: null,
+        recent: store.get('stream_alerts', []).filter((a) => a.kind === 'tip').slice(0, 15)
+          .map((a) => ({ name: a.user_name, cents: a.amount, currency: a.tier, message: a.message, at: a.created_at })),
+      };
+    },
+    async tipSave(p) {
+      await requireAdmin();
+      const links = [];
+      for (const l of Array.isArray(p.links) ? p.links : []) {
+        const url = String(l?.url ?? '').trim();
+        if (!url) continue;
+        if (!/^https:\/\/[^\s<>"'\\]{3,}$/.test(url) || url.length > 300) throw new Error('Bitte nur https-Links (z. B. https://paypal.me/…).');
+        links.push({ label: String(l.label ?? '').trim().slice(0, 30), url });
+        if (links.length >= 4) break;
+      }
+      store.set('tips', { ...store.get('tips', {}), links, alert: !!p.alert, thank: !!p.thank, thank_text: String(p.thank_text ?? '').trim().slice(0, 300), min_cents: Math.max(0, p.min_cents | 0) });
+      return this.tipGet();
+    },
+    async tipKofiToken(token) {
+      await requireAdmin();
+      const v = String(token ?? '').trim();
+      if (v && !/^[A-Za-z0-9-]{8,100}$/.test(v)) throw new Error('Das sieht nicht wie ein Ko-fi-Token aus.');
+      store.set('tips', { ...store.get('tips', {}), kofi: !!v });
+      return this.tipGet();
+    },
+    async sponsorAdminList() { await requireAdmin(); return store.get('sponsors', []); },
+    async sponsorSave(x) {
+      await requireAdmin();
+      const fixed = x.id && store.get('sponsors', []).find((s) => s.id === x.id && s.offer_id);
+      if (fixed) { // aus der Sponsoring-Börse: legt die Firma fest, nur zeigen/pausieren
+        store.set('sponsors', store.get('sponsors', []).map((s) => (s.id === x.id ? { ...s, active: x.active !== false } : s)));
+        return store.get('sponsors', []);
+      }
+      const name = String(x.name ?? '').trim().slice(0, 60);
+      const url = String(x.url ?? '').trim();
+      if (!name) throw new Error('Bitte einen Namen eingeben.');
+      if (url && !/^https:\/\/[^\s<>"'\\]{3,}$/.test(url)) throw new Error('Der Link muss mit https:// beginnen.');
+      const list = store.get('sponsors', []);
+      const row = { name, text: String(x.text ?? '').trim().slice(0, 140), code: String(x.code ?? '').trim().slice(0, 40), url, active: x.active !== false };
+      if (x.id) {
+        const i = list.findIndex((s) => s.id === x.id);
+        if (i < 0) throw new Error('Diesen Sponsor gibt es nicht.');
+        list[i] = { ...list[i], ...row };
+      } else {
+        if (list.length >= 20) throw new Error('Höchstens 20 Sponsoren.');
+        list.push({ id: Date.now(), ...row });
+      }
+      store.set('sponsors', list);
+      return list;
+    },
+    async sponsorDelete(id) {
+      await requireAdmin();
+      const offer = store.get('sponsors', []).find((s) => s.id === id)?.offer_id;
+      if (offer) {
+        store.set('sponsor_applications', store.get('sponsor_applications', []).map((a) => (a.mine && a.offer_id === offer && a.status === 'accepted' ? { ...a, status: 'ended' } : a)));
+      }
+      const list = store.get('sponsors', []).filter((s) => s.id !== id);
+      store.set('sponsors', list);
+      return list;
+    },
+    async proStatus() { return { pro: false, until: null }; },
+    async channelHasPro() { return false; },
+    // Raid-Netzwerk im Demo-Modus: drei erfundene Mitglieder sind live, geraidet wird nicht
+    async raidNetworkGet() {
+      await requireAdmin();
+      const r = store.get('raid_network', {});
+      const enabled = !!r.enabled;
+      const raided = store.get('raid_log', {});
+      const members = [
+        { login: 'pixelpaula', display_name: 'PixelPaula', category: 'Fortnite', viewers: 14, language: 'de', note: 'Zero Build mit Chat-Challenges' },
+        { login: 'nachteule_nils', display_name: 'NachteuleNils', category: 'Just Chatting', viewers: 6, language: 'de', note: 'Gemütlich quatschen, Musikwünsche' },
+        { login: 'gg_gina', display_name: 'GG_Gina', category: 'Minecraft', viewers: 31, language: 'en', note: 'Hardcore survival day 40' },
+      ].map((m) => ({ ...m, avatar_url: '', same_game: m.category === 'Fortnite', same_lang: m.language === (r.language ?? 'de'),
+        raided_recently: Date.now() - (raided[m.login] ?? 0) < 7 * 864e5 }))
+        .sort((a, b) => (b.same_game - a.same_game) || (b.same_lang - a.same_lang) || (a.viewers - b.viewers));
+      return {
+        enabled, language: r.language ?? 'de', note: r.note ?? '', announce: r.announce ?? true, welcome: r.welcome ?? true,
+        raid_text: r.raid_text || '🚀 Gleich geht\'s rüber zu {target}! Bleibt dabei und sagt Hallo 💜',
+        live: true, category: 'Fortnite', members: 4, suggestions: enabled ? members : [],
+      };
+    },
+    async raidNetworkSave(p) {
+      await requireAdmin();
+      const lang = ['de', 'en', 'es', 'fr', 'it', 'nl', 'pl', 'pt', 'tr', 'ru', 'other'].includes(p.language) ? p.language : 'other';
+      store.set('raid_network', {
+        enabled: !!p.enabled, language: lang, note: String(p.note ?? '').trim().slice(0, 120), announce: !!p.announce, welcome: !!p.welcome,
+        raid_text: String(p.raid_text ?? '').trim().slice(0, 300),
+      });
+      return this.raidNetworkGet();
+    },
+    async raidStart(login) {
+      await requireAdmin();
+      const d = await this.raidNetworkGet();
+      const t = d.suggestions.find((m) => m.login === login);
+      if (!t) throw new Error(d.enabled ? 'Dieser Kanal ist gerade nicht live.' : 'Schalte zuerst „Im Raid-Netzwerk sichtbar“ ein.');
+      store.set('raid_log', { ...store.get('raid_log', {}), [login]: Date.now() });
+      return { ok: true, target: t.display_name, demo: true };
+    },
+    async raidCancel() { await requireAdmin(); return { ok: true, target: '', demo: true }; },
+    async referralGet() {
+      await requireAdmin();
+      const mine = demoChannels().find((c) => c.owner === current?.email);
+      return { login: mine?.login ?? 'streamer', active: 1, badge: 'werber', pending: 1, channels: [
+        { login: 'kekskruemel', display_name: 'KeksKrümel', avatar_url: '', status: 'active', since: new Date(Date.now() - 9 * 864e5).toISOString() },
+        { login: 'luna_live', display_name: 'LunaLive', avatar_url: '', status: 'pending', since: new Date(Date.now() - 864e5).toISOString() },
+      ] };
+    },
+    async referralClaim() { return false; },
+    // Discord im Demo-Modus: Einstellungen in localStorage, gepostet wird nichts
+    // Console (Entwurf) im Demo-Modus: in localStorage, nur Admins (wie is_site_admin)
+    async consoleGet() {
+      await requireAdmin();
+      const c = store.get('console_config', {});
+      return { keys: Array.isArray(c.keys) ? c.keys : [], display: c.display ?? {}, kit: c.kit ?? {}, updated_by: c.updated_by ?? '', updated_at: c.updated_at ?? null };
+    },
+    async consoleSave(keys, display) {
+      await requireAdmin();
+      if (!Array.isArray(keys) || keys.length > 9) throw new Error('Die Tasten fehlen oder es sind mehr als 9.');
+      const ok = (k) => k && typeof k === 'object' && /^(none|scene|spin|sound|alert|guard|page)$/.test(k.action ?? '')
+        && String(k.arg ?? '').length <= 64 && String(k.label ?? '').length <= 24 && String(k.icon ?? '').length <= 8 && /^(|#[0-9a-fA-F]{6})$/.test(k.color ?? '');
+      if (!keys.every(ok)) throw new Error('Eine Taste ist ungültig belegt.');
+      store.set('console_config', { ...store.get('console_config', {}), keys, display: display ?? {}, updated_by: this.raw.name(), updated_at: new Date().toISOString() });
+      return this.consoleGet();
+    },
+    async consoleKitSave(kit) {
+      await requireAdmin();
+      if (!kit || typeof kit !== 'object' || Array.isArray(kit)) throw new Error('Baukasten-Daten fehlen.');
+      if (JSON.stringify(kit).length > 30000) throw new Error('Zu viele Einträge im Baukasten.');
+      store.set('console_config', { ...store.get('console_config', {}), kit, updated_by: this.raw.name(), updated_at: new Date().toISOString() });
+      return this.consoleGet();
+    },
+    // 3D-Modell im Demo-Modus: nur bis zum Neuladen (zu groß für localStorage)
+    async consoleModelGet() { await requireAdmin(); return demoConsoleModel; },
+    async consoleModelUpload(file) {
+      await requireAdmin();
+      if (file.size > 12 * 1024 * 1024) throw new Error('Das Modell ist größer als 12 MB.');
+      demoConsoleModel = await file.text();
+    },
+    async discordGet() {
+      await requireAdmin();
+      const d = store.get('discord', {});
+      return {
+        connected: !!d.webhook_name, webhook_name: d.webhook_name ?? '', on_live: d.on_live ?? true, on_recap: d.on_recap ?? true,
+        on_ideas: d.on_ideas ?? false, live_text: d.live_text || '🔴 {streamer} ist jetzt live: {title}', mention: d.mention ?? '',
+        last_ok_at: d.last_ok_at ?? null, last_error: '',
+      };
+    },
+    async discordSave(p) {
+      await requireAdmin();
+      let mention = String(p.mention ?? '').trim().toLowerCase().replace(/^<@&(\d+)>$/, '$1').replace(/^@/, '');
+      if (!/^(|here|everyone|\d{5,25})$/.test(mention)) throw new Error('Erwähnung: leer, here, everyone oder eine Rollen-ID.');
+      store.set('discord', {
+        ...store.get('discord', {}), on_live: !!p.on_live, on_recap: !!p.on_recap, on_ideas: !!p.on_ideas,
+        live_text: String(p.live_text ?? '').trim().slice(0, 300), mention,
+      });
+      return this.discordGet();
+    },
+    async discordConnect(url) {
+      await requireAdmin();
+      if (!/^https:\/\/(ptb\.|canary\.)?discord(app)?\.com\/api\/webhooks\/[0-9]{5,25}\/[A-Za-z0-9_-]{20,100}$/.test(String(url ?? '').trim())) {
+        throw new Error('Das ist keine Discord-Webhook-Adresse (https://discord.com/api/webhooks/…).');
+      }
+      store.set('discord', { ...store.get('discord', {}), webhook_name: 'Demo-Webhook' });
+      return { connected: true, webhook_name: 'Demo-Webhook' };
+    },
+    async discordDisconnect() {
+      await requireAdmin();
+      store.set('discord', { ...store.get('discord', {}), webhook_name: '' });
+      return this.discordGet();
+    },
+    async discordPost(kind, _tile, auto = false) {
+      await requireAdmin();
+      const d = store.get('discord', {});
+      if (auto && (!d.webhook_name || !d.on_ideas)) return { ok: true, skipped: true };
+      if (!d.webhook_name) throw new Error('Discord ist noch nicht verbunden.');
+      if (!['test', 'schedule', 'idea'].includes(kind)) throw new Error('Unbekannte Nachricht');
+      store.set('discord', { ...store.get('discord', {}), last_ok_at: new Date().toISOString() });
+      return { ok: true, demo: true };
+    },
+    async profileAccentSave(accent) {
+      await requireAdmin();
+      const v = accent ? String(accent).trim().toLowerCase() : null;
+      if (v && !/^#[0-9a-f]{6}$/.test(v)) throw new Error('Bitte eine Farbe wie #9146ff.');
+      store.set('profile', { ...store.get('profile', {}), accent: v });
+      return v;
+    },
+    async scheduleSave(slots) {
+      await requireAdmin();
+      if (!Array.isArray(slots) || slots.length > 21) throw new Error('Höchstens 21 Termine pro Woche.');
+      for (const x of slots) {
+        if (!/^[1-7]$/.test(String(x.weekday)) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.start ?? '')) throw new Error('Ungültiger Termin: Wochentag 1–7 und Uhrzeit HH:MM.');
+      }
+      store.set('schedule', slots.map((x) => ({
+        weekday: Number(x.weekday), start: x.start, minutes: Math.min(Math.max(Number(x.minutes) || 120, 15), 1440),
+        title: String(x.title ?? '').trim().slice(0, 80), game: String(x.game ?? '').trim().slice(0, 60),
+      })));
+      return demoProfile();
+    },
+    async publicProfile() {
+      const p = demoProfile();
+      if (!p.is_public) return null;
+      const away = p.away_until && p.away_until >= new Date().toISOString().slice(0, 10);
+      return { login: p.login, display_name: p.display_name, avatar_url: '', live: false, category: '', bio: p.bio, links: p.links, tz: p.tz, accent: p.accent,
+        away_until: away ? p.away_until : null, away_note: away ? p.away_note : '', slots: p.slots, upcoming: p.upcoming,
+        tips: store.get('tips', {}).links ?? [], sponsors: store.get('sponsors', []).filter((x) => x.active !== false) };
+    },
+    // Demo: Artist-Bewerbung und Uploads in diesem Browser; freischalten im Admin-Bereich (admin.html, Passwort „demo“)
+    async artistMe() {
+      if (!current) throw new Error('Bitte anmelden.');
+      const a = store.get('artists', {})[current.email] ?? null;
+      const assets = store.get('artist_assets', []).filter((x) => x.artist === current.email && x.status !== 'removed')
+        .map(({ artist: _a, ...x }) => x).sort((x, y) => y.created_at.localeCompare(x.created_at));
+      return { artist: a && { name: a.name, slug: a.slug, bio: a.bio, links: a.links, status: a.status, note: a.note ?? '', applied_at: a.applied_at, reviewed_at: a.reviewed_at ?? null }, assets };
+    },
+    async artistApply(p) {
+      if (!current) throw new Error('Bitte anmelden.');
+      const name = String(p.name ?? '').replace(/\s+/g, ' ').trim();
+      const slug = String(p.slug ?? '').trim().toLowerCase();
+      const links = (p.links ?? []).map((l) => String(l).trim()).filter((l) => /^https:\/\/[^\s<>"]{3,195}$/.test(l)).slice(0, 4);
+      if (name.length < 2 || name.length > 40) throw new Error('Der Artist-Name braucht 2 bis 40 Zeichen.');
+      if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug)) throw new Error('Die Kennung braucht 3 bis 30 Zeichen: Kleinbuchstaben, Ziffern und Bindestrich.');
+      if (!links.length) throw new Error('Mindestens ein Link zu deinen Arbeiten (https://…), z. B. Portfolio oder Instagram.');
+      const all = store.get('artists', {});
+      if (Object.entries(all).some(([k, a]) => k !== current.email && a.slug === slug) || slug === 'pixel-pinsel') throw new Error('Diese Kennung ist schon vergeben.');
+      const old = all[current.email];
+      if (old?.status === 'blocked') throw new Error('Dein Artist-Konto ist gesperrt. Bei Fragen: Kontaktformular.');
+      const again = !old || old.status === 'rejected';
+      all[current.email] = {
+        ...old, name, slug, bio: String(p.bio ?? '').trim().slice(0, 300), links, folder: demoArtistFolder(current.email),
+        status: again ? 'pending' : old.status, applied_at: again ? new Date().toISOString() : old.applied_at,
+      };
+      store.set('artists', all);
+      return this.artistMe();
+    },
+    // Demo: Datei als data:-Adresse im Browser (höchstens 1,5 MB – der Speicher im Browser ist klein)
+    async artistUpload(file) {
+      const a = store.get('artists', {})[current?.email];
+      if (a?.status !== 'approved') throw new Error('Hochladen dürfen nur freigeschaltete Artists.');
+      if (file.size > 1.5 * 1024 * 1024) throw new Error('Im Demo-Modus höchstens 1,5 MB je Datei (live: 10 MB).');
+      const ext = (/\.([a-z0-9]{2,4})$/i.exec(file.name)?.[1] ?? '').toLowerCase().replace('jpeg', 'jpg');
+      const path = `${a.folder}/${crypto.randomUUID()}.${ext}`;
+      const url = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(new Error('Datei nicht lesbar.'));
+        r.readAsDataURL(file);
+      });
+      const files = store.get('artist_files', {});
+      files[path] = url;
+      try {
+        localStorage.setItem('zd_artist_files', JSON.stringify(files));
+      } catch {
+        throw new Error('Der Speicher im Browser ist voll – lösch ein paar Demo-Uploads.');
+      }
+      return path;
+    },
+    async artistSubmit(p) {
+      const a = store.get('artists', {})[current?.email];
+      if (a?.status !== 'approved') throw new Error('Hochladen dürfen nur freigeschaltete Artists.');
+      if (!p.rights) throw new Error('Bitte bestätige, dass du die Rechte an dem Design hast.');
+      const title = String(p.title ?? '').replace(/\s+/g, ' ').trim();
+      if (title.length < 3 || title.length > 60) throw new Error('Der Titel braucht 3 bis 60 Zeichen.');
+      const list = store.get('artist_assets', []);
+      if (list.filter((x) => x.artist === current.email && x.status === 'pending').length >= 10) throw new Error('Du hast schon 10 Uploads in der Prüfung. Warte bitte, bis sie freigegeben sind.');
+      const tags = [...new Set((p.tags ?? []).map((t) => String(t).trim().toLowerCase().replace(/[^\p{L}\p{N}-]+/gu, '-').replace(/^-+|-+$/g, '')).filter((t) => t.length >= 2 && t.length <= 20))].slice(0, 6);
+      const extra = p.kind === 'look' ? { base: p.extra?.base || 'standard', ...(p.extra?.accent ? { accent: p.extra.accent.toLowerCase() } : {}), ...(p.extra?.alert ? { alert: p.extra.alert } : {}) }
+        : p.kind === 'card' ? { rarity: p.extra?.rarity || 'rare', ...(p.extra?.emoji ? { emoji: p.extra.emoji } : {}) } : {};
+      const row = { id: crypto.randomUUID(), artist: current.email, kind: p.kind, title, description: String(p.description ?? '').trim().slice(0, 300), tags,
+        file: p.file, extra, status: 'pending', note: '', uses: 0, created_at: new Date().toISOString() };
+      store.set('artist_assets', [...list, row]);
+      const { artist: _a, ...out } = row;
+      return out;
+    },
+    async artistDelete(id) {
+      const list = store.get('artist_assets', []);
+      const x = list.find((r) => r.id === id && r.artist === current?.email);
+      if (!x) throw new Error('Nicht gefunden.');
+      store.set('artist_assets', list.filter((r) => r !== x));
+      const files = store.get('artist_files', {});
+      delete files[x.file];
+      if (x.extra?.alert) delete files[x.extra.alert];
+      store.set('artist_files', files);
+    },
+    async artistGallery(kind = null) {
+      const artists = store.get('artists', {});
+      const own = store.get('artist_assets', []).filter((x) => x.status === 'approved' && artists[x.artist]?.status === 'approved')
+        .map(({ artist, note: _n, status: _s, ...asset }) => ({ asset: { ...asset, approved_at: asset.reviewed_at }, artist: { name: artists[artist].name, slug: artists[artist].slug, links: artists[artist].links } }));
+      const uses = store.get('artist_uses', []);
+      const seeds = DEMO_GALLERY.map((x) => ({ ...x, asset: { ...x.asset, uses: x.asset.uses + (uses.includes(x.asset.id) ? 1 : 0) } }));
+      return [...own, ...seeds].filter((x) => !kind || x.asset.kind === kind);
+    },
+    async artistUse(id) {
+      await requireAdmin();
+      const uses = store.get('artist_uses', []);
+      if (!uses.includes(id)) {
+        store.set('artist_uses', [...uses, id]);
+        const list = store.get('artist_assets', []);
+        const x = list.find((r) => r.id === id);
+        if (x) { x.uses += 1; store.set('artist_assets', list); }
+      }
+      return (await this.artistGallery()).find((x) => x.asset.id === id)?.asset ?? null;
+    },
+    async artistReport(id, reason) {
+      if (!current) throw new Error('Bitte anmelden.');
+      if (String(reason ?? '').trim().length < 3) throw new Error('Bitte kurz schreiben, was nicht stimmt.');
+      const all = store.get('artist_reports', []).filter((r) => !(r.asset_id === id && r.reporter === current.email));
+      store.set('artist_reports', [...all, { id: Date.now(), asset_id: id, reporter: current.email, reason: String(reason).trim().slice(0, 300), status: 'open', created_at: new Date().toISOString() }]);
+    },
+    // Demo: Beispielzahlen, die je Tag gleich bleiben (kein Zufall – sonst springt die Statistik)
+    async channelStats(days = 7) {
+      await requireAdmin();
+      const n = Math.min(Math.max(Number(days) || 7, 1), 90);
+      const series = Array.from({ length: n }, (_, i) => {
+        const d = new Date(Date.now() - (n - 1 - i) * 86400000);
+        const seed = d.getDate() * 31 + d.getMonth() * 7;
+        const live = d.getDay() % 3 !== 0;
+        const peak = live ? 18 + (seed % 40) : 0;
+        return {
+          day: d.toISOString().slice(0, 10), live_minutes: live ? 90 + (seed % 150) : 0, peak_viewers: peak, avg_viewers: Math.round(peak * 0.7),
+          follows: live ? seed % 9 : 0, subs: live ? seed % 4 : 0, bits: live ? (seed % 5) * 100 : 0, redeems: live ? seed % 12 : 0,
+          spins: live ? seed % 6 : 0, pranks: live ? seed % 5 : 0, actions: live ? seed % 7 : 0,
+        };
+      });
+      const sum = (k) => series.reduce((a, d) => a + d[k], 0);
+      const lives = series.filter((d) => d.avg_viewers);
+      return {
+        days: n, series,
+        totals: {
+          live_minutes: sum('live_minutes'), peak_viewers: Math.max(0, ...series.map((d) => d.peak_viewers)),
+          avg_viewers: lives.length ? Math.round(sum('avg_viewers') / lives.length) : 0,
+          follows: sum('follows'), subs: sum('subs'), bits: sum('bits'), redeems: sum('redeems'), spins: sum('spins'), pranks: sum('pranks'), actions: sum('actions'),
+        },
+        top_viewers: [{ name: 'PixelPaul', seconds: 61200 }, { name: 'NightOwl_Mia', seconds: 48300 }, { name: 'LootLukas', seconds: 30120 }, { name: 'gg_sina', seconds: 21900 }],
+        chatters: 37,
+      };
+    },
+    // Demo: Datenverbrauch des Overlays – an Stream-Tagen (wie channelStats) drei Module
+    async overlayUsage(days = 7) {
+      await requireAdmin();
+      const n = Math.min(Math.max(Number(days) || 7, 1), 90);
+      const mods = { alerts: [0.9, 0.5, 0.25, 0.04], chat: [0.4, 0.15, 0.2, 1.6], games: [1.4, 0.9, 0.6, 0.05] };
+      const KEYS = ['files', 'db', 'live', 'chat'];
+      const per = {};
+      const series = Array.from({ length: n }, (_, i) => {
+        const d = new Date(Date.now() - (n - 1 - i) * 86400000);
+        const seed = d.getDate() * 31 + d.getMonth() * 7;
+        const live = d.getDay() % 3 !== 0;
+        const sec = live ? (90 + (seed % 150)) * 60 + 600 : 0;
+        const row = { day: d.toISOString().slice(0, 10), files: 0, db: 0, live: 0, chat: 0, other: 0, seconds: 0 };
+        if (!live) return row;
+        for (const [id, rate] of Object.entries(mods)) {
+          const m = (per[id] ??= { module: id, total: 0, seconds: 0, last_at: null });
+          KEYS.forEach((k, j) => { const b = Math.round(rate[j] * 1e6 * (sec / 3600) * (0.8 + (seed % 5) / 10)); row[k] += b; m.total += b; });
+          row.other += 40000; m.total += 40000;
+          row.seconds += sec; m.seconds += sec;
+          m.last_at = new Date(d.setHours(22, 15, 0, 0)).toISOString();
+        }
+        return row;
+      });
+      const sum = (k) => series.reduce((a, d) => a + d[k], 0);
+      return {
+        days: n, series,
+        modules: Object.values(per).sort((a, b) => b.total - a.total),
+        totals: { files: sum('files'), db: sum('db'), live: sum('live'), chat: sum('chat'), other: sum('other'), seconds: sum('seconds') },
+      };
+    },
+    async channelExport() {
+      await requireAdmin();
+      const tables = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k?.startsWith('zd_') || ['zd_users', 'zd_session', 'zd_session_aal'].includes(k)) continue;
+        try { tables[k.slice(3)] = JSON.parse(localStorage.getItem(k)); } catch { /* egal */ }
+      }
+      return { format: 'streamhelp-export-1', exported_at: new Date().toISOString(), channel: { login: 'demo', display_name: 'Demo' }, tables };
+    },
+    async getProfile(user) {
+      const u = store.get('users', {})[user.email] ?? {};
+      return { username: u.username ?? user.email, is_admin: !!u.is_admin };
+    },
+    async getTiles() { return demoTiles(); },
+    async updateTile(id, patch) {
+      const tiles = demoTiles().map((t) => (t.id === id ? { ...t, ...patch } : t));
+      store.set('tiles', tiles);
+      return tiles.find((t) => t.id === id);
+    },
+    async getVariants() { return demoVariants(); },
+    async saveVariants(variants) {
+      await requireAdmin();
+      const list = cleanVariants(variants);
+      store.set('wheel_variants', list);
+      return list;
+    },
+    async setWheelCost(cost) {
+      await requireAdmin();
+      const n = Math.round(Number(cost));
+      if (!Number.isFinite(n) || n < 1 || n > 1000000) throw new Error('Die Kosten müssen zwischen 1 und 1.000.000 Kanalpunkten liegen.');
+      store.set('wheel_cost', n);
+      return { cost: n, title: 'Glücksrad' };
+    },
+    async getIdeas(limit = 12) {
+      const me = current?.email ?? '';
+      return store.get('ideas', DEFAULT_IDEAS)
+        .map(({ voters = [], ...i }) => ({ ...i, votes: i.votes + (voters.includes(me) ? 1 : 0), voted: voters.includes(me) }))
+        .sort((a, b) => b.votes - a.votes || b.id - a.id)
+        .slice(0, limit);
+    },
+    async addIdea(text) {
+      const profile = await this.getProfile(current);
+      const idea = { id: nextId++, text, author: profile.username, votes: 0, voters: [current.email] };
+      store.set('ideas', [idea, ...store.get('ideas', DEFAULT_IDEAS)].slice(0, 40));
+      return { id: idea.id, text, author: idea.author, votes: 1, voted: true };
+    },
+    async voteIdea(id, on) {
+      const me = current?.email ?? '';
+      store.set('ideas', store.get('ideas', DEFAULT_IDEAS).map((i) => {
+        if (i.id !== id) return i;
+        const voters = new Set(i.voters ?? []);
+        if (on) voters.add(me); else voters.delete(me);
+        return { ...i, voters: [...voters] };
+      }));
+    },
+    async getSpins(limit = 15) { return store.get('spins', []).slice(0, limit); },
+    async overlayReady() { return true; },
+    // Demo: Admins gelten als Streamer
+    async getOverlayConfig() { return { params: '', admins_can_edit: false, updated_by: '', ...store.get('overlay_config', {}) }; },
+    async overlayAccess() {
+      const admin = isAdminNow();
+      const cfg = store.get('overlay_config', {});
+      return { can_edit: admin, is_owner: admin, admins_can_edit: !!cfg.admins_can_edit, mods_enabled: !!cfg.mods_enabled, is_mod: false };
+    },
+    async getOverlayPresets() { return [...store.get('overlay_presets', [])].sort((x, y) => x.name.localeCompare(y.name)); },
+    async saveOverlayPreset(name, params) {
+      if (!isAdminNow()) throw new Error('Vorlagen speichern darf nur, wer das Overlay anpassen darf.');
+      const n = String(name ?? '').trim();
+      if (!n || n.length > 40) throw new Error('Bitte einen Namen mit 1–40 Zeichen.');
+      const list = store.get('overlay_presets', []);
+      const old = list.find((x) => x.name.toLowerCase() === n.toLowerCase());
+      if (old) Object.assign(old, { params, updated_at: new Date().toISOString() });
+      else {
+        if (list.length >= 50) throw new Error('Höchstens 50 Vorlagen – lösch erst eine alte.');
+        list.push({ id: Date.now(), name: n, params, updated_at: new Date().toISOString() });
+      }
+      store.set('overlay_presets', list);
+      return old ?? list[list.length - 1];
+    },
+    async deleteOverlayPreset(id) { store.set('overlay_presets', store.get('overlay_presets', []).filter((x) => x.id !== id)); },
+    // ---------- Kanäle (Demo: zwei Beispiel-Kanäle, Bewerbungen bleiben im Browser) ----------
+    async resolveChannel(key) {
+      const k = String(key ?? '').toLowerCase();
+      const mine = demoChannels().find((c) => c.owner === current?.email);
+      const list = demoChannels().filter((c) => c.status === 'active' || c === mine);
+      const c = k ? list.find((x) => x.id === k || x.login === k) : list.find((x) => x.is_default);
+      return { platform: true, channel: c ? demoChannelPublic(c) : null };
+    },
+    async channelsList() { return demoChannels().filter((c) => c.status === 'active').map(demoChannelPublic); },
+    // Sammelpool: Beispiel-Spendenaktion, die langsam wächst
+    async charityPool() {
+      const k = Math.max(0, (Date.now() - Date.UTC(2026, 10, 1)) / 60000);
+      const raised = Math.min(180000, 52000 + Math.floor(k / 3) * 100);
+      const at = (cents) => (raised >= cents ? new Date(Date.UTC(2026, 10, 1) + (cents - 52000) * 1800).toISOString() : null);
+      return {
+        enabled: true, event_id: '1', title: 'StreamHelp für krebskranke Kinder', url: 'https://www.betterplace.org/de/fundraising-events',
+        goal_cents: 200000, raised_cents: raised, donations: 40 + Math.floor(k / 17),
+        milestones: [
+          { id: 1, amount_cents: 25000, title: 'Glücksrad-Marathon', description: 'Eine Stunde lang dreht der Chat das Rad.', reached_at: '2026-11-03T18:00:00Z' },
+          { id: 2, amount_cents: 50000, title: 'Gesichtsbemalung live im Stream', description: '', reached_at: '2026-11-08T20:00:00Z' },
+          { id: 3, amount_cents: 100000, title: '24-Stunden-Stream', description: 'Ein ganzer Tag live – für den guten Zweck.', reached_at: at(100000) },
+          { id: 4, amount_cents: 200000, title: 'Community-Treffen in Hamburg', description: '', reached_at: at(200000) },
+        ],
+      };
+    },
+    // Beispielzahlen, die langsam weiterwachsen (plus was im Demo-Modus selbst passiert ist)
+    async platformStats() {
+      const k = Math.max(0, (Date.now() - Date.UTC(2026, 9, 1)) / 60000);
+      const grow = (base, every) => base + Math.floor(k / every);
+      const today = (list) => list.filter((x) => new Date(x.created_at).toDateString() === new Date().toDateString()).length;
+      const spins = store.get('spins', []);
+      const pranks = store.get('pranks', []);
+      const alerts = store.get('stream_alerts', []).filter((a) => !a.test);
+      const streamers = demoChannels().filter((c) => c.status === 'active').length;
+      const live = Math.min(streamers, 1 + Math.floor(k / 7) % 3);
+      return {
+        streamers,
+        live, viewers_now: live * 37 + Math.floor(k) % 23,
+        watch_hours: grow(1840, 3), viewers_total: grow(612, 40),
+        spins: grow(1284, 7) + spins.length, spins_today: 18 + Math.floor(k / 7) % 40 + today(spins),
+        pranks: grow(731, 11) + pranks.length, pranks_today: 9 + Math.floor(k / 11) % 25 + today(pranks),
+        questions: grow(214, 60) + store.get('questions', []).length, ideas: store.get('ideas', DEFAULT_IDEAS).length + 40,
+        winners: grow(37, 900), alerts: grow(2650, 5) + alerts.length, alerts_today: 31 + Math.floor(k / 5) % 60 + today(alerts),
+        pet_moments: grow(3920, 2) + store.get('pet_events', []).length, tts: grow(402, 30), cards: grow(1555, 9),
+        quiz_answers: grow(980, 15), hotwords: grow(5230, 1), players: grow(148, 120),
+        at: new Date().toISOString(),
+      };
+    },
+    async channelMine() {
+      const c = demoChannels().find((x) => x.owner && x.owner === current?.email);
+      if (!c) return null;
+      const future = (iso) => (iso && Date.parse(iso) > Date.now() ? iso : null);
+      return {
+        ...demoChannelPublic(c), note: c.note ?? '', admin_note: c.admin_note ?? '', created_at: c.created_at,
+        blocked_until: future(c.blocked_until), overlay_off_until: future(c.overlay_off_until), overlay_off_reason: c.overlay_off_reason ?? '',
+        warning: c.warning || null, warning_at: c.warning_at ?? null,
+        warning_open: !!c.warning && (!c.warning_seen_at || c.warning_seen_at < c.warning_at),
+      };
+    },
+    async channelApply(note = '') {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const list = demoChannels();
+      if (!list.some((c) => c.owner === current.email)) {
+        const name = (store.get('users', {})[current.email]?.username ?? 'streamer').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25) || 'streamer';
+        list.push({ id: `demo-${Date.now()}`, login: name, display_name: store.get('users', {})[current.email]?.username ?? name, avatar_url: '',
+          status: 'pending', is_default: false, owner: current.email, note, created_at: new Date().toISOString() });
+        store.set('channels', list);
+      }
+      store.set(`account_type_${current.email}`, 'streamer');
+      return this.channelMine();
+    },
+    async accountType() { return current ? store.get(`account_type_${current.email}`, null) : 'unknown'; },
+    // Demo: Neuigkeiten schreibt der Admin-Bereich im selben Browser (zd_platform_updates)
+    async channelWarningSeen() {
+      const list = demoChannels();
+      const c = list.find((x) => x.owner && x.owner === current?.email);
+      if (c) { c.warning_seen_at = new Date().toISOString(); store.set('channels', list); }
+    },
+    async platformUpdates() {
+      if (!current) return [];
+      const read = store.get(`updates_read_${current.email}`, []);
+      return store.get('platform_updates', []).slice(-10).reverse().map((u) => ({ ...u, read: read.includes(u.id) }));
+    },
+    async platformUpdatesRead(id = null) {
+      if (!current) return;
+      const ids = store.get('platform_updates', []).map((u) => u.id).filter((x) => id === null || x === id);
+      store.set(`updates_read_${current.email}`, [...new Set([...store.get(`updates_read_${current.email}`, []), ...ids])]);
+    },
+    async setAccountType(type) { if (current) store.set(`account_type_${current.email}`, type); },
+    async hasTwitchLogin() { return true; }, // Demo: so tun, als wäre es ein Twitch-Konto
+    // Demo: kein Twitch – der Streamer heißt wie der Kanal in js/config.js
+    async streamerInfo() { return { connected: false, login: CONFIG.CHANNEL, name: CONFIG.CHANNEL || 'Streamer' }; },
+    async myAccess() {
+      const admin = isAdminNow();
+      const cfg = store.get('overlay_config', {});
+      return { is_admin: admin, is_site_admin: admin, is_owner: admin, is_mod: false, is_twitch_mod: false, mods_enabled: !!cfg.mods_enabled, mods_scope: false, mods_count: 0 };
+    },
+    // Zwei Beispiel-Mods, damit sich Mod-Rechte und Protokoll ausprobieren lassen
+    async getMods() {
+      return [
+        { twitch_user_id: '1001', login: 'kai_mod', display_name: 'Kai_Mod' },
+        { twitch_user_id: '1002', login: 'lena_mod', display_name: 'Lena_Mod' },
+      ];
+    },
+    async syncMods() { await requireAdmin(); return { missing_scope: true, count: 0 }; },
+    async allowModsOverlay(on) {
+      await requireAdmin();
+      const next = { ...store.get('overlay_config', {}), mods_enabled: !!on };
+      store.set('overlay_config', next);
+      return next;
+    },
+    async saveOverlayConfig(params) {
+      await requireAdmin();
+      if (!/^[A-Za-z0-9_=&.,%+-]*$/.test(params) || params.length > 2000) throw new Error('Ungültige Einstellungen.');
+      const next = { ...store.get('overlay_config', {}), params, updated_by: store.get('users', {})[current.email]?.username ?? '', updated_at: new Date().toISOString() };
+      store.set('overlay_config', next);
+      return next;
+    },
+    async allowAdminsOverlay(on) {
+      await requireAdmin();
+      const next = { ...store.get('overlay_config', {}), admins_can_edit: !!on };
+      store.set('overlay_config', next);
+      return next;
+    },
+
+    // ---------- Ärgere den Streamer (Demo) ----------
+    // Neue Einträge in zd_pranks erreichen das Overlay im selben Browser über das storage-Ereignis.
+    async getPrankSettings() {
+      return {
+        enabled: true, cooldown_seconds: 20, allow_uploads: true, throw_cost: 500, sound_cost: 300,
+        panel_sounds: false, panel_sound_cooldown: 120, panel_sound_gap: 15,
+        panel_sub_sounds: [], panel_sub_cooldown: 30, panel_bits: false, panel_bits_sku: 'sound_100',
+        panel_bits_throw: false, panel_bits_throw_sku: 'action_100', panel_bits_feed: false, panel_bits_feed_sku: 'action_50', ...store.get('prank_settings', {}),
+      };
+    },
+    async syncPrankRewards() {
+      throw new Error('Im Demo-Modus nicht verfügbar. Die Belohnungen braucht Twitch und Supabase.');
+    },
+    async updatePrankSettings(patch) {
+      const next = { ...(await this.getPrankSettings()), ...patch };
+      store.set('prank_settings', next);
+      return next;
+    },
+    async getPranks(limit = 12) { return store.get('pranks', []).slice(0, limit); },
+    async sendPrank(kind, item, soundId = null) {
+      const profile = await this.getProfile(current);
+      // wie send_prank: Zuschauer lösen über Kanalpunkte aus, hier nur Admins
+      if (!profile.is_admin) throw new Error('„Ärgere den Streamer“ geht über Kanalpunkte im Twitch-Chat.');
+      let sound = null;
+      if (soundId) {
+        sound = store.get('sounds', []).find((x) => x.id === soundId);
+        if (!sound) throw new Error('Diesen Sound gibt es nicht mehr.');
+      }
+      const prank = {
+        id: nextId++,
+        created_at: new Date().toISOString(),
+        kind,
+        item: sound ? 'custom' : item,
+        sound_path: sound?.path ?? null,
+        label: sound?.name ?? '',
+        requested_by: profile.username,
+      };
+      store.set('pranks', [prank, ...store.get('pranks', [])].slice(0, 30));
+      setTimeout(() => prankListeners.forEach((cb) => cb(prank)), 50);
+      return prank;
+    },
+    // Demo: Beispieldaten statt Twitch – Name aus js/config.js, Kacheln und Watchtime aus dem Browser
+    async startAnniversary(start = '') {
+      const profile = await this.getProfile(current);
+      if (!profile.is_admin) throw new Error('Das Kanal-Jubiläum starten nur der Streamer, Admins und freigegebene Mods.');
+      const name = CONFIG.CHANNEL || 'DeinKanal';
+      const since = /^\d{4}-\d{2}-\d{2}$/.test(start) ? new Date(`${start}T12:00:00Z`) : new Date(Date.now() - 366 * 864e5);
+      const tiles = (await this.getTiles()).filter((t) => t.kind !== 'countdown').slice(0, 8);
+      const next = (await this.getTiles()).filter((t) => t.target_at && Date.parse(t.target_at) > Date.now())
+        .sort((a, b) => Date.parse(a.target_at) - Date.parse(b.target_at))[0];
+      const data = {
+        v: 1, name, login: name.toLowerCase(), avatar: '', since: since.toISOString(), since_kind: start ? 'custom' : 'twitch',
+        title: 'Heute: Jubiläums-Stream', game: 'Fortnite', followers: 1284, watch_hours: 612, chatters: 318, bits: 25400, subs: 96,
+        content_count: tiles.length, content: tiles.map((t) => ({ title: t.title, text: t.description })),
+        mods: ['PixelPaul', 'GG_Gina', 'LootLukas'], top: [{ name: 'NightOwl_Mia', hours: 84.5 }, { name: 'CrispyCarl', hours: 61 }, { name: 'StreamSofia', hours: 40.2 }],
+        next: next ? { title: next.title, at: next.target_at } : null,
+      };
+      const prank = { id: nextId++, created_at: new Date().toISOString(), kind: 'show', item: 'anniversary', label: '', sound_path: null, requested_by: profile.username, data };
+      store.set('pranks', [prank, ...store.get('pranks', [])].slice(0, 30));
+      setTimeout(() => prankListeners.forEach((cb) => cb(prank)), 50);
+      return prank;
+    },
+    onPrank(cb) { prankListeners.push(cb); },
+    soundUrl(path) { return store.get('sounds', []).find((x) => x.path === path)?.url ?? ''; },
+    async getSounds() {
+      const all = store.get('sounds', []);
+      return all.map((x, i) => ({ ...x, no: BOARD.length + all.length - i, mine: x.user_id === current?.email }));
+    },
+    async getSoundRewards() { return store.get('sound_rewards', []); },
+    async setSoundReward(target, patch) {
+      const list = store.get('sound_rewards', []);
+      const key = target.board ? 'board' : 'sound_id';
+      let row = list.find((r) => r[key] === (target.board ?? target.sound_id));
+      if (patch.enabled && !row?.enabled && list.filter((r) => r.enabled).length >= 20) {
+        throw new Error('Höchstens 20 Sounds mit eigener Belohnung – Twitch erlaubt nur 50 Belohnungen pro Kanal. Schalte erst einen anderen aus.');
+      }
+      if (row) Object.assign(row, patch);
+      else list.push(row = { id: nextId++, board: target.board ?? null, sound_id: target.sound_id ?? null, enabled: true, cost: 300, reward_id: null, error: '', ...patch });
+      store.set('sound_rewards', list);
+      return row;
+    },
+    // Demo: Die Datei landet als data:-URL im localStorage – der ist klein, daher höchstens 400 KB.
+    async uploadSound(file, name, duration) {
+      if (file.size > 400 * 1024) throw new Error('Im Demo-Modus höchstens 400 KB (live: 1 MB).');
+      const mine = store.get('sounds', []).filter((x) => x.user_id === current.email);
+      if (mine.length >= 8) throw new Error('Du hast schon 8 Sounds hochgeladen. Lösch einen, um Platz zu schaffen.');
+      const url = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+        reader.readAsDataURL(file);
+      });
+      const profile = await this.getProfile(current);
+      const id = `demo-${nextId++}`;
+      const sound = { id, name, path: `demo/${id}`, duration, author: profile.username, user_id: current.email, created_at: new Date().toISOString(), url };
+      try {
+        localStorage.setItem('zd_sounds', JSON.stringify([sound, ...store.get('sounds', [])]));
+      } catch {
+        throw new Error('Der Speicher im Browser ist voll. Lösch einen Sound oder nimm eine kürzere Datei.');
+      }
+      return { ...sound, mine: true };
+    },
+    async deleteSound(sound) {
+      store.set('sounds', store.get('sounds', []).filter((x) => x.id !== sound.id));
+      store.set('sound_rewards', store.get('sound_rewards', []).filter((r) => r.sound_id !== sound.id));
+    },
+
+    // ---------- Fortnite-Bingo (Demo) ----------
+    // Bilder liegen als data:-URL in zd_bingo_items, die Karte in zd_bingo_card.
+    bingoUrl(path) {
+      return store.get('bingo_items', []).find((i) => i.path === path)?.url ?? '';
+    },
+    async getBingo() {
+      return {
+        items: store.get('bingo_items', []).filter((i) => i.source !== 'lootpool' && !i.path?.startsWith('https://')),
+        card: store.get('bingo_card', null),
+      };
+    },
+    async addBingoItem(blob, name, { rarity = null, amount = null, imageKey = null, rarities = null, category = null } = {}) {
+      await requireAdmin();
+      const url = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Bild konnte nicht gelesen werden.'));
+        reader.readAsDataURL(blob);
+      });
+      const list = rarities?.length ? rarities : [rarity];
+      const made = [];
+      for (const r of list) made.push(await this.insertBingoItem({ name, rarity: r, amount, url, image_key: imageKey, category }));
+      return made;
+    },
+    async copyBingoItem(item, patch = {}) {
+      await requireAdmin();
+      return this.insertBingoItem({ name: item.name, rarity: item.rarity, amount: item.amount, url: item.url, image_key: item.image_key ?? null, category: item.category ?? null, ...patch });
+    },
+    async insertBingoItem({ name, rarity = null, amount = null, url, image_key = null, category = null }) {
+      const id = `demo-${nextId++}`;
+      const item = { id, name, rarity, amount, category, path: `demo/${id}`, url, image_key, vault: false, created_at: new Date().toISOString() };
+      try {
+        localStorage.setItem('zd_bingo_items', JSON.stringify([...store.get('bingo_items', []), item]));
+      } catch {
+        throw new Error('Der Speicher im Browser ist voll – im Demo-Modus passen nicht so viele Bilder hinein.');
+      }
+      return item;
+    },
+    async updateBingoItem(id, patch) {
+      await requireAdmin();
+      store.set('bingo_items', store.get('bingo_items', []).map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    },
+    async deleteBingoItem(item) {
+      await requireAdmin();
+      store.set('bingo_items', store.get('bingo_items', []).filter((i) => i.id !== item.id));
+    },
+    async bingoBet(action, seconds = 120) {
+      await requireAdmin();
+      const card = store.get('bingo_card', null);
+      if (!card) throw new Error('Es gibt noch keine Bingo-Karte.');
+      const bet = card.bet;
+      if (action === 'start') {
+        if (bet?.status === 'active') throw new Error('Es läuft schon eine Tipprunde.');
+        if (fullBetLines(card).length) throw new Error('Auf der Karte ist schon eine Reihe voll. Erst „Haken entfernen“ oder eine neue Karte ziehen.');
+        const now = Date.now();
+        const outcomes = betLines(card.size).map(({ key, title }) => ({ id: `demo-${key}`, key, title }));
+        return { bet: saveCard({ ...card, bet: { id: 'demo', status: 'active', outcomes, started_at: new Date(now).toISOString(), lock_at: new Date(now + seconds * 1000).toISOString() } }).bet };
+      }
+      if (bet?.status !== 'active') return { bet };
+      if (action === 'cancel') return { bet: saveCard({ ...card, bet: { ...bet, status: 'canceled' } }).bet };
+      const done = new Set(fullBetLines(card).map((l) => l.key));
+      const winner = bet.outcomes.find((o) => done.has(o.key));
+      if (!winner) return { bet };
+      return { bet: saveCard({ ...card, bet: { ...bet, status: 'resolved', winner: winner.key, winner_title: winner.title } }).bet };
+    },
+    async newBingoCard(size, free) {
+      await requireAdmin();
+      if (store.get('bingo_card', null)?.bet?.status === 'active') throw new Error('Es läuft noch eine Tipprunde. Erst beenden oder abbrechen, dann eine neue Karte ziehen.');
+      const { cells, marked } = drawCard(await this.getBingo().then((b) => b.items), size, free);
+      return saveCard({ id: 1, size, cells, marked, visible: true, created_at: new Date().toISOString() });
+    },
+    async toggleBingo(index) {
+      await requireAdmin();
+      const card = store.get('bingo_card', null);
+      if (!card) throw new Error('Es gibt noch keine Bingo-Karte.');
+      if (card.cells[index]?.free) return card;
+      const marked = card.marked.includes(index) ? card.marked.filter((i) => i !== index) : [...card.marked, index];
+      return saveCard({ ...card, marked });
+    },
+    async updateBingoCard(patch) {
+      await requireAdmin();
+      return saveCard({ ...store.get('bingo_card', null), ...patch });
+    },
+    onBingo(cb) { bingoListeners.push(cb); },
+    // ---------- Games (Demo) ----------
+    async getStreamGames() { return store.get('stream_games', {}); },
+    async saveStreamGames({ active, current, auto }) {
+      await requireAdmin();
+      const next = { ...store.get('stream_games', {}), active: [...new Set(active)], current: current ?? '', auto: !!auto };
+      store.set('stream_games', next);
+      emitDemo('stream_games', next);
+      return next;
+    },
+    onStreamGames(cb) { (demoListeners.stream_games ??= []).push(cb); },
+    // ---------- Unangenehme Fragen (Demo) ----------
+    async getQuestions() {
+      const all = store.get('questions', []);
+      return isAdminNow() ? all : all.filter((q) => q.user_id === current?.email);
+    },
+    async askQuestion(text, anonymous) {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const profile = store.get('users', {})[current.email];
+      const mine = store.get('questions', []).filter((q) => q.user_id === current.email && Date.now() - Date.parse(q.created_at) < 86400000);
+      if (!profile?.is_admin && mine.length >= 3) throw new Error('Du hast heute schon 3 Fragen gestellt. Morgen geht es weiter.');
+      const q = {
+        id: nextId++, text: text.trim(), anonymous: !!anonymous, author: profile?.username ?? 'Zuschauer', user_id: current.email,
+        status: 'pending', outcome: null, punishment: null, created_at: new Date().toISOString(), reviewed_at: null, shown_at: null,
+      };
+      store.set('questions', [q, ...store.get('questions', [])]);
+      emitDemo('questions', { eventType: 'INSERT', new: q });
+      return q;
+    },
+    async deleteQuestion(id) {
+      store.set('questions', store.get('questions', []).filter((q) => q.id !== id));
+      emitDemo('questions', { eventType: 'DELETE', old: { id } });
+    },
+    async reviewQuestion(id, status) {
+      await requireAdmin();
+      let row = null;
+      store.set('questions', store.get('questions', []).map((q) => (q.id === id ? (row = { ...q, status, reviewed_at: new Date().toISOString() }) : q)));
+      emitDemo('questions', { eventType: 'UPDATE', new: row });
+      return row;
+    },
+    async getQuestionStage() { return demoStage(); },
+    async showQuestion(id) {
+      await requireAdmin();
+      const q = store.get('questions', []).find((x) => x.id === id);
+      if (!q) throw new Error('Diese Frage gibt es nicht mehr.');
+      if (!['approved', 'done'].includes(q.status)) throw new Error('Die Frage muss erst freigegeben werden.');
+      return saveStage({ question_id: q.id, text: q.text, author: q.anonymous ? 'Anonym' : q.author, state: 'ask', punishment: null });
+    },
+    async resolveQuestion(outcome) {
+      await requireAdmin();
+      const stage = demoStage();
+      if (!stage.question_id || stage.state === 'hidden') throw new Error('Im Stream steht gerade keine Frage.');
+      const punishment = outcome === 'punished' ? stage.punishments[randomInt(stage.punishments.length)] : null;
+      store.set('questions', store.get('questions', []).map((q) => (q.id === stage.question_id ? { ...q, status: 'done', outcome, punishment } : q)));
+      emitDemo('questions', { eventType: 'UPDATE', new: store.get('questions', []).find((q) => q.id === stage.question_id) });
+      return saveStage({ state: outcome, punishment });
+    },
+    async hideQuestion() { await requireAdmin(); return saveStage({ state: 'hidden' }); },
+    async savePunishments(punishments) {
+      await requireAdmin();
+      const list = punishments.map((p) => p.trim().slice(0, 100)).filter(Boolean).slice(0, 50);
+      if (!list.length) throw new Error('Es braucht mindestens eine Bestrafung.');
+      return saveStage({ punishments: list });
+    },
+    onQuestions(cb) { (demoListeners.questions ??= []).push(cb); },
+    onQuestionStage(cb) { (demoListeners.question_stage ??= []).push(cb); },
+    // ---------- Kisten-Shop (Demo) ----------
+    async getShopSettings() { return { ...DEFAULT_SHOP, ...store.get('shop_settings', {}) }; },
+    async saveShopSettings(patch) {
+      await requireAdmin();
+      const next = { ...(await this.getShopSettings()), ...patch };
+      if (!next.items?.length) throw new Error('Der Shop braucht mindestens ein Item.');
+      store.set('shop_settings', next);
+      return next;
+    },
+    async openChest(chest, code = null, stream = false) {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const profile = store.get('users', {})[current.email];
+      const settings = await this.getShopSettings();
+      const streamed = !!stream && !!profile?.is_admin;
+      let runs = store.get('shop_runs', []).map((r) => (streamed ? { ...r, stream: false } : r));
+      if (code) {
+        const lobby = findLobby(code);
+        if (!lobby) throw new Error('Diese Koop-Runde gibt es nicht. Code prüfen.');
+        if (!lobby.open || lobby.ended_at) throw new Error('Diese Koop-Runde ist schon beendet.');
+        if (!lobby.started_at) throw new Error(`Warte, bis ${lobby.host_name || 'der Ersteller'} die Runde startet.`);
+        const mine = runs.find((r) => r.lobby_id === lobby.id && r.user_id === current.email);
+        if (!mine) throw new Error('Du spielst in dieser Koop-Runde nicht mit.');
+        if (mine.status !== 'choosing') throw new Error('Du hast schon eine Kiste.');
+        const taker = runs.find((r) => r.lobby_id === lobby.id && r.chest === chest);
+        if (taker) throw new Error(`Die Kiste hat sich schon ${taker.player} geschnappt.`);
+        runs = runs.map((r) => (r.id === mine.id
+          ? { ...r, chest, coins: lobby.chests[chest], status: 'opened', stream: r.stream || streamed, updated_at: new Date().toISOString() } : r));
+        saveLobbyRuns(runs);
+        advanceLobby(lobby.id);
+        return {
+          run: store.get('shop_runs', []).find((r) => r.id === mine.id),
+          chests: pubLobby(demoLobbies().find((l) => l.id === lobby.id)).chests,
+        };
+      }
+      const chests = demoChests();
+      runs = runs.map((r) => (r.user_id === current.email && !r.lobby_id ? { ...r, status: 'done' } : r));
+      const run = {
+        id: `run-${nextId++}`, user_id: current.email, player: profile?.username ?? 'Zuschauer', lobby_id: null,
+        stream: streamed, chest, coins: chests[chest], spent: 0, items: [], status: 'shopping',
+        shop_until: new Date(Date.now() + settings.shop_seconds * 1000).toISOString(), score: 0,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      saveRuns([run, ...runs]);
+      return { run, chests };
+    },
+    async shopBuy(runId, name) {
+      const settings = await this.getShopSettings();
+      return updateRun(runId, (r) => {
+        if (r.status !== 'shopping') throw new Error('Der Einkauf ist schon vorbei.');
+        if (Date.now() > Date.parse(r.shop_until) + 3000) throw new Error('Die Zeit im Shop ist abgelaufen.');
+        const item = settings.items.find((i) => i.name.toLowerCase() === name.trim().toLowerCase());
+        if (!item) throw new Error('Dieses Item gibt es im Shop nicht.');
+        if (r.items.some((i) => i.name.toLowerCase() === item.name.toLowerCase())) throw new Error('Das hast du schon gekauft.');
+        const price = Number(settings.prices[item.rarity] ?? 10);
+        if (r.spent + price > r.coins) throw new Error('Dafür reichen deine Goldbarren nicht.');
+        return { ...r, items: [...r.items, { name: item.name, rarity: item.rarity, price, found: false }], spent: r.spent + price };
+      });
+    },
+    async shopDoneShopping(runId) {
+      const run = updateRun(runId, (r) => (r.status === 'shopping' ? { ...r, status: 'playing' } : r));
+      if (!run.lobby_id) return run;
+      advanceLobby(run.lobby_id);
+      return store.get('shop_runs', []).find((r) => r.id === runId);
+    },
+    async shopMark(runId, index, found) {
+      return updateRun(runId, (r) => {
+        if (r.lobby_id && !lobbyOfRun(r)?.vs_at) throw new Error('Warte, bis alle eingekauft haben – dann geht das Duell los.');
+        if (r.status !== 'playing') throw new Error('Abhaken geht, sobald der Einkauf vorbei ist und bis die Runde endet.');
+        const items = r.items.map((it, i) => (i === index ? { ...it, found: !!found } : it));
+        return { ...r, items, score: shopScore(items) };
+      });
+    },
+    async shopFinish(runId) {
+      const run = updateRun(runId, (r) => {
+        if (r.lobby_id && !lobbyOfRun(r)?.vs_at) throw new Error('Warte, bis alle eingekauft haben – dann geht das Duell los.');
+        return { ...r, status: 'done', score: shopScore(r.items) };
+      });
+      if (run.lobby_id) advanceLobby(run.lobby_id);
+      return run;
+    },
+    async getMyShopRun() { return store.get('shop_runs', []).find((r) => r.user_id === current?.email) ?? null; },
+    async createShopLobby() {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const code = Array.from({ length: 5 }, () => letters[randomInt(letters.length)]).join('');
+      const name = store.get('users', {})[current.email]?.username ?? '';
+      const now = new Date().toISOString();
+      const lobby = {
+        id: `lobby-${nextId++}`, code, host_id: current.email, host_name: name, chests: demoChests(), open: true, created_at: now,
+        started_at: null, chests_until: null, shop_until: null, vs_at: null, ended_at: null,
+      };
+      store.set('shop_lobbies', [lobby, ...demoLobbies()]);
+      const run = {
+        id: `run-${nextId++}`, user_id: current.email, player: name || 'Zuschauer', lobby_id: lobby.id, stream: false,
+        chest: null, coins: 0, spent: 0, items: [], status: 'waiting', shop_until: null, score: 0, created_at: now, updated_at: now,
+      };
+      saveLobbyRuns([run, ...store.get('shop_runs', [])]);
+      return pubLobby(lobby);
+    },
+    async joinShopLobby(code) {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const lobby = findLobby(code);
+      if (!lobby) throw new Error('Diese Koop-Runde gibt es nicht. Code prüfen.');
+      const runs = store.get('shop_runs', []);
+      const mine = runs.find((r) => r.lobby_id === lobby.id && r.user_id === current.email);
+      if (mine) return mine;
+      if (!lobby.open || lobby.ended_at) throw new Error('Diese Koop-Runde ist schon beendet.');
+      if (lobby.started_at) throw new Error('Diese Koop-Runde hat schon angefangen.');
+      if (runs.filter((r) => r.lobby_id === lobby.id).length >= 4) throw new Error('Die Koop-Runde ist voll – mehr als 4 geht nicht (4 Kisten).');
+      const now = new Date().toISOString();
+      const run = {
+        id: `run-${nextId++}`, user_id: current.email, player: store.get('users', {})[current.email]?.username ?? 'Zuschauer',
+        lobby_id: lobby.id, stream: false, chest: null, coins: 0, spent: 0, items: [], status: 'waiting', shop_until: null, score: 0,
+        created_at: now, updated_at: now,
+      };
+      saveLobbyRuns([...runs, run]);
+      return run;
+    },
+    async leaveShopLobby(code) {
+      const lobby = findLobby(code);
+      if (!lobby || lobby.started_at) return;
+      const runs = store.get('shop_runs', []);
+      if (lobby.host_id === current?.email) {
+        saveLobby({ ...lobby, open: false, ended_at: new Date().toISOString() });
+        saveLobbyRuns(runs.map((r) => (r.lobby_id === lobby.id ? { ...r, status: 'done' } : r)));
+      } else {
+        saveLobbyRuns(runs.filter((r) => !(r.lobby_id === lobby.id && r.user_id === current?.email)));
+      }
+    },
+    async startShopLobby(code) {
+      const lobby = findLobby(code);
+      if (!lobby) throw new Error('Diese Koop-Runde gibt es nicht. Code prüfen.');
+      if (lobby.host_id !== current?.email) throw new Error('Starten darf nur, wer die Runde eröffnet hat.');
+      if (!lobby.open || lobby.ended_at) throw new Error('Diese Koop-Runde ist schon beendet.');
+      if (!lobby.started_at) {
+        const runs = store.get('shop_runs', []);
+        if (runs.filter((r) => r.lobby_id === lobby.id).length < 2) throw new Error('Zum Starten braucht es mindestens 2 Spieler.');
+        const now = Date.now();
+        Object.assign(lobby, { started_at: new Date(now).toISOString(), chests_until: new Date(now + LOBBY_CHEST_MS).toISOString() });
+        saveLobby(lobby);
+        saveLobbyRuns(runs.map((r) => (r.lobby_id === lobby.id && r.status === 'waiting' ? { ...r, status: 'choosing', updated_at: lobby.started_at } : r)));
+      }
+      return pubLobby(lobby);
+    },
+    async tickShopLobby(code) {
+      const lobby = findLobby(code);
+      if (!lobby) throw new Error('Diese Koop-Runde gibt es nicht. Code prüfen.');
+      advanceLobby(lobby.id);
+      return pubLobby(findLobby(code));
+    },
+    async closeShopLobby(code) {
+      const lobby = findLobby(code);
+      if (!lobby || (lobby.host_id !== current?.email && !isAdminNow())) throw new Error('Beenden darf nur, wer die Runde eröffnet hat.');
+      const now = new Date().toISOString();
+      Object.assign(lobby, { open: false, ended_at: lobby.ended_at ?? now, vs_at: lobby.started_at ? (lobby.vs_at ?? now) : null });
+      saveLobby(lobby);
+      saveLobbyRuns(store.get('shop_runs', []).map((r) => (r.lobby_id === lobby.id && r.status !== 'done'
+        ? { ...r, status: 'done', score: shopScore(r.items), updated_at: now } : r)));
+      return pubLobby(lobby);
+    },
+    async getShopLobby(code) { return pubLobby(findLobby(code)); },
+    async getShopLobbyById(id) { return pubLobby(demoLobbies().find((x) => x.id === id)); },
+    async getLobbyRuns(lobbyId) { return store.get('shop_runs', []).filter((r) => r.lobby_id === lobbyId).sort((a, b) => b.score - a.score); },
+    onShopRuns(cb) { (demoListeners.shop_runs ??= []).push(cb); },
+    // ---------- Win-Challenge (Demo: Admins gelten als Streamer) ----------
+    async getChallenge() { return { ...DEFAULT_CHALLENGE, ...store.get('win_challenge', {}) }; },
+    async challengeAccess() {
+      const admin = isAdminNow();
+      return { can_edit: admin, is_owner: admin, admins_can_edit: !!store.get('win_challenge', {}).admins_can_edit };
+    },
+    async saveChallenge(patch) { return changeChallenge((ch, by) => saveChallenge(ch, patch, by)); },
+    async challengeResult(win) { return changeChallenge((ch, by) => applyResult(ch, win, by)); },
+    async challengeUndo() { return changeChallenge((ch, by) => undoChallenge(ch, by)); },
+    async challengeGoto(index) { return changeChallenge((ch, by) => gotoStage(ch, index, by)); },
+    async challengeReset() { return changeChallenge((ch, by) => resetChallenge(ch, by)); },
+    async challengeAllowAdmins(on) { return changeChallenge((ch) => ({ ...ch, admins_can_edit: !!on })); },
+    async getModNames() { return Object.values(store.get('users', {})).filter((u) => u.is_admin).map((u) => u.username).sort(); },
+    onChallenge(cb) { (demoListeners.win_challenge ??= []).push(cb); },
+    // ---------- Laufband (Demo) ----------
+    async getTicker() { return store.get('ticker', null)?.items ?? DEFAULT_TICKER; },
+    async saveTicker(items) {
+      await requireAdmin();
+      const list = items.map((t) => t.trim().slice(0, 120)).filter(Boolean).slice(0, 30);
+      if (!list.length) throw new Error('Das Laufband braucht mindestens einen Text.');
+      store.set('ticker', { items: list, updated_at: new Date().toISOString() });
+      return list;
+    },
+    // ---------- Stream-Dino (Demo) ----------
+    async getPet() { return { ...DEFAULT_PET, last_fed_at: new Date().toISOString(), ...store.get('pet', {}) }; },
+    async getPetEvents(limit = 20) { return store.get('pet_events', []).slice(0, limit); },
+    async petAction(kind) {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const profile = store.get('users', {})[current.email];
+      if (!profile?.is_admin) throw new Error('Im Stream füttern Zuschauer den Dino über den Twitch-Chat.');
+      const key = `pet_cd_${current.email}_${kind}`;
+      const wait = kind === 'feed' ? 600000 : 60000;
+      const last = store.get(key, 0);
+      if (!profile?.is_admin && Date.now() - last < wait) {
+        throw new Error(`Kurz warten – noch ${Math.ceil((last + wait - Date.now()) / 1000)} Sekunden.`);
+      }
+      store.set(key, Date.now());
+      if (kind === 'feed') {
+        const pet = await this.getPet();
+        // Füttern beendet den Heißhunger (wie der Trigger in …_pet_costume.sql)
+        const { pet: fed, changed } = advanceStage(pet, { ...pet, last_fed_at: new Date().toISOString(), last_fed_by: profile?.username ?? 'Zuschauer', fed_count: (pet.fed_count ?? 0) + 1, frenzy_at: null });
+        savePet(fed);
+        if (changed) addPetEvent({ kind: 'stage', who: changed.helpers, text: changed.stage });
+      }
+      return addPetEvent({ kind, who: profile?.username ?? 'Zuschauer', text: '' });
+    },
+    async petSay(text) {
+      await requireAdmin();
+      const t = String(text ?? '').trim();
+      if (!t || t.length > 100) throw new Error('Bitte 1 bis 100 Zeichen.');
+      return addPetEvent({ kind: 'say', who: store.get('users', {})[current.email]?.username ?? 'Admin', text: t });
+    },
+    async updatePet(patch) {
+      await requireAdmin();
+      const next = { ...(await this.getPet()), ...patch };
+      if (patch.phrases) next.phrases = patch.phrases.map((p) => p.trim().slice(0, 80)).filter(Boolean).slice(0, 50);
+      if (patch.name !== undefined) next.name = String(patch.name).trim().slice(0, 20) || 'Rexi';
+      if (patch.feed_command !== undefined && !/^![^\s!]{1,29}$/.test(patch.feed_command)) throw new Error('Der Chat-Befehl beginnt mit ! und hat keine Leerzeichen.');
+      if (patch.costume_cooldown !== undefined && !(patch.costume_cooldown >= 0 && patch.costume_cooldown <= 300)) throw new Error('Abklingzeit 0 bis 300 Sekunden.');
+      if (patch.species !== undefined && !isSpecies(patch.species)) throw new Error('Dieses Tier gibt es nicht.');
+      if (patch.hatch_feeds !== undefined && !(patch.hatch_feeds >= 5 && patch.hatch_feeds <= 500)) throw new Error('Schlüpfen nach 5 bis 500 × Füttern.');
+      if (patch.grow_days !== undefined && !(patch.grow_days >= 1 && patch.grow_days <= 30)) throw new Error('Wachsen nach 1 bis 30 Streams.');
+      return savePet(advanceStage(await this.getPet(), next).pet);
+    },
+    async petFrenzy(on = true) {
+      await requireAdmin();
+      return savePet({ ...(await this.getPet()), frenzy_at: on ? new Date().toISOString() : null });
+    },
+    async petCostume(costume) {
+      await requireAdmin();
+      if (!COSTUMES.some((c) => c.id === costume)) throw new Error('Dieses Kostüm gibt es nicht.');
+      const pet = savePet({ ...(await this.getPet()), costume, costume_changed_at: new Date().toISOString() });
+      addPetEvent({ kind: 'costume', who: store.get('users', {})[current.email]?.username ?? 'Admin', text: costume });
+      return pet;
+    },
+    onPet(cb) { (demoListeners.pet ??= []).push(cb); },
+    onPetEvents(cb) { (demoListeners.pet_events ??= []).push(cb); },
+    async getMyBingo() { return store.get(`my_bingo_${current?.email}`, null); },
+    async saveMyBingo(card) {
+      const next = { size: card.size, cells: card.cells, marked: card.marked, created_at: card.created_at };
+      store.set(`my_bingo_${current?.email}`, next);
+      return next;
+    },
+    async spin(variantId) {
+      const variants = demoVariants();
+      const variant = variants.find((v) => v.id === variantId) ?? variants[0];
+      const profile = await this.getProfile(current);
+      return { spin: makeSpin(variant, 'web', profile.username), announced: false };
+    },
+    onSpin(cb) { spinListeners.push(cb); },
+    // Nur Demo: tut so, als hätte ein Zuschauer die Kanalpunkte-Belohnung eingelöst.
+    simulateRedemption() {
+      const names = ['NightOwl_Mia', 'PixelPaul', 'GG_Gina', 'LootLukas', 'CrispyCarl'];
+      const variants = demoVariants();
+      const variant = variants[randomInt(variants.length)];
+      const spin = makeSpin(variant, 'twitch', names[randomInt(names.length)]);
+      setTimeout(() => spinListeners.forEach((cb) => cb(spin)), 250);
+    },
+    // ---------- Alerts (Demo) ----------
+    // Neue Einträge in zd_stream_alerts erreichen das Overlay im selben Browser über das storage-Ereignis.
+    async getAlerts(limit = 10) { return store.get('stream_alerts', []).slice(0, limit); },
+    onAlerts(cb) { (demoListeners.stream_alerts ??= []).push(cb); },
+    async testAlert(kind) {
+      await requireAdmin();
+      if (!['follow', 'sub', 'resub', 'gift', 'bits', 'redeem', 'tip', 'charity'].includes(kind)) throw new Error('Diese Alert-Art gibt es nicht.');
+      const names = ['NightOwl_Mia', 'PixelPaul', 'GG_Gina', 'LootLukas', 'CrispyCarl', 'StreamSofia'];
+      const row = {
+        id: nextId++, created_at: new Date().toISOString(), kind, user_name: kind === 'charity' ? 'StreamHelp' : names[randomInt(names.length)], tier: kind === 'tip' || kind === 'charity' ? 'EUR' : '1000',
+        months: kind === 'resub' ? 3 + randomInt(20) : 0,
+        amount: kind === 'gift' ? [1, 5, 10][randomInt(3)] : kind === 'bits' ? [100, 500, 1000][randomInt(3)] : kind === 'redeem' ? [500, 1000][randomInt(2)] : kind === 'tip' ? [300, 500, 1000][randomInt(3)] : kind === 'charity' ? [25000, 50000, 100000][randomInt(3)] : 0,
+        message: kind === 'resub' ? 'Test-Nachricht: Weiter so!' : kind === 'bits' ? "Test-Cheer: Let's go!" : kind === 'redeem' ? '🎡 Glücksrad' : kind === 'tip' ? 'Test-Trinkgeld: Danke für den Stream!' : kind === 'charity' ? 'Test: 24-Stunden-Stream' : '', test: true,
+      };
+      store.set('stream_alerts', [row, ...store.get('stream_alerts', [])].slice(0, 30));
+      emitDemo('stream_alerts', row);
+      return row;
+    },
+    async alertsStatus() { return { connected: false, follows: false, subs: false, bits: false }; },
+    // Demo: Die Datei landet als data:-URL im localStorage – höchstens 400 KB
+    async getAlertSounds() { return store.get('alert_sounds', []); },
+    async uploadAlertSound(file, name, duration) {
+      await requireAdmin();
+      if (file.size > 400 * 1024) throw new Error('Im Demo-Modus höchstens 400 KB (live: 1 MB).');
+      const url = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+        reader.readAsDataURL(file);
+      });
+      const id = `demo-${nextId++}`;
+      const sound = { id, name, path: `${id}.mp3`, duration, created_at: new Date().toISOString(), url };
+      try {
+        store.set('alert_sounds', [sound, ...store.get('alert_sounds', [])]);
+      } catch {
+        throw new Error('Im Browser ist kein Platz mehr – lösch einen Sound.');
+      }
+      return sound;
+    },
+    async deleteAlertSound(sound) {
+      await requireAdmin();
+      store.set('alert_sounds', store.get('alert_sounds', []).filter((x) => x.id !== sound.id));
+    },
+    // Alert-Designer im Demo-Modus: localStorage, das Overlay im selben Browser liest mit
+    async getAlertConfig() { return store.get('alert_config', {}); },
+    async saveAlertConfig(config) {
+      await requireAdmin();
+      store.set('alert_config', config);
+    },
+    alertMediaUrl(path) { return store.get('alert_media', []).find((x) => x.path === path)?.url ?? ''; },
+    async getAlertMedia() { return store.get('alert_media', []); },
+    async uploadAlertMedia(file, name) {
+      await requireAdmin();
+      if (file.size > 1024 * 1024) throw new Error('Im Demo-Modus höchstens 1 MB (live: 10 MB).');
+      const url = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+        reader.readAsDataURL(file);
+      });
+      const ext = (/\.([a-z0-9]{2,4})$/i.exec(file.name)?.[1] ?? 'png').toLowerCase().replace('jpeg', 'jpg');
+      const id = `demo-${nextId++}`;
+      const media = { id, name, path: `${id}.${ext}`, kind: /^video\//.test(file.type) ? 'video' : 'image', created_at: new Date().toISOString(), url };
+      try {
+        store.set('alert_media', [media, ...store.get('alert_media', [])]);
+      } catch {
+        throw new Error('Im Browser ist kein Platz mehr – lösch ein Bild.');
+      }
+      return media;
+    },
+    async deleteAlertMedia(media) {
+      await requireAdmin();
+      store.set('alert_media', store.get('alert_media', []).filter((x) => x.id !== media.id));
+    },
+    // Demo: Kosten fürs Glücksrad lassen sich zum Ausprobieren einstellen
+    async twitchStatus() {
+      return {
+        connected: false, reward_cost: store.get('wheel_cost', 10000),
+        // Demo: zwei Plattform-Bots zur Auswahl (…_bot_stats.sql)
+        bots: [{ slot: 1, name: 'StreamHelpBot', login: 'streamhelpbot' }, { slot: 2, name: 'StreamHelpBot2', login: 'streamhelpbot2' }],
+        bot_slot: store.get('bot_slot', 1), can_choose_bot: !!current,
+      };
+    },
+    async twitchConnect() {
+      throw new Error('Im Demo-Modus nicht verfügbar. Trag zuerst Supabase in js/config.js ein (siehe README).');
+    },
+    async twitchDisconnect() {},
+    // Demo: YouTube „verbunden“, Einstellungen bleiben im Browser
+    async youtubeStatus() {
+      const cfg = store.get('youtube', { auto_start: true, auto_stop: true, chat_merge: true, privacy: 'public' });
+      return { connected: true, allowed: true, can_edit: !!current, title: 'Demo-Kanal', handle: '@demo', stream_ready: true, ...cfg, live: { status: 'idle' } };
+    },
+    async youtubeSave(p) { await requireAdmin(); store.set('youtube', { ...store.get('youtube', {}), ...p }); return this.youtubeStatus(); },
+    async youtubeConnect() { throw new Error('Im Demo-Modus nicht verfügbar. YouTube braucht Supabase und einen Google-Zugang (README).'); },
+    async youtubeDisconnect() { throw new Error('Im Demo-Modus nicht verfügbar.'); },
+    async youtubeStreamKey() { return { server: 'rtmp://a.rtmp.youtube.com/live2', key: 'demo-xxxx-xxxx-xxxx', status: 'inactive' }; },
+    async youtubeGoLive() { return { ok: false, reason: 'Im Demo-Modus startet keine echte Sendung.' }; },
+    async youtubeEndLive() { return { ok: true }; },
+    async botConnect() {
+      throw new Error('Im Demo-Modus nicht verfügbar. Der Chat-Bot braucht Supabase und Twitch.');
+    },
+    async botSelect(slot) {
+      await requireAdmin();
+      store.set('bot_slot', slot === 2 ? 2 : 1);
+      // Wie in twitch-oauth: Der neue Bot meldet sich gleich im Chat (steht im Protokoll)
+      const bot = slot === 2 ? 'StreamHelpBot2' : 'StreamHelpBot';
+      const row = { id: Date.now(), created_at: new Date().toISOString(), bot: bot.toLowerCase(),
+        text: `👋 Hallo! Ich bin ${bot} und ab jetzt der Bot in diesem Chat.`, status: 'sent', reason: '', source: 'system', ms: 170 };
+      store.set('bot_log', [row, ...store.get('bot_log', [])].slice(0, 50));
+      return { ok: true, slot, bot, said: true };
+    },
+    async botTest() {
+      await requireAdmin();
+      const log = store.get('bot_log', []);
+      const row = { id: Date.now(), created_at: new Date().toISOString(), bot: store.get('bot_slot', 1) === 2 ? 'streamhelpbot2' : 'streamhelpbot',
+        text: '✅ StreamHelp-Test: Der Chat-Bot kann in diesem Chat schreiben.', status: 'sent', reason: '', source: 'test', ms: 180 };
+      store.set('bot_log', [row, ...log].slice(0, 50));
+      return { ok: true, ms: 180, bot: row.bot };
+    },
+    // Demo: ein paar Einträge, darunter einer, den Twitch blockiert hat
+    async botLog() {
+      await requireAdmin();
+      const now = Date.now();
+      const items = [
+        ...store.get('bot_log', []),
+        { id: 3, created_at: new Date(now - 4 * 60000).toISOString(), bot: 'streamhelpbot', text: '🏆 Fortnite Cup: Anmeldung offen! Schreib !cup join, um mitzumachen.', status: 'sent', reason: '', source: 'outbox', ms: 210 },
+        { id: 2, created_at: new Date(now - 9 * 60000).toISOString(), bot: 'streamhelpbot', text: '@Ben Du hast 1 Std 4 Min zugeschaut.', status: 'dropped', reason: 'This room is in followers-only mode.', source: 'chat', ms: 160 },
+        { id: 1, created_at: new Date(now - 12 * 60000).toISOString(), bot: 'streamhelpbot', text: '@Mia Du hast 3 Std 12 Min zugeschaut.', status: 'sent', reason: '', source: 'chat', ms: 190 },
+      ];
+      const sent = items.filter((i) => i.status === 'sent');
+      return { items, day: { sent: sent.length, failed: items.length - sent.length, avg_ms: Math.round(sent.reduce((a, i) => a + (i.ms ?? 0), 0) / Math.max(1, sent.length)) } };
+    },
+    // Demo: ein laufender Stream und drei beendete (gleichbleibende Beispielzahlen)
+    async channelSessions() {
+      await requireAdmin();
+      const at = (h) => new Date(Date.now() - h * 3600000).toISOString();
+      return {
+        live: { started_at: at(1.4), last_at: at(0.01), minutes: 84, viewers: 31, in_chat: 24, peak_viewers: 38, avg_viewers: 29, game: 'Fortnite', follows: 4, subs: 1, bits: 200, redeems: 7, chatters: 19 },
+        last_tick_at: at(0.01),
+        sessions: [
+          { started_at: at(26), ended_at: at(22.8), minutes: 192, peak_viewers: 44, avg_viewers: 31, game: 'Fortnite', follows: 9, subs: 2, bits: 500, redeems: 15, chatters: 41 },
+          { started_at: at(74), ended_at: at(71.5), minutes: 150, peak_viewers: 36, avg_viewers: 27, game: 'Just Chatting', follows: 5, subs: 0, bits: 0, redeems: 8, chatters: 29 },
+          { started_at: at(122), ended_at: at(118), minutes: 240, peak_viewers: 52, avg_viewers: 35, game: 'Fortnite', follows: 12, subs: 3, bits: 1200, redeems: 21, chatters: 48 },
+        ],
+      };
+    },
+    onWatchState() { return () => {}; },
+    botCommands: {
+      async list() {
+        return store.get('bot_commands', [
+          { id: 1, command: '!lurk', response: '{user} macht es sich gemütlich und lurkt mit. Danke fürs Dabeibleiben! 💜', enabled: true, mod_only: false, cooldown_seconds: 10, uses: 3 },
+          { id: 2, command: '!hydrate', response: 'Trinkpause! {streamer} und alle im Chat: einmal Wasser trinken 💧', enabled: true, mod_only: false, cooldown_seconds: 10, uses: 0 },
+        ]);
+      },
+      async save(c) {
+        await requireAdmin();
+        if (!/^![a-z0-9äöüß_]{2,25}$/.test(c.command)) throw new Error('Der Befehl braucht ein ! und 2–25 Kleinbuchstaben, Ziffern oder _.');
+        if (['!join', '!leave', '!a', '!b', '!c', '!d', '!change', '!watchtime', '!befehle', '!commands', '!füttern', '!fuettern', '!erwischt', '!rate'].includes(c.command)) throw new Error('Diesen Befehl gibt es schon eingebaut.');
+        const all = await this.list();
+        if (all.some((x) => x.command === c.command && x.id !== c.id)) throw new Error('Diesen Befehl gibt es schon.');
+        const row = { uses: 0, ...all.find((x) => x.id === c.id), ...c, id: c.id ?? Date.now() };
+        store.set('bot_commands', c.id ? all.map((x) => (x.id === c.id ? row : x)) : [...all, row]);
+        return row;
+      },
+      async remove(id) { await requireAdmin(); store.set('bot_commands', (await this.list()).filter((x) => x.id !== id)); },
+    },
+    // Demo: Chat-Bot-Einstellungen, Auto-Nachrichten und Song-Wünsche im Browser (Overlay liest zd_bot_songs)
+    botPlus: {
+      async get() {
+        await requireAdmin();
+        return { settings: { ...BOT_DEFAULTS, ...store.get('bot_settings', {}) }, connected: false,
+          missing: { moderation: false, shoutout: false, followage: false, clip: false, ads: false, hype: false, goals: false } };
+      },
+      async save(p) {
+        await requireAdmin();
+        const s = { ...BOT_DEFAULTS, ...store.get('bot_settings', {}), ...p };
+        const host = (a) => String(a).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
+        s.mod_link_allow = [...new Set((s.mod_link_allow ?? []).map(host).filter((x) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(x)))];
+        s.mod_words = [...new Set((s.mod_words ?? []).map((w) => String(w).trim().toLowerCase().slice(0, 40)).filter(Boolean))];
+        if (!['off', 'new', 'stream'].includes(s.greet_mode)) throw new Error('Ungültige Begrüßung.');
+        store.set('bot_settings', s);
+        return this.get();
+      },
+      timers: {
+        async list() {
+          return store.get('bot_timers', [
+            { id: 1, text: 'Gefällt dir der Stream? Ein Follow hilft enorm 💜', interval_min: 20, min_lines: 5, enabled: true, sent: 4, last_at: null, position: 1 },
+            { id: 2, text: 'Alle Befehle: !befehle · Song wünschen: !sr <YouTube-Link>', interval_min: 30, min_lines: 10, enabled: false, sent: 0, last_at: null, position: 2 },
+          ]);
+        },
+        async save(t) {
+          await requireAdmin();
+          if (!String(t.text ?? '').trim()) throw new Error('Bitte einen Text eintragen.');
+          const all = await this.list();
+          const row = { sent: 0, last_at: null, position: all.length + 1, ...all.find((x) => x.id === t.id), ...t, id: t.id ?? Date.now() };
+          store.set('bot_timers', t.id ? all.map((x) => (x.id === t.id ? row : x)) : [...all, row]);
+          return row;
+        },
+        async remove(id) { await requireAdmin(); store.set('bot_timers', (await this.list()).filter((x) => x.id !== id)); },
+      },
+      // Demo: Stichwort-Antworten und Clips im Browser
+      faq: {
+        async list() {
+          return store.get('bot_faq', [
+            { id: 1, keywords: ['wann streamst', 'zeitplan'], answer: 'Stream ist Mo, Mi und Fr ab 19 Uhr, {user} 💜', match_all: false, cooldown: 120, enabled: true, hits: 3, position: 1 },
+          ]);
+        },
+        async save(f) {
+          await requireAdmin();
+          const keywords = [...new Set((f.keywords ?? []).map((k) => String(k).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().slice(0, 60)).filter((k) => k.length >= 2))].sort();
+          if (!keywords.length) throw new Error('Bitte mindestens ein Stichwort (2+ Zeichen).');
+          if (!String(f.answer ?? '').trim()) throw new Error('Bitte eine Antwort eintragen.');
+          const all = await this.list();
+          const row = { hits: 0, position: all.length + 1, ...all.find((x) => x.id === f.id), ...f, keywords, id: f.id ?? Date.now() };
+          store.set('bot_faq', f.id ? all.map((x) => (x.id === f.id ? row : x)) : [...all, row]);
+          return row;
+        },
+        async remove(id) { await requireAdmin(); store.set('bot_faq', (await this.list()).filter((x) => x.id !== id)); },
+      },
+      async clips() {
+        return store.get('bot_clips', [{ clip_id: 'DemoClip-Beispiel', who: 'NightOwl_Mia', created_at: new Date(Date.now() - 3600_000).toISOString() }]);
+      },
+      songs: {
+        all: () => store.get('bot_songs', [
+          { id: 1, video_id: 'dQw4w9WgXcQ', title: 'Rick Astley – Never Gonna Give You Up', seconds: 213, who: 'PixelPaul', source: 'chat', status: 'queued', position: 1 },
+          { id: 2, video_id: 'jfKfPfyJRdk', title: 'lofi hip hop radio – beats to relax/study to', seconds: 0, who: 'NightOwl_Mia', source: 'chat', status: 'queued', position: 2 },
+        ]),
+        put(list) { store.set('bot_songs', list); emitDemo('bot_songs', null); },
+        async list() { return this.all().filter((s) => ['queued', 'playing'].includes(s.status)).sort((a, b) => a.position - b.position || a.id - b.id); },
+        async history() { return this.all().filter((s) => ['done', 'skipped'].includes(s.status)).reverse().slice(0, 15); },
+        async control(action, id = null) {
+          await requireAdmin();
+          let list = this.all();
+          const queued = () => list.filter((s) => s.status === 'queued').sort((a, b) => a.position - b.position || a.id - b.id);
+          const startNext = () => { const n = queued()[0]; if (n) { n.status = 'playing'; n.played_at = new Date().toISOString(); } };
+          if (action === 'next' || action === 'skip') {
+            list.forEach((s) => { if (s.status === 'playing') s.status = action === 'skip' ? 'skipped' : 'done'; });
+            startNext();
+          } else if (action === 'stop') list.forEach((s) => { if (s.status === 'playing') s.status = 'done'; });
+          else if (action === 'play') {
+            list.forEach((s) => { if (s.status === 'playing') s.status = 'done'; });
+            const s = list.find((x) => x.id === id);
+            if (s) { s.status = 'playing'; s.played_at = new Date().toISOString(); }
+          } else if (action === 'remove') list = list.map((s) => (s.id === id && s.status === 'queued' ? { ...s, status: 'skipped' } : s));
+          else if (action === 'clear') list = list.map((s) => (s.status === 'queued' ? { ...s, status: 'skipped' } : s));
+          else if (action === 'up' || action === 'down') {
+            const q = queued();
+            const i = q.findIndex((s) => s.id === id);
+            const j = action === 'up' ? i - 1 : i + 1;
+            if (i >= 0 && q[j]) [q[i].position, q[j].position] = [q[j].position, q[i].position];
+          }
+          this.put(list.slice(-80));
+          return { ok: true, playing: list.find((s) => s.status === 'playing') ?? null };
+        },
+        async add(url) {
+          await requireAdmin();
+          const m = String(url ?? '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:\S*?&)?v=|shorts\/|embed\/|live\/))([A-Za-z0-9_-]{11})/) ?? String(url ?? '').trim().match(/^([A-Za-z0-9_-]{11})$/);
+          if (!m) return { ok: false, error: 'Das ist kein YouTube-Link.' };
+          const list = this.all();
+          if (list.some((s) => s.video_id === m[1] && ['queued', 'playing'].includes(s.status))) return { ok: false, error: 'Der Song ist schon drin.' };
+          const row = { id: Date.now(), video_id: m[1], title: `YouTube-Video ${m[1]}`, seconds: 0, who: current?.username ?? 'Demo', source: 'web', status: 'queued', position: Math.max(0, ...list.map((s) => s.position)) + 1 };
+          this.put([...list, row]);
+          return { ok: true, position: list.filter((s) => s.status === 'queued').length + 1, title: row.title };
+        },
+        on(cb) { (demoListeners.bot_songs ??= []).push(cb); addEventListener('storage', (e) => { if (e.key === 'zd_bot_songs') cb(); }); },
+      },
+    },
+    async watchTop(limit = 10) {
+      const base = [
+        { display_name: 'NightOwl_Mia', login: 'nightowl_mia', seconds: 184320, followed_at: '2021-03-14T18:00:00Z', account_created_at: '2019-06-02T10:00:00Z' },
+        { display_name: 'PixelPaul', login: 'pixelpaul', seconds: 96000, followed_at: '2023-11-02T20:00:00Z', account_created_at: '2020-01-20T10:00:00Z' },
+        { display_name: 'GG_Gina', login: 'gg_gina', seconds: 30600, followed_at: null, account_created_at: '2024-05-01T10:00:00Z' },
+      ];
+      const imports = store.get('watch_imports', []);
+      const all = new Map(base.map((w) => [w.login, { ...w, imported: 0 }]));
+      for (const i of imports) {
+        const w = all.get(i.login) ?? { display_name: i.name || i.login, login: i.login, seconds: 0, followed_at: null, account_created_at: null, imported: 0 };
+        all.set(i.login, { ...w, seconds: w.seconds + i.seconds, imported: i.seconds });
+      }
+      const fmt = (s) => { const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return [d && `${d} ${d === 1 ? 'Tag' : 'Tage'}`, h && `${h} Std`, m && `${m} Min`].filter(Boolean).join(' ') || '0 Min'; };
+      return [...all.values()].sort((a, b) => b.seconds - a.seconds).slice(0, limit).map((w) => ({ ...w, pretty: fmt(w.seconds) }));
+    },
+    async watchInfo() {
+      const imports = store.get('watch_imports', []);
+      return {
+        counting_since: new Date(Date.now() - 21 * 86400000).toISOString(),
+        imported: { count: imports.length, seconds: imports.reduce((a, i) => a + i.seconds, 0), source: store.get('watch_import_source', null), at: store.get('watch_import_at', null) },
+        viewers: 3,
+      };
+    },
+    async watchImport(rows, source) {
+      await requireAdmin();
+      store.set('watch_imports', rows.slice(0, 50000));
+      store.set('watch_import_source', source);
+      store.set('watch_import_at', new Date().toISOString());
+      return { count: rows.length, seconds: rows.reduce((a, i) => a + i.seconds, 0) };
+    },
+    async watchImportClear() { await requireAdmin(); store.set('watch_imports', []); },
+    async watchDates() { return { updated: 0 }; },
+    async watchState() { return { live: false, last_tick_at: null, source: '', viewers: 0 }; },
+    async botDisconnect() {},
+    // Demo: zeigt, wie ein Problem aussieht
+    async twitchHealth() {
+      await requireAdmin();
+      const row = {
+        checked_at: new Date().toISOString(), ok: false, last_event_at: null, last_event_type: '',
+        problems: [{ code: 'not_connected', level: 'error', text: 'Twitch ist noch nicht verbunden – ohne Verbindung keine Alerts, Kanalpunkte und Chat-Befehle.', fix: 'Streamer: Twitch verbinden' }],
+        details: {},
+      };
+      store.set('twitch_health', row);
+      return row;
+    },
+    async getTwitchHealth() { return store.get('twitch_health', null); },
+  };
+}

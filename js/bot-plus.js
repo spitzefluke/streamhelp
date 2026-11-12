@@ -1,0 +1,598 @@
+// Dashboard → Bot & Chat: die neuen Bot-Bereiche (Migration …_chat_bot_plus.sql)
+//   · Stream-Infos (!uptime, !followage, !game, !title, !so)
+//   · Begrüßung & Danke (Follow, Abo, Bits, Raid + Auto-Shoutout)
+//   · Auto-Nachrichten (Timer, nur wenn im Chat etwas los ist)
+//   · Moderation (Links, Großbuchstaben, Spam, gesperrte Wörter, !permit)
+//   · Song-Wünsche (!sr) mit Player: Abgespielt wird in genau einem Browserfenster („Hier abspielen“),
+//     OBS nimmt den Ton über das Desktop-Audio auf. Das Overlay zeigt nur an.
+//   · Clips & Statistik (!clip, !stats, !topchatter, !topwatch), Ansagen (Werbung, Hype-Train, Ziele) und
+//     Stichwort-Antworten (Migration …_bot_more.sql)
+// Eingebunden von js/app.js (renderBotPanel). api = state.api, toast/germanError aus app.js.
+import { hasConsent, onConsent, setConsent } from './consent.js';
+import { h } from './extras-core.js';
+
+let ctx = null;          // { api, toast, germanError }
+let settings = null;     // aktueller Stand aus bot_settings_get
+let missing = {};
+let loaded = false;
+
+const MORE_MIGRATION = 'Einmal nötig: supabase/migrations/20261120000000_bot_more.sql im SQL Editor ausführen.';
+const errText = (err) => (/bot_faq|bot_clips|bot_more|clip_on/i.test(err?.message ?? '')
+  ? MORE_MIGRATION
+  : /bot_settings|bot_timers|bot_songs|bot_song|schema cache|does not exist/i.test(err?.message ?? '')
+    ? 'Einmal nötig: supabase/migrations/20261109000000_chat_bot_plus.sql im SQL Editor ausführen.'
+    : ctx.germanError(err));
+// Neue Einstellungen (…_bot_more.sql) fehlen noch? Dann zeigt die Karte den Hinweis statt des Formulars.
+const hasMore = () => 'clip_on' in (settings ?? {});
+
+// ---------- Formular-Bausteine (name = Spalte in bot_settings) ----------
+const toggle = (name, label, hint) => h('label', { class: 'toggle bp-toggle' },
+  h('input', { type: 'checkbox', name }), h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }), h('span', {}, label, hint ? h('small', {}, hint) : null));
+const num = (name, label, min, max, unit = '') => h('label', { class: 'field bp-num' },
+  h('span', {}, label), h('span', { class: 'bp-unit' }, h('input', { type: 'number', name, min, max, step: 1, inputmode: 'numeric' }), unit ? h('em', {}, unit) : null));
+const text = (name, label, max = 300, placeholder = '') => h('label', { class: 'field' },
+  h('span', {}, label), h('input', { name, maxlength: max, autocomplete: 'off', placeholder }));
+const list = (name, label, placeholder) => h('label', { class: 'field' },
+  h('span', {}, label), h('textarea', { name, rows: 3, 'data-list': '1', placeholder }));
+const select = (name, label, options) => h('label', { class: 'field' },
+  h('span', {}, label), h('select', { name }, ...options.map(([v, t]) => h('option', { value: v }, t))));
+
+function fill(form) {
+  for (const el of form.elements) {
+    if (!el.name || !(el.name in settings)) continue;
+    const v = settings[el.name];
+    if (el.type === 'checkbox') el.checked = !!v;
+    else if (el.dataset.list) el.value = (v ?? []).join('\n');
+    else el.value = v ?? '';
+  }
+}
+function read(form) {
+  const out = {};
+  for (const el of form.elements) {
+    if (!el.name || !(el.name in (settings ?? {}))) continue;
+    if (el.type === 'checkbox') out[el.name] = el.checked;
+    else if (el.type === 'number') out[el.name] = Math.round(Number(el.value) || 0);
+    else if (el.dataset.list) out[el.name] = el.value.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    else out[el.name] = el.value.trim();
+  }
+  return out;
+}
+
+// Ein Einstellungs-Block mit eigenem Speichern-Knopf
+function settingsForm(...kids) {
+  const msg = h('p', { class: 'form-msg', role: 'status' });
+  const btn = h('button', { class: 'btn btn--primary', type: 'submit' }, 'Speichern');
+  const form = h('form', { class: 'bp-form', novalidate: true }, ...kids, h('div', { class: 'bp-save' }, btn, msg));
+  form.addEventListener('input', () => { form.classList.add('is-dirty'); msg.textContent = ''; });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    msg.classList.remove('is-ok');
+    try {
+      const res = await ctx.api.botPlus.save(read(form));
+      settings = res.settings;
+      missing = res.missing ?? {};
+      fill(form);
+      form.classList.remove('is-dirty');
+      msg.textContent = '✓ Gespeichert';
+      msg.classList.add('is-ok');
+      paintWarnings();
+    } catch (err) {
+      msg.textContent = /check constraint|violates/i.test(err?.message ?? '') ? 'Ein Wert liegt außerhalb des Erlaubten – bitte prüfen.' : errText(err);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  return form;
+}
+
+const head = (ico, title, sub) => h('header', { class: 'dash-card-head' },
+  h('span', { class: 'dash-ico', 'aria-hidden': 'true' }, ico), h('div', {}, h('h2', {}, title), sub ? h('p', { class: 'dash-status' }, sub) : null));
+const scopeWarn = (key, text) => h('p', { class: 'bp-warn', 'data-missing': key, hidden: true }, '⚠️ ', text);
+
+function paintWarnings() {
+  document.querySelectorAll('[data-missing]').forEach((el) => { el.hidden = !missing?.[el.dataset.missing]; });
+}
+
+// ---------- Karten ----------
+function infoCard() {
+  return [
+    head('📺', 'Stream-Infos', 'Antworten mit echten Daten von Twitch'),
+    h('ul', { class: 'cmd-list' },
+      ...[['!uptime', 'Wie lange der Stream schon läuft'], ['!game', 'Was gerade gespielt wird'], ['!title', 'Der Stream-Titel'],
+        ['!followage', 'Seit wann man folgt'], ['!so @name', 'Shoutout (nur Mods) – mit Link und letztem Spiel, dazu der offizielle Twitch-Shoutout']]
+        .map(([c, t]) => h('li', {}, h('code', {}, c), t))),
+    settingsForm(
+      toggle('info_on', 'Stream-Infos an'),
+      num('info_cooldown', 'Pause je Befehl', 0, 600, 's'),
+      text('so_text', 'Text beim Shoutout', 300),
+      h('p', { class: 'form-hint' }, 'Platzhalter: ', h('code', {}, '{target}'), ' Name, ', h('code', {}, '{login}'), ' für den Link, ', h('code', {}, '{game}'), ' letztes Spiel.'),
+    ),
+    scopeWarn('shoutout', 'Für den offiziellen Twitch-Shoutout fehlt ein Twitch-Recht – der Streamer muss Twitch einmal neu verbinden. Die Shoutout-Nachricht im Chat geht trotzdem.'),
+    scopeWarn('followage', '!followage braucht das Twitch-Recht „Follower lesen“ – Twitch einmal neu verbinden.'),
+  ];
+}
+
+function greetCard() {
+  const bits = num('thank_bits_min', 'ab Bits', 1, 1000000);
+  return [
+    head('👋', 'Begrüßung & Danke', 'Der Bot begrüßt und bedankt sich – Texte aus deinen Vorlagen'),
+    settingsForm(
+      h('div', { class: 'bp-grid' },
+        select('greet_mode', 'Begrüßung', [['off', 'Aus'], ['new', 'Nur neue Zuschauer (erste Nachricht überhaupt)'], ['stream', 'Jeden einmal pro Stream']]),
+        text('greet_text', 'Text für Neue'),
+        text('greet_back_text', 'Text für Wiederkommende (nur „einmal pro Stream“)')),
+      h('h3', { class: 'bp-sub' }, 'Live-Start'),
+      h('div', { class: 'bp-box' }, toggle('live_on', '🔴 Willkommensnachricht, sobald du live gehst', 'sofort beim Start, höchstens einmal in 30 Minuten'),
+        text('live_text', 'Text'),
+        h('p', { class: 'form-hint' }, h('code', {}, '{streamer}'), ' dein Name, ', h('code', {}, '{game}'), ' das Spiel (Twitch-Kategorie), ',
+          h('code', {}, '{title}'), ' der Stream-Titel.')),
+      h('h3', { class: 'bp-sub' }, 'Danke sagen'),
+      h('div', { class: 'bp-grid' },
+        h('div', { class: 'bp-box' }, toggle('thank_follow', '💜 Follow', 'höchstens alle 5 s – gegen Follow-Bots'), text('thank_follow_text', 'Text')),
+        h('div', { class: 'bp-box' }, toggle('thank_sub', '⭐ Abos'), text('thank_sub_text', 'Neues Abo'),
+          text('thank_resub_text', 'Resub ({months} = Monate)'), text('thank_gift_text', 'Verschenkt ({amount} = Anzahl)')),
+        h('div', { class: 'bp-box' }, toggle('thank_bits', '💎 Bits'), bits, text('thank_bits_text', 'Text ({amount} = Bits)')),
+        h('div', { class: 'bp-box' }, toggle('thank_raid', '🚀 Raid'), text('thank_raid_text', 'Text ({amount} = Zuschauer)'),
+          toggle('raid_shoutout', 'Automatisch Shoutout für den Raider', 'mit dem Text vom Shoutout (Stream-Infos)'))),
+      h('p', { class: 'form-hint' }, h('code', {}, '{user}'), ' wird zum Namen (mit @). Im Raid-Schutz begrüßt und bedankt sich der Bot bei Follows und Raids nicht.'),
+    ),
+  ];
+}
+
+function modCard() {
+  return [
+    head('🛡️', 'Moderation', 'Der Bot löscht Nachrichten oder gibt einen Timeout – Mods und der Streamer sind immer ausgenommen'),
+    scopeWarn('moderation', 'Zum Löschen und für Timeouts fehlen Twitch-Rechte – der Streamer muss Twitch einmal neu verbinden.'),
+    settingsForm(
+      toggle('mod_on', 'Moderation an'),
+      h('div', { class: 'bp-grid' },
+        h('div', { class: 'bp-box' }, toggle('mod_links', 'Links verbieten'), list('mod_link_allow', 'Erlaubte Seiten (eine pro Zeile)', 'twitch.tv\nyoutube.com'),
+          num('mod_permit_seconds', '!permit @name gilt', 10, 600, 's'),
+          h('p', { class: 'form-hint' }, 'Mods geben mit ', h('code', {}, '!permit @name'), ' einen Link frei.')),
+        h('div', { class: 'bp-box' }, toggle('mod_caps', 'Zu viele GROSSBUCHSTABEN'), num('mod_caps_pct', 'ab Anteil', 30, 100, '%'), num('mod_caps_min', 'erst ab Buchstaben', 5, 200)),
+        h('div', { class: 'bp-box' }, toggle('mod_spam', 'Spam'), num('mod_repeat', 'gleiches Zeichen hintereinander', 4, 100, '×'), num('mod_emotes', 'mehr Emotes als', 3, 100)),
+        h('div', { class: 'bp-box' }, list('mod_words', 'Gesperrte Wörter (eins pro Zeile)', 'wort1\nwort2'),
+          h('p', { class: 'form-hint' }, 'Zählt nur als ganzes Wort, Groß/klein egal.'))),
+      h('div', { class: 'bp-grid bp-grid--row' },
+        select('mod_action', 'Was passiert', [['delete', 'Nachricht löschen'], ['timeout', 'Timeout']]),
+        num('mod_timeout', 'Timeout-Dauer', 1, 1209600, 's'),
+        toggle('mod_warn', 'Ermahnung vom Bot', 'höchstens alle 30 s je Person'),
+        toggle('mod_exempt_vip', 'VIPs ausnehmen'),
+        toggle('mod_exempt_sub', 'Abonnenten ausnehmen')),
+    ),
+  ];
+}
+
+// ---------- Auto-Nachrichten ----------
+async function timersCard(card) {
+  const listEl = h('ul', { class: 'bp-timers' });
+  const add = h('form', { class: 'bp-timer-add', novalidate: true },
+    h('label', { class: 'field bp-timer-text' }, h('span', {}, 'Neue Auto-Nachricht'), h('input', { name: 'text', maxlength: 400, placeholder: 'Gefällt dir der Stream? Ein Follow hilft enorm 💜', autocomplete: 'off' })),
+    h('label', { class: 'field bp-num' }, h('span', {}, 'alle'), h('span', { class: 'bp-unit' }, h('input', { type: 'number', name: 'interval_min', min: 5, max: 240, value: 15 }), h('em', {}, 'Min'))),
+    h('label', { class: 'field bp-num' }, h('span', {}, 'ab Nachrichten'), h('input', { type: 'number', name: 'min_lines', min: 0, max: 200, value: 5 })),
+    h('button', { class: 'btn btn--primary', type: 'submit' }, '＋ Anlegen'),
+    h('p', { class: 'form-msg', role: 'alert' }));
+  const gap = settingsForm(num('timer_gap', 'Mindestens Pause zwischen zwei Auto-Nachrichten', 30, 3600, 's'));
+  gap.classList.add('bp-form--inline');
+  card.replaceChildren(
+    head('⏰', 'Auto-Nachrichten', 'Kommen nur, wenn im Chat etwas los ist: frühestens nach X Minuten und erst nach N neuen Nachrichten'),
+    add, listEl, gap,
+    h('p', { class: 'form-hint' }, 'Platzhalter: ', h('code', {}, '{streamer}'), '. Im Raid-Schutz pausieren die Auto-Nachrichten.'));
+  fill(gap);
+
+  let timers = [];
+  const row = (t) => {
+    const li = h('li', { class: `bp-timer${t.enabled ? '' : ' is-off'}` },
+      h('label', { class: 'toggle', title: 'An/aus' }, h('input', { type: 'checkbox', name: 'enabled' }), h('span', { class: 'toggle-ui', 'aria-hidden': 'true' })),
+      h('input', { class: 'bp-timer-input', name: 'text', maxlength: 400, 'aria-label': 'Text' }),
+      h('label', { class: 'bp-unit', title: 'Frühestens alle … Minuten' }, h('input', { type: 'number', name: 'interval_min', min: 5, max: 240, 'aria-label': 'Minuten' }), h('em', {}, 'Min')),
+      h('label', { class: 'bp-unit', title: 'Erst nach so vielen Chat-Nachrichten' }, h('input', { type: 'number', name: 'min_lines', min: 0, max: 200, 'aria-label': 'Nachrichten' }), h('em', {}, '💬')),
+      h('span', { class: 'bp-timer-sent', title: 'So oft geschickt' }, `${t.sent ?? 0}×`),
+      h('button', { class: 'btn btn--primary btn--sm', type: 'button', 'data-save': '1' }, 'Speichern'),
+      h('button', { class: 'icon-btn', type: 'button', 'data-del': '1', 'aria-label': 'Auto-Nachricht löschen' }, '🗑'));
+    li.querySelector('[name=enabled]').checked = !!t.enabled;
+    li.querySelector('[name=text]').value = t.text;
+    li.querySelector('[name=interval_min]').value = t.interval_min;
+    li.querySelector('[name=min_lines]').value = t.min_lines;
+    li.addEventListener('input', () => li.classList.add('is-dirty'));
+    li.addEventListener('click', async (e) => {
+      const val = (n) => li.querySelector(`[name=${n}]`);
+      if (e.target.closest('[data-save]')) {
+        try {
+          await ctx.api.botPlus.timers.save({ id: t.id, text: val('text').value.trim(), enabled: val('enabled').checked,
+            interval_min: Math.round(Number(val('interval_min').value) || 15), min_lines: Math.round(Number(val('min_lines').value) || 0) });
+          ctx.toast('✓ Auto-Nachricht gespeichert.', 'ok', 2500);
+          await load();
+        } catch (err) { ctx.toast(/check constraint|violates/i.test(err?.message ?? '') ? 'Text 1–400 Zeichen, alle 5–240 Min, 0–200 Nachrichten.' : errText(err), 'error', 6000); }
+      }
+      if (e.target.closest('[data-del]')) {
+        if (!confirm('Auto-Nachricht wirklich löschen?')) return;
+        try { await ctx.api.botPlus.timers.remove(t.id); await load(); } catch (err) { ctx.toast(errText(err), 'error'); }
+      }
+    });
+    return li;
+  };
+  const load = async () => {
+    try {
+      timers = await ctx.api.botPlus.timers.list();
+    } catch (err) {
+      listEl.replaceChildren(h('li', { class: 'cmd-empty' }, errText(err)));
+      return;
+    }
+    listEl.replaceChildren(...(timers.length ? timers.map(row) : [h('li', { class: 'cmd-empty' }, 'Noch keine Auto-Nachrichten – oben die erste anlegen.')]));
+  };
+  add.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = add.querySelector('.form-msg');
+    const t = { text: add.text.value.trim(), enabled: true, interval_min: Math.round(Number(add.interval_min.value) || 15), min_lines: Math.round(Number(add.min_lines.value) || 0) };
+    if (!t.text) { msg.textContent = 'Bitte einen Text eintragen.'; return; }
+    msg.textContent = '';
+    try {
+      await ctx.api.botPlus.timers.save(t);
+      add.text.value = '';
+      await load();
+    } catch (err) {
+      msg.textContent = /check constraint|violates/i.test(err?.message ?? '') ? 'Alle 5–240 Minuten, 0–200 Nachrichten.' : errText(err);
+    }
+  });
+  await load();
+}
+
+// ---------- Clips & Statistik (…_bot_more.sql) ----------
+function clipsCard(card) {
+  const recent = h('ul', { class: 'bp-clips' });
+  card.replaceChildren(
+    head('🎬', 'Clips & Statistik', 'Zuschauer machen Clips, der Bot zeigt Zahlen zum Stream'),
+    h('ul', { class: 'cmd-list' },
+      ...[['!clip', 'Macht einen Twitch-Clip der letzten Sekunden und postet den Link (nur live)'],
+        ['!stats', 'Laufender Stream: Dauer, Chatter, Nachrichten, Follower, Abos, Bits – offline der letzte Stream'],
+        ['!topchatter', 'Wer in diesem Stream am meisten schreibt (offline: insgesamt)'],
+        ['!topwatch', 'Die Top 5 der Watchtime']].map(([c, t]) => h('li', {}, h('code', {}, c), t))),
+    hasMore() ? settingsForm(
+      h('div', { class: 'bp-grid' },
+        h('div', { class: 'bp-box' }, toggle('clip_on', '🎬 !clip an'),
+          select('clip_who', 'Wer darf clippen', [['everyone', 'Alle'], ['sub', 'Abonnenten, VIPs, Mods'], ['vip', 'VIPs und Mods'], ['mod', 'Nur Mods']]),
+          num('clip_cooldown', 'Pause für alle', 0, 3600, 's'), num('clip_user_cooldown', 'Pause je Person (Mods nie)', 0, 3600, 's')),
+        h('div', { class: 'bp-box' }, toggle('stats_on', '📊 Statistik-Befehle an'), num('stats_cooldown', 'Pause je Befehl', 0, 600, 's')))) : h('p', { class: 'form-msg' }, MORE_MIGRATION),
+    scopeWarn('clip', 'Für !clip fehlt das Twitch-Recht „Clips erstellen“ – der Streamer muss Twitch einmal neu verbinden.'),
+    h('h3', { class: 'bp-sub' }, 'Letzte Clips'), recent);
+  if (hasMore()) fill(card.querySelector('.bp-form'));
+  ctx.api.botPlus.clips().then((list) => {
+    recent.replaceChildren(...(list.length ? list.map((c) => h('li', {},
+      h('a', { href: `https://clips.twitch.tv/${encodeURIComponent(c.clip_id)}`, target: '_blank', rel: 'noopener noreferrer' }, `🎬 ${c.clip_id}`),
+      h('small', {}, ` von ${c.who || 'jemand'} · ${new Date(c.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`)))
+      : [h('li', { class: 'cmd-empty' }, 'Noch keine Clips – im Stream einfach !clip schreiben.')]));
+  }).catch((err) => recent.replaceChildren(h('li', { class: 'cmd-empty' }, errText(err))));
+}
+
+// ---------- Ansagen: Werbung, Hype-Train, Ziele (…_bot_more.sql) ----------
+function noticesCard() {
+  return [
+    head('📣', 'Ansagen', 'Der Bot sagt Werbepausen an und feiert Hype-Trains und erreichte Ziele'),
+    hasMore() ? settingsForm(
+      h('div', { class: 'bp-grid' },
+        h('div', { class: 'bp-box' }, toggle('ads_on', '📺 Werbepausen', 'Vorwarnung, Beginn und „vorbei“'),
+          text('ads_warn_text', 'Kurz vorher'), text('ads_start_text', 'Beim Start'), text('ads_end_text', 'Wenn sie vorbei ist'),
+          h('p', { class: 'form-hint' }, h('code', {}, '{in}'), ' wann (z. B. „etwa einer Minute“), ', h('code', {}, '{duration}'), ' Länge.')),
+        h('div', { class: 'bp-box' }, toggle('hype_on', '🚂 Hype-Train'),
+          text('hype_start_text', 'Start'), text('hype_level_text', 'Neue Stufe'), text('hype_end_text', 'Ende'),
+          h('p', { class: 'form-hint' }, h('code', {}, '{level}'), ' Stufe. Jede Stufe nur einmal.')),
+        h('div', { class: 'bp-box' }, toggle('goal_on', '🎯 Ziele', 'Follower-, Abo- und Bits-Ziele aus dem Creator-Dashboard'),
+          text('goal_text', 'Ziel erreicht'),
+          h('p', { class: 'form-hint' }, h('code', {}, '{goal}'), ' Beschreibung, ', h('code', {}, '{current}'), ' / ', h('code', {}, '{target}'), ' Stand.')))) : h('p', { class: 'form-msg' }, MORE_MIGRATION),
+    scopeWarn('ads', 'Für die Werbepausen-Ansage fehlt ein Twitch-Recht – Twitch einmal neu verbinden.'),
+    scopeWarn('hype', 'Für den Hype-Train fehlt ein Twitch-Recht – Twitch einmal neu verbinden.'),
+    scopeWarn('goals', 'Für die Ziele fehlt ein Twitch-Recht – Twitch einmal neu verbinden.'),
+    h('p', { class: 'form-hint' }, 'Werbepausen und Hype-Trains gibt es bei Twitch nur für Affiliates und Partner.'),
+  ];
+}
+
+// ---------- Stichwort-Antworten (…_bot_more.sql) ----------
+async function faqCard(card) {
+  const listEl = h('ul', { class: 'bp-faqs' });
+  const add = h('form', { class: 'bp-faq-add', novalidate: true },
+    h('label', { class: 'field' }, h('span', {}, 'Stichwörter (mit Komma trennen)'), h('input', { name: 'keywords', maxlength: 300, placeholder: 'wann streamst, zeitplan, streamplan', autocomplete: 'off' })),
+    h('label', { class: 'field' }, h('span', {}, 'Antwort des Bots'), h('input', { name: 'answer', maxlength: 400, placeholder: 'Stream ist Mo, Mi und Fr ab 19 Uhr, {user} 💜', autocomplete: 'off' })),
+    select('match_all', 'Wann antworten', [['false', 'Eins der Stichwörter kommt vor'], ['true', 'Alle Stichwörter kommen vor']]),
+    h('label', { class: 'field bp-num' }, h('span', {}, 'Pause'), h('span', { class: 'bp-unit' }, h('input', { type: 'number', name: 'cooldown', min: 0, max: 3600, value: 120 }), h('em', {}, 's'))),
+    h('button', { class: 'btn btn--primary', type: 'submit' }, '＋ Anlegen'),
+    h('p', { class: 'form-msg', role: 'alert' }));
+  const gap = hasMore() ? settingsForm(toggle('faq_on', 'Stichwort-Antworten an'), num('faq_gap', 'Mindestens Pause zwischen zwei Antworten', 0, 600, 's')) : null;
+  gap?.classList.add('bp-form--inline');
+  card.replaceChildren(
+    head('💡', 'Stichwort-Antworten', 'Fragt jemand im Chat z. B. „wann streamst du?“, antwortet der Bot automatisch'),
+    add, listEl, gap ?? h('p', { class: 'form-msg' }, MORE_MIGRATION),
+    h('p', { class: 'form-hint' }, 'Stichwörter zählen als ganze Wörter bzw. Wortfolgen, Groß/klein und Satzzeichen egal („maus“ passt nicht zu „Mausi“). ',
+      h('code', {}, '{user}'), ' wird zum Namen. Befehle (!…) und der Streamer selbst lösen nichts aus, im Raid-Schutz schweigt der Bot.'));
+  if (gap) fill(gap);
+
+  const row = (f) => {
+    const li = h('li', { class: `bp-faq${f.enabled ? '' : ' is-off'}` },
+      h('label', { class: 'toggle', title: 'An/aus' }, h('input', { type: 'checkbox', name: 'enabled' }), h('span', { class: 'toggle-ui', 'aria-hidden': 'true' })),
+      h('input', { class: 'bp-faq-keys', name: 'keywords', maxlength: 300, 'aria-label': 'Stichwörter' }),
+      h('input', { class: 'bp-faq-answer', name: 'answer', maxlength: 400, 'aria-label': 'Antwort' }),
+      h('select', { name: 'match_all', 'aria-label': 'Wann antworten' }, h('option', { value: 'false' }, 'eins'), h('option', { value: 'true' }, 'alle')),
+      h('label', { class: 'bp-unit', title: 'Pause dieser Antwort' }, h('input', { type: 'number', name: 'cooldown', min: 0, max: 3600, 'aria-label': 'Pause in Sekunden' }), h('em', {}, 's')),
+      h('span', { class: 'bp-timer-sent', title: 'So oft geantwortet' }, `${f.hits ?? 0}×`),
+      h('button', { class: 'btn btn--primary btn--sm', type: 'button', 'data-save': '1' }, 'Speichern'),
+      h('button', { class: 'icon-btn', type: 'button', 'data-del': '1', 'aria-label': 'Stichwort-Antwort löschen' }, '🗑'));
+    const val = (n) => li.querySelector(`[name=${n}]`);
+    val('enabled').checked = !!f.enabled;
+    val('keywords').value = (f.keywords ?? []).join(', ');
+    val('answer').value = f.answer;
+    val('match_all').value = String(!!f.match_all);
+    val('cooldown').value = f.cooldown;
+    li.addEventListener('input', () => li.classList.add('is-dirty'));
+    li.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-save]')) {
+        try {
+          await ctx.api.botPlus.faq.save({ id: f.id, keywords: splitKeys(val('keywords').value), answer: val('answer').value.trim(),
+            match_all: val('match_all').value === 'true', cooldown: Math.round(Number(val('cooldown').value) || 0), enabled: val('enabled').checked });
+          ctx.toast('✓ Stichwort-Antwort gespeichert.', 'ok', 2500);
+          await load();
+        } catch (err) { ctx.toast(faqError(err), 'error', 6000); }
+      }
+      if (e.target.closest('[data-del]')) {
+        if (!confirm('Stichwort-Antwort wirklich löschen?')) return;
+        try { await ctx.api.botPlus.faq.remove(f.id); await load(); } catch (err) { ctx.toast(errText(err), 'error'); }
+      }
+    });
+    return li;
+  };
+  const load = async () => {
+    let list;
+    try { list = await ctx.api.botPlus.faq.list(); } catch (err) { listEl.replaceChildren(h('li', { class: 'cmd-empty' }, errText(err))); return; }
+    listEl.replaceChildren(...(list.length ? list.map(row) : [h('li', { class: 'cmd-empty' }, 'Noch keine Stichwort-Antworten – oben die erste anlegen.')]));
+  };
+  add.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = add.querySelector('.form-msg');
+    const f = { keywords: splitKeys(add.keywords.value), answer: add.answer.value.trim(), match_all: add.match_all.value === 'true',
+      cooldown: Math.round(Number(add.cooldown.value) || 0), enabled: true };
+    if (!f.keywords.length || !f.answer) { msg.textContent = 'Bitte Stichwörter und eine Antwort eintragen.'; return; }
+    msg.textContent = '';
+    try {
+      await ctx.api.botPlus.faq.save(f);
+      add.keywords.value = '';
+      add.answer.value = '';
+      await load();
+    } catch (err) {
+      msg.textContent = faqError(err);
+    }
+  });
+  await load();
+}
+const splitKeys = (v) => v.split(/[,\n]+/).map((k) => k.trim()).filter(Boolean).slice(0, 10);
+const faqError = (err) => (/Stichwort/.test(err?.message ?? '') ? err.message
+  : /check constraint|violates/i.test(err?.message ?? '') ? 'Höchstens 10 Stichwörter, Antwort 1–400 Zeichen, Pause 0–3600 s.' : errText(err));
+
+// ---------- Song-Wünsche ----------
+const PLAY_KEY = 'zd_song_player';
+const songPlayer = { on: false, frame: null, current: null, volume: 60, paused: false, ending: false, reload: null };
+// Einwilligung erteilt oder zurückgenommen: den laufenden Song neu laden (Player bzw. Platzhalter)
+onConsent(() => songPlayer.reload?.());
+const fmtLen = (s) => (s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '');
+
+function songCard(card) {
+  let on = false;
+  try { on = localStorage.getItem(PLAY_KEY) === '1'; } catch { /* egal */ }
+  try { songPlayer.volume = Math.max(0, Math.min(100, Number(localStorage.getItem(`${PLAY_KEY}_vol`) ?? 60))); } catch { /* egal */ }
+  songPlayer.on = on;
+
+  const nowTitle = h('b', { class: 'bp-now-title' }, '–');
+  const nowWho = h('small', {});
+  const frameBox = h('div', { class: 'bp-player', hidden: true });
+  const playBtn = h('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'Pause / weiter' }, '⏸');
+  const skipBtn = h('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'Nächster Song' }, '⏭ Überspringen');
+  const vol = h('input', { type: 'range', min: 0, max: 100, value: songPlayer.volume, 'aria-label': 'Lautstärke', class: 'bp-vol' });
+  const here = h('label', { class: 'toggle bp-toggle' }, h('input', { type: 'checkbox' }), h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }),
+    h('span', {}, '🔊 Hier abspielen', h('small', {}, 'Nur in einem Fenster an – OBS nimmt den Ton über das Desktop-Audio auf')));
+  here.querySelector('input').checked = on;
+  const queueEl = h('ol', { class: 'bp-queue' });
+  const histEl = h('ol', { class: 'bp-queue bp-queue--done' });
+  const addForm = h('form', { class: 'bp-song-add', novalidate: true },
+    h('input', { name: 'url', placeholder: 'YouTube-Link einfügen …', autocomplete: 'off', 'aria-label': 'YouTube-Link' }),
+    h('button', { class: 'btn btn--primary', type: 'submit' }, '＋ Eintragen'));
+  const clearBtn = h('button', { class: 'btn btn--ghost btn--sm', type: 'button' }, 'Warteschlange leeren');
+
+  const cfgForm = settingsForm(
+    toggle('song_on', 'Song-Wünsche im Chat an (!sr)'),
+    h('div', { class: 'bp-grid bp-grid--row' },
+      select('song_who', 'Wer darf wünschen', [['everyone', 'Alle'], ['sub', 'Abonnenten (und VIPs, Mods)'], ['vip', 'VIPs und Mods'], ['mod', 'Nur Mods']]),
+      num('song_max_user', 'Wünsche je Person', 1, 20),
+      num('song_max_queue', 'Warteschlange höchstens', 1, 200),
+      num('song_max_minutes', 'Song höchstens', 1, 60, 'Min'),
+      num('song_cooldown', 'Pause je Person', 0, 3600, 's')),
+    h('p', { class: 'form-hint' }, 'Im Chat: ', h('code', {}, '!sr <YouTube-Link>'), ' wünschen, ', h('code', {}, '!song'), ' was läuft, ',
+      h('code', {}, '!queue'), ' Warteschlange, ', h('code', {}, '!wrongsong'), ' eigenen Wunsch zurücknehmen, ', h('code', {}, '!skip'), ' (Mods) überspringen.'));
+
+  card.replaceChildren(
+    head('🎵', 'Song-Wünsche', 'Zuschauer wünschen per !sr – du spielst sie hier ab, das Overlay zeigt sie (Ebene „Song-Wünsche“)'),
+    h('div', { class: 'bp-songs' },
+      h('div', { class: 'bp-songs-main' },
+        h('div', { class: 'bp-now' }, h('span', { class: 'bp-now-ico', 'aria-hidden': 'true' }, '🎶'), h('div', {}, nowTitle, nowWho)),
+        frameBox,
+        h('div', { class: 'dash-actions bp-controls' }, playBtn, skipBtn, h('label', { class: 'bp-vol-wrap' }, '🔈', vol), here),
+        addForm),
+      h('div', { class: 'bp-songs-side' },
+        h('div', { class: 'bp-side-head' }, h('h3', { class: 'bp-sub' }, 'Warteschlange'), clearBtn), queueEl,
+        h('h3', { class: 'bp-sub' }, 'Zuletzt'), histEl)),
+    cfgForm);
+  fill(cfgForm);
+
+  // YouTube-Player ohne Zusatz-Skript: eingebettetes Video, gesteuert per postMessage (enablejsapi=1)
+  const post = (func, args = []) => songPlayer.frame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+  const loadVideo = (song) => {
+    songPlayer.current = song;
+    songPlayer.paused = false;
+    playBtn.textContent = '⏸';
+    if (!songPlayer.on || !song) { frameBox.hidden = true; frameBox.replaceChildren(); songPlayer.frame = null; return; }
+    // YouTube erst nach Einwilligung („Externe Medien“, js/consent.js) – vorher nur ein Platzhalter
+    if (!hasConsent('media')) {
+      songPlayer.frame = null;
+      const allow = h('button', { class: 'btn btn--primary btn--sm', type: 'button' }, '▶ YouTube erlauben und abspielen');
+      allow.addEventListener('click', () => setConsent({ media: true }));
+      frameBox.replaceChildren(h('div', { class: 'ck-gate' },
+        h('p', {}, 'Der Player kommt von YouTube (Google). Beim Laden erhält YouTube deine IP-Adresse und kann Daten in deinem Browser speichern.'),
+        allow,
+        h('small', {}, 'Ändern unter ', h('a', { href: '#cookies' }, 'Cookie-Einstellungen'), ' · ', h('a', { href: 'cookies.html', target: '_blank', rel: 'noopener' }, 'Cookie-Richtlinie'))));
+      frameBox.hidden = false;
+      return;
+    }
+    const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(song.video_id)}?enablejsapi=1&autoplay=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
+    const frame = h('iframe', { src, title: `YouTube: ${song.title}`, allow: 'autoplay; encrypted-media', referrerpolicy: 'strict-origin-when-cross-origin' });
+    frame.addEventListener('load', () => {
+      frame.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+      setTimeout(() => post('setVolume', [songPlayer.volume]), 400);
+    });
+    songPlayer.frame = frame;
+    frameBox.replaceChildren(frame);
+    frameBox.hidden = false;
+  };
+  songPlayer.reload = () => { if (songPlayer.on && songPlayer.current) loadVideo(songPlayer.current); };
+  const step = async (action) => {
+    if (songPlayer.ending) return;
+    songPlayer.ending = true;
+    try { await ctx.api.botPlus.songs.control(action); } catch (err) { ctx.toast(errText(err), 'error'); }
+    songPlayer.ending = false;
+    await load();
+  };
+
+  let lastList = [];
+  const songRow = (s, i, queued) => {
+    const li = h('li', { class: `bp-song${s.status === 'playing' ? ' is-playing' : ''}` },
+      h('span', { class: 'bp-song-n' }, queued ? String(i + 1) : s.status === 'skipped' ? '⏭' : '✓'),
+      h('span', { class: 'bp-song-t' }, h('a', { href: `https://youtu.be/${s.video_id}`, target: '_blank', rel: 'noopener noreferrer' }, s.title),
+        h('small', {}, [s.who, fmtLen(s.seconds)].filter(Boolean).join(' · '))),
+      queued ? h('span', { class: 'bp-song-btns' },
+        h('button', { class: 'icon-btn', type: 'button', 'data-a': 'play', title: 'Jetzt spielen', 'aria-label': 'Jetzt spielen' }, '▶'),
+        h('button', { class: 'icon-btn', type: 'button', 'data-a': 'up', title: 'Nach oben', 'aria-label': 'Nach oben', disabled: i === 0 }, '↑'),
+        h('button', { class: 'icon-btn', type: 'button', 'data-a': 'down', title: 'Nach unten', 'aria-label': 'Nach unten' }, '↓'),
+        h('button', { class: 'icon-btn', type: 'button', 'data-a': 'remove', title: 'Entfernen', 'aria-label': 'Entfernen' }, '✕'))
+        : h('span', { class: 'bp-song-btns' }, h('button', { class: 'icon-btn', type: 'button', 'data-a': 'play', title: 'Nochmal spielen', 'aria-label': 'Nochmal spielen' }, '↻')));
+    li.addEventListener('click', async (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a;
+      if (!a) return;
+      try { await ctx.api.botPlus.songs.control(a, s.id); await load(); } catch (err) { ctx.toast(errText(err), 'error'); }
+    });
+    return li;
+  };
+
+  const load = async () => {
+    let songs;
+    let hist = [];
+    try {
+      [songs, hist] = await Promise.all([ctx.api.botPlus.songs.list(), ctx.api.botPlus.songs.history().catch(() => [])]);
+    } catch (err) {
+      queueEl.replaceChildren(h('li', { class: 'cmd-empty' }, errText(err)));
+      return;
+    }
+    lastList = songs;
+    const playing = songs.find((s) => s.status === 'playing') ?? null;
+    const queued = songs.filter((s) => s.status === 'queued');
+    nowTitle.textContent = playing ? playing.title : 'Gerade läuft nichts';
+    nowWho.textContent = playing ? [playing.who && `gewünscht von ${playing.who}`, fmtLen(playing.seconds)].filter(Boolean).join(' · ') : queued.length ? 'Mit ⏭ startet der nächste Wunsch.' : '';
+    queueEl.replaceChildren(...(queued.length ? queued.map((s, i) => songRow(s, i, true)) : [h('li', { class: 'cmd-empty' }, 'Keine Wünsche in der Warteschlange.')]));
+    histEl.replaceChildren(...hist.slice(0, 8).map((s, i) => songRow(s, i, false)));
+    if (songPlayer.on) {
+      if (playing && playing.id !== songPlayer.current?.id) loadVideo(playing);
+      else if (!playing && songPlayer.current) loadVideo(null);
+      // Player an, nichts läuft, aber es warten Wünsche: den nächsten starten
+      else if (!playing && queued.length && !songPlayer.ending) step('next');
+    } else if (playing?.id !== songPlayer.current?.id) songPlayer.current = playing;
+  };
+
+  addEventListener('message', (e) => {
+    if (!songPlayer.frame || e.source !== songPlayer.frame.contentWindow) return;
+    let data;
+    try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+    if (data?.event === 'onError') step('skip');                         // nicht abspielbar: weiter
+    if (data?.event === 'infoDelivery' && data.info?.playerState === 0) step('next'); // zu Ende
+  });
+  playBtn.addEventListener('click', () => {
+    if (!songPlayer.on) { ctx.toast('Erst „Hier abspielen“ anschalten.', 'info'); return; }
+    songPlayer.paused = !songPlayer.paused;
+    post(songPlayer.paused ? 'pauseVideo' : 'playVideo');
+    playBtn.textContent = songPlayer.paused ? '▶' : '⏸';
+  });
+  skipBtn.addEventListener('click', () => step('skip'));
+  vol.addEventListener('input', () => {
+    songPlayer.volume = Number(vol.value);
+    post('setVolume', [songPlayer.volume]);
+    try { localStorage.setItem(`${PLAY_KEY}_vol`, String(songPlayer.volume)); } catch { /* egal */ }
+  });
+  here.querySelector('input').addEventListener('change', (e) => {
+    songPlayer.on = e.target.checked;
+    try { localStorage.setItem(PLAY_KEY, songPlayer.on ? '1' : '0'); } catch { /* egal */ }
+    songPlayer.current = null;
+    if (!songPlayer.on) loadVideo(null);
+    load();
+  });
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Alle wartenden Wünsche entfernen?')) return;
+    try { await ctx.api.botPlus.songs.control('clear'); await load(); } catch (err) { ctx.toast(errText(err), 'error'); }
+  });
+  addForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = addForm.url.value.trim();
+    if (!url) return;
+    const btn = addForm.querySelector('button');
+    btn.disabled = true;
+    try {
+      const res = await ctx.api.botPlus.songs.add(url);
+      if (res?.ok === false) ctx.toast(res.error ?? 'Nicht eingetragen.', 'error');
+      else { ctx.toast(`✓ „${res.title}“ ist auf Platz ${res.position}.`, 'ok', 3000); addForm.url.value = ''; }
+    } catch (err) {
+      ctx.toast(errText(err), 'error');
+    } finally {
+      btn.disabled = false;
+      load();
+    }
+  });
+  let t = 0;
+  ctx.api.botPlus.songs.on?.(() => { clearTimeout(t); t = setTimeout(load, 150); });
+  setInterval(() => { if (!document.hidden) load(); }, 30000);
+  load();
+  return lastList;
+}
+
+// ---------- Einstieg ----------
+// Einmal aufbauen; danach nur noch die Einstellungen neu laden (z. B. beim erneuten Öffnen der Seite).
+export async function renderBotPlus(deps) {
+  ctx = deps;
+  const cards = Object.fromEntries([...document.querySelectorAll('[data-botplus]')].map((el) => [el.dataset.botplus, el]));
+  if (!cards.info) return;
+  try {
+    const res = await ctx.api.botPlus.get();
+    settings = res.settings;
+    missing = res.missing ?? {};
+  } catch (err) {
+    for (const el of Object.values(cards)) el.replaceChildren(h('p', { class: 'form-msg' }, errText(err)));
+    loaded = false;
+    return;
+  }
+  if (!loaded) {
+    cards.info.replaceChildren(...infoCard());
+    cards.greet.replaceChildren(...greetCard());
+    cards.mod.replaceChildren(...modCard());
+    if (cards.timers) await timersCard(cards.timers);
+    songCard(cards.songs);
+    if (cards.clips) clipsCard(cards.clips);
+    if (cards.notices) cards.notices.replaceChildren(...noticesCard());
+    if (cards.faq) await faqCard(cards.faq);
+    loaded = true;
+  }
+  for (const form of document.querySelectorAll('[data-botplus] .bp-form, .bs-gap .bp-form')) if (!form.classList.contains('is-dirty')) fill(form);
+  paintWarnings();
+}
+
+// Für den Bot-Editor (js/bot-studio.js): aktueller Stand und die Pause zwischen Auto-Nachrichten
+export const botSettings = () => settings;
+export function timerGapForm() {
+  if (!settings) return null;
+  const form = settingsForm(num('timer_gap', 'Mindestens Pause zwischen zwei Auto-Nachrichten (für alle)', 30, 3600, 's'));
+  form.classList.add('bp-form--inline');
+  fill(form);
+  return form;
+}

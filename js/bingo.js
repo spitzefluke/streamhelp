@@ -1,0 +1,314 @@
+// Fortnite-Bingo: gemeinsame Helfer für die Webseite (Dialog) und das OBS-Overlay.
+import { shuffled } from './random.js';
+
+// Seltenheit wie in Fortnite – Farben stehen in css/bingo.css (.r-common …)
+export const RARITIES = [
+  { id: 'common', name: 'Gewöhnlich', words: ['common', 'gewoehnlich', 'gewöhnlich', 'grau', 'gray', 'grey'] },
+  { id: 'uncommon', name: 'Ungewöhnlich', words: ['uncommon', 'ungewoehnlich', 'ungewöhnlich', 'gruen', 'grün', 'green'] },
+  { id: 'rare', name: 'Selten', words: ['rare', 'selten', 'blau', 'blue'] },
+  { id: 'epic', name: 'Episch', words: ['epic', 'episch', 'lila', 'purple'] },
+  { id: 'legendary', name: 'Legendär', words: ['legendary', 'legendaer', 'legendär', 'legend', 'gold', 'orange'] },
+  { id: 'mythic', name: 'Mythisch', words: ['mythic', 'mythisch', 'mythical'] },
+  { id: 'exotic', name: 'Exotisch', words: ['exotic', 'exotisch'] },
+];
+export const rarityName = (id) => RARITIES.find((r) => r.id === id)?.name ?? '';
+
+// Kategorien wie im Fortnite-Lootpool (Migration …_bingo_categories.sql) – Reihenfolge = Reihenfolge der Liste.
+// Das Symbol steht klein auf der Karte (Emoji, weil das Overlay keine Icon-Schrift lädt).
+// words: ganze Wörter (oder Wortanfänge ab 4 Buchstaben, „heil“ → „Heiltrank“); mit Leerzeichen: Wortgruppe.
+export const CATEGORIES = [
+  { id: 'ar', name: 'Sturmgewehre', icon: '🪖', words: ['ar', 'assault', 'sturmgewehr', 'scar', 'm4', 'm16', 'famas', 'ranger', 'striker', 'enforcer', 'warforged', 'nemesis', 'red-eye', 'redeye', 'thermal', 'infantry', 'gewehr', 'rifle', 'minigun'] },
+  { id: 'shotgun', name: 'Schrotflinten', icon: '💥', words: ['shotgun', 'schrotflinte', 'schrot', 'pump', 'pumpgun', 'tactical shotgun', 'taktische schrotflinte', 'charge', 'gatekeeper', 'frenzy', 'sentinel', 'drum shotgun', 'auto shotgun', 'lever action shotgun'] },
+  { id: 'smg', name: 'MPs', icon: '⚡', words: ['smg', 'mp', 'maschinenpistole', 'submachine', 'stinger', 'hyper', 'thunder', 'swarmstrike', 'ares', 'drum gun'] },
+  { id: 'sniper', name: 'Scharfschützen', icon: '🎯', words: ['sniper', 'scharfschütze', 'scharfschützengewehr', 'scharfschuetze', 'hunting', 'jagdgewehr', 'dmr', 'bolt', 'reaper', 'heavy sniper', 'precision'] },
+  { id: 'pistol', name: 'Pistolen', icon: '🔫', words: ['pistol', 'pistole', 'revolver', 'hand cannon', 'handkanone', 'deagle', 'sidearm', 'six shooter', 'dual pistols'] },
+  { id: 'explosive', name: 'Explosiv', icon: '🧨', words: ['rocket', 'rakete', 'raketenwerfer', 'rpg', 'launcher', 'granatwerfer', 'granatenwerfer', 'grenade launcher', 'c4', 'sprengstoff', 'explosive', 'remote explosives', 'guided'] },
+  { id: 'heal', name: 'Heilung', icon: '💊', words: ['heal', 'heil', 'health', 'medkit', 'medikit', 'med kit', 'bandage', 'verband', 'chug', 'kanister', 'slurp', 'flowberry', 'fizz', 'apple', 'apfel', 'banana', 'med mist', 'leben', 'erste hilfe'] },
+  { id: 'shield', name: 'Schild', icon: '🛡️', words: ['shield', 'schild', 'minis', 'mini shield', 'big pot', 'keg', 'mushroom', 'pilz', 'shield potion', 'schildtrank'] },
+  { id: 'throw', name: 'Wurfgegenstände', icon: '🪃', words: ['grenade', 'granate', 'impulse', 'firefly', 'glühwürmchen', 'smoke', 'rauch', 'boogie', 'bubble', 'clinger', 'stink', 'wurf', 'throw', 'snowball', 'schneeball', 'chug splash', 'splash'] },
+  { id: 'mobility', name: 'Mobilität', icon: '🏃', words: ['shockwave', 'schockwelle', 'launch pad', 'sprungpad', 'grappler', 'enterhaken', 'rift', 'riss', 'crash pad', 'glider', 'gleiter', 'mobility', 'sprint', 'jetpack', 'car', 'boat'] },
+  { id: 'other', name: 'Sonstiges', icon: '✨', words: [] },
+];
+const CAT = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]));
+export const categoryOf = (id) => CAT[id] ?? CAT.other;
+// Reihenfolge beim Erkennen: Spezielles vor Allgemeinem („Grenade Launcher“ ist Explosiv, nicht Wurf;
+// „Shockwave Grenade“ ist Mobilität; „Shield Bubble“ ein Wurfgegenstand; „Burst SMG“ eine MP).
+const DETECT = ['heal', 'explosive', 'mobility', 'throw', 'shield', 'sniper', 'shotgun', 'smg', 'pistol', 'ar'];
+export function categoryFromName(name) {
+  const text = ` ${String(name ?? '').toLowerCase().replace(/[^a-z0-9äöüß-]+/g, ' ').trim()} `;
+  const tokens = text.trim().split(/\s+/);
+  const hit = (w) => (w.includes(' ') ? text.includes(` ${w} `)
+    : tokens.some((t) => t === w || (w.length >= 4 && t.startsWith(w))));
+  return DETECT.find((id) => CAT[id].words.some(hit)) ?? 'other';
+}
+
+// Seltenheit aus dem Dateinamen: "scar_legendary.png", "Pump Episch.png" …
+// "uncommon" vor "common" prüfen, sonst wird Grün zu Grau.
+export function rarityFromFile(fileName) {
+  const words = fileName.toLowerCase().replace(/\.[^.]+$/, '').split(/[^a-zäöüß]+/).filter(Boolean);
+  const hit = [...RARITIES].sort((a, b) => b.id.length - a.id.length)
+    .find((r) => r.words.some((w) => words.includes(w)));
+  return hit?.id ?? null;
+}
+
+// Zahl im Icon, z. B. bei Kills: "kill_5.png", "5-kills.png", "elim x10.png" → 5 bzw. 10
+const AMOUNT = /^(?:x|×)?(\d{1,3})(?:x|×)?$/i;
+export const MAX_AMOUNT = 999;
+export function amountFromFile(fileName) {
+  const words = fileName.replace(/\.[^.]+$/, '').split(/[-_\s]+/);
+  const hit = words.map((w) => AMOUNT.exec(w)).find((m) => m && Number(m[1]) >= 1);
+  return hit ? Number(hit[1]) : null;
+}
+
+// Name ohne Seltenheits-Wort und ohne Zahl: "scar_legendary.png" → "Scar", "kill_5.png" → "Kill"
+function stripRarity(fileName) {
+  // Farbwörter (gold, blau …) bleiben im Namen – "Gold Scar" heißt wirklich so.
+  const colors = ['grau', 'gray', 'grey', 'gruen', 'grün', 'green', 'blau', 'blue', 'lila', 'purple', 'gold', 'orange'];
+  const all = RARITIES.flatMap((r) => r.words).filter((w) => !colors.includes(w));
+  const parts = fileName.replace(/\.[^.]+$/, '').split(/([-_\s]+)/);
+  // Nur die erste Zahl ist die Zahl im Icon (wie in amountFromFile)
+  const numberAt = parts.findIndex((part, i) => i % 2 === 0 && AMOUNT.test(part) && Number(AMOUNT.exec(part)[1]) >= 1);
+  return parts.filter((part, i) => i !== numberAt && !all.includes(part.toLowerCase()))
+    .join('').replace(/^[-_\s]+|[-_\s]+$/g, '');
+}
+
+// Was von einem Bild in eine Karte kommt (ohne leere Felder)
+export function cardCell({ id, name, path, rarity, amount, category }) {
+  return { id, name, path, ...(rarity ? { rarity } : {}), ...(amount ? { amount } : {}), ...(category ? { category } : {}) };
+}
+
+// Alle Reihen, Spalten und die beiden Diagonalen als Listen von Feld-Nummern
+function lines(size) {
+  const all = [];
+  for (let r = 0; r < size; r++) all.push(Array.from({ length: size }, (_, c) => r * size + c));
+  for (let c = 0; c < size; c++) all.push(Array.from({ length: size }, (_, r) => r * size + c));
+  all.push(Array.from({ length: size }, (_, i) => i * size + i));
+  all.push(Array.from({ length: size }, (_, i) => i * size + (size - 1 - i)));
+  return all;
+}
+
+// Tipprunde: Welche Linien kann man tippen? Steht genauso in
+// supabase/functions/_shared/bingo.ts – beide gleich halten. Twitch erlaubt
+// höchstens 10 Antworten: Reihen und Spalten immer, Diagonalen nur, wenn Platz ist.
+export const columnLetters = (size) => (size === 5 ? 'BINGO' : 'ABCDE'.slice(0, size));
+export function betLines(size) {
+  const letters = columnLetters(size);
+  const out = [];
+  for (let r = 0; r < size; r++) out.push({ key: `r${r + 1}`, title: `Reihe ${r + 1}`, cells: Array.from({ length: size }, (_, c) => r * size + c) });
+  for (let c = 0; c < size; c++) out.push({ key: `c${c + 1}`, title: `Spalte ${letters[c]}`, cells: Array.from({ length: size }, (_, r) => r * size + c) });
+  if (out.length + 2 <= 10) {
+    out.push({ key: 'd1', title: 'Diagonale ↘', cells: Array.from({ length: size }, (_, i) => i * size + i) });
+    out.push({ key: 'd2', title: 'Diagonale ↙', cells: Array.from({ length: size }, (_, i) => i * size + (size - 1 - i)) });
+  }
+  return out;
+}
+export function fullBetLines(card) {
+  const marked = new Set(card?.marked ?? []);
+  return card ? betLines(card.size).filter((l) => l.cells.every((i) => marked.has(i))) : [];
+}
+
+// Welche Linien sind voll? → Anzahl und die Felder darin
+export function bingoState(card) {
+  if (!card) return { count: 0, cells: new Set(), done: 0, total: 0 };
+  const marked = new Set(card.marked ?? []);
+  const full = lines(card.size).filter((line) => line.every((i) => marked.has(i)));
+  const free = card.cells.filter((c) => c.free).length;
+  return {
+    count: full.length,
+    cells: new Set(full.flat()),
+    done: [...marked].filter((i) => !card.cells[i]?.free).length,
+    total: card.cells.length - free,
+  };
+}
+
+// Items ohne Seltenheit bekommen eine von drei bunten Farben, die es bei
+// Waffen nicht gibt – so verwechselt man sie nicht mit einer Seltenheit.
+const FUN = ['fun-pink', 'fun-teal', 'fun-red'];
+function funColor(id = '') {
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return FUN[h % FUN.length];
+}
+
+// Zeichnet die Karte in `el`. Mit onCell werden die Felder zu Knöpfen.
+// itemOf(cell) liefert das Bild aus der aktuellen Liste (falls ein Admin Seltenheit
+// oder Zahl nachträglich geändert hat); sonst gilt, was beim Ziehen in der Karte steht.
+// labels: Reihen-Nummern und Spalten-Buchstaben dazu (während einer Tipprunde),
+// damit man sieht, was „Reihe 2“ oder „Spalte G“ ist.
+export function renderBingoGrid(el, card, { urlFor, onCell = null, stamped = null, itemOf = null, labels = false } = {}) {
+  const { cells: winning } = bingoState(card);
+  const marked = new Set(card.marked ?? []);
+  el.style.setProperty('--n', card.size);
+  el.classList.toggle('has-labels', labels);
+  const span = (cls, text) => {
+    const l = document.createElement('span');
+    l.className = cls;
+    l.textContent = text;
+    l.setAttribute('aria-hidden', 'true');
+    return l;
+  };
+  // Bei 5 × 5 steht B-I-N-G-O über den Spalten, mit Beschriftung auch A-B-C … bei kleineren Karten
+  const head = card.size === 5 || labels
+    ? [...(labels ? [span('bingo-corner', '')] : []),
+      ...[...columnLetters(card.size)].map((ch, i) => span(`bingo-letter bingo-letter--${i}`, ch))]
+    : [];
+  const nodes = card.cells.map((cell, i) => {
+    const node = document.createElement(onCell && !cell.free ? 'button' : 'div');
+    node.className = 'bingo-cell';
+    const live = cell.free ? null : itemOf?.(cell) ?? cell;
+    const rarity = live?.rarity ?? null;
+    const amount = live?.amount ?? null;
+    if (!cell.free) node.classList.add(rarity ? `r-${rarity}` : funColor(cell.id));
+    if (onCell && !cell.free) {
+      node.type = 'button';
+      node.setAttribute('aria-pressed', String(marked.has(i)));
+      node.addEventListener('click', () => onCell(i, node));
+    }
+    if (cell.free) {
+      node.classList.add('is-free');
+      node.innerHTML = '<span class="bingo-free">★<b>Frei</b></span>';
+    } else {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.src = urlFor(cell.path);
+      const name = document.createElement('span');
+      name.className = 'bingo-name';
+      name.textContent = cell.name;
+      node.append(img, name);
+      node.title = [cell.name, amount, rarity && rarityName(rarity), CAT[live?.category ?? cell.category]?.name].filter(Boolean).join(' · ');
+      if (amount) {
+        // Die Zahl steht groß im Icon, z. B. 5 auf dem Kill-Symbol
+        const num = document.createElement('span');
+        num.className = 'bingo-amount';
+        num.textContent = amount;
+        node.append(num);
+      }
+      if (rarity) {
+        const badge = document.createElement('span');
+        badge.className = 'bingo-rarity';
+        badge.textContent = rarityName(rarity);
+        node.append(badge);
+      }
+      // Kategorie als kleines Symbol oben links (ältere Karten ohne Kategorie: keins)
+      const category = live?.category ?? cell.category;
+      if (category && CAT[category]) {
+        const cat = document.createElement('span');
+        cat.className = 'bingo-cat';
+        cat.textContent = CAT[category].icon;
+        cat.title = CAT[category].name;
+        cat.setAttribute('aria-hidden', 'true');
+        node.append(cat);
+      }
+    }
+    if (marked.has(i) && !cell.free) {
+      node.classList.add('is-marked');
+      const stamp = document.createElement('span');
+      stamp.className = 'bingo-stamp';
+      stamp.setAttribute('aria-hidden', 'true');
+      node.append(stamp);
+    }
+    if (winning.has(i)) node.classList.add('is-line');
+    if (i === stamped) node.classList.add('is-stamped');
+    return node;
+  });
+  const rows = labels
+    ? nodes.flatMap((node, i) => (i % card.size === 0 ? [span('bingo-rownum', String(i / card.size + 1)), node] : [node]))
+    : nodes;
+  el.replaceChildren(...head, ...rows);
+}
+
+// Kartenregel (wie bingo_new_card in der Datenbank): Items im Tresor kommen nicht auf die Karte,
+// jeder Name nur einmal (gleiche Waffe in anderer Seltenheit zählt als dieselbe) und jedes Bild
+// nur einmal (gleicher Fingerabdruck image_key, sonst gleiche Datei).
+const nameKey = (item) => String(item.name ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+const imageOf = (item) => item.image_key || item.path;
+export function pickDistinct(items, need = Infinity) {
+  const pool = balanced(shuffled(items.filter((i) => !i.vault)));
+  const names = new Set();
+  const images = new Set();
+  const out = [];
+  for (const item of pool) {
+    if (out.length >= need) break;
+    if (names.has(nameKey(item)) || images.has(imageOf(item))) continue;
+    names.add(nameKey(item));
+    images.add(imageOf(item));
+    out.push(item);
+  }
+  return out;
+}
+// Ausgewogen mischen: reihum aus jeder Kategorie eins (Kategorien in zufälliger Reihenfolge),
+// ohne Kategorie zählt als „Sonstiges“ – so wird eine Karte nicht nur aus Waffen gezogen.
+function balanced(pool) {
+  const groups = new Map();
+  for (const item of pool) {
+    const key = CAT[item.category] ? item.category : 'other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  const lists = shuffled([...groups.values()]);
+  const out = [];
+  for (let k = 0; out.length < pool.length; k++) for (const list of lists) if (list[k]) out.push(list[k]);
+  return out;
+}
+// Wie viele verschiedene Items eine Karte höchstens bekommen kann (Namen außerhalb des Tresors)
+export const distinctCount = (items) => new Set(items.filter((i) => !i.vault).map(nameKey)).size;
+
+export function needError(size, need, have) {
+  return new Error(`Für eine ${size}×${size}-Karte braucht es ${need} verschiedene Items – es gibt erst ${have}. Gleiche Waffe in anderer Seltenheit und gleiche Bilder zählen nur einmal, Items im Tresor gar nicht.`);
+}
+
+// Zufällige Karte aus den hochgeladenen Bildern (für die eigene Karte und den Demo-Modus).
+// Die Karte des Streamers zieht die Datenbank (bingo_new_card), mit derselben Regel.
+export function drawCard(items, size, free = true) {
+  const withFree = free && size % 2 === 1;
+  const need = size * size - (withFree ? 1 : 0);
+  const picked = pickDistinct(items, need);
+  if (picked.length < need) throw needError(size, need, picked.length);
+  const cells = picked.map(cardCell);
+  const center = Math.floor((size * size) / 2);
+  if (withFree) cells.splice(center, 0, { free: true });
+  return { size, cells, marked: withFree ? [center] : [], created_at: new Date().toISOString() };
+}
+
+// Fingerabdruck einer Bilddatei (SHA-256 als Hex) – erkennt dieselbe Datei beim Ziehen der Karte
+export async function imageKey(file) {
+  try {
+    const hash = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
+// "chug-jug_legendary.png" → "Chug Jug" (Seltenheit und Zahl stecken extra in rarityFromFile/amountFromFile)
+export function nameFromFile(fileName) {
+  return (stripRarity(fileName) || fileName)
+    .replace(/\.[^.]+$/, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/(^|\s)\S/g, (m) => m.toUpperCase())
+    .slice(0, 40) || 'Item';
+}
+
+// Bilder vor dem Hochladen verkleinern: Auf der Karte sind sie klein,
+// und kleine Dateien laden in OBS schneller.
+export async function shrinkImage(file, max = 256) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error(`„${file.name}“ ist kein Bild, das der Browser lesen kann.`);
+  }
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
+  if (blob?.type === 'image/webp') return blob;
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}

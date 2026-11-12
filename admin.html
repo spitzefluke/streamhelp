@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZarCAVuYaXeVM/QfQ1s7IHoh5QQkGwjHI3hjDErSb/w=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="same-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>StreamHelp-Admin · StreamHelp</title>
+  <meta name="theme-color" content="#0a0d13">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
+  <link rel="stylesheet" href="css/style.css?v=5e80a45d85">
+  <link rel="stylesheet" href="css/admin.css?v=1fed08735f">
+  <!-- versions:start (node tools/stamp-versions.mjs) -->
+  <script type="importmap">{
+    "imports": {
+      "./js/admin.js": "./js/admin.js?v=814d4cb5c3",
+      "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
+      "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
+      "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
+      "./js/api.js": "./js/api.js?v=8c9c607e1b",
+      "./js/app.js": "./js/app.js?v=22a0d3e4c6",
+      "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
+      "./js/avatar.js": "./js/avatar.js?v=136eccd608",
+      "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
+      "./js/bot-plus.js": "./js/bot-plus.js?v=ced2515118",
+      "./js/bot-reasons.js": "./js/bot-reasons.js?v=e2e03e6022",
+      "./js/bot-studio.js": "./js/bot-studio.js?v=44a852cd77",
+      "./js/brand-colors.js": "./js/brand-colors.js?v=4cadf11bf4",
+      "./js/challenge.js": "./js/challenge.js?v=e9003437a5",
+      "./js/channel.js": "./js/channel.js?v=9ca5d517e8",
+      "./js/config.js": "./js/config.js?v=9983d070cb",
+      "./js/consent.js": "./js/consent.js?v=c698a67e69",
+      "./js/dash-artist.js": "./js/dash-artist.js?v=28e15868ab",
+      "./js/dash-bot.js": "./js/dash-bot.js?v=4f62b52221",
+      "./js/dash-console-3d.js": "./js/dash-console-3d.js?v=95387bdaf5",
+      "./js/dash-console-kit.js": "./js/dash-console-kit.js?v=cefbc93725",
+      "./js/dash-console-rear.js": "./js/dash-console-rear.js?v=13223a0473",
+      "./js/dash-console-spec.js": "./js/dash-console-spec.js?v=0dae1af8e8",
+      "./js/dash-console-survey.js": "./js/dash-console-survey.js?v=5ab919de44",
+      "./js/dash-console-tips.js": "./js/dash-console-tips.js?v=ea2871823b",
+      "./js/dash-console.js": "./js/dash-console.js?v=5dcb0be18e",
+      "./js/dash-discord.js": "./js/dash-discord.js?v=9526da96a9",
+      "./js/dash-money.js": "./js/dash-money.js?v=27c4d95119",
+      "./js/dash-network.js": "./js/dash-network.js?v=fec34b21f7",
+      "./js/dash-obsdata.js": "./js/dash-obsdata.js?v=800b31c135",
+      "./js/dash-profile.js": "./js/dash-profile.js?v=d64a161e18",
+      "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
+      "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
+      "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
+      "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
+      "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
+      "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
+      "./js/extras-core.js": "./js/extras-core.js?v=11e697c4d7",
+      "./js/extras-counter.js": "./js/extras-counter.js?v=f5ef93b3a8",
+      "./js/extras-cup.js": "./js/extras-cup.js?v=9eff968373",
+      "./js/extras-emoterain.js": "./js/extras-emoterain.js?v=260fb52829",
+      "./js/extras-fun.js": "./js/extras-fun.js?v=dcf17541ef",
+      "./js/extras-gamewheel.js": "./js/extras-gamewheel.js?v=f9e4229236",
+      "./js/extras-giveaway.js": "./js/extras-giveaway.js?v=f10ed16401",
+      "./js/extras-guard.js": "./js/extras-guard.js?v=6ef5d043e0",
+      "./js/extras-heart.js": "./js/extras-heart.js?v=c35e588fc4",
+      "./js/extras-hotwords.js": "./js/extras-hotwords.js?v=fea8926ca1",
+      "./js/extras-live.js": "./js/extras-live.js?v=869fb7dfb4",
+      "./js/extras-obswatch.js": "./js/extras-obswatch.js?v=a9ba0e26f0",
+      "./js/extras-play.js": "./js/extras-play.js?v=24950909df",
+      "./js/extras-poll.js": "./js/extras-poll.js?v=9d625d0b37",
+      "./js/extras-scratch.js": "./js/extras-scratch.js?v=3e50c227be",
+      "./js/extras.js": "./js/extras.js?v=c66aa479c2",
+      "./js/frame-guard.js": "./js/frame-guard.js?v=3a391987bd",
+      "./js/games.js": "./js/games.js?v=1dbc5571d9",
+      "./js/help.js": "./js/help.js?v=a68e78522c",
+      "./js/i18n-en.js": "./js/i18n-en.js?v=6aa4228ba4",
+      "./js/i18n-es.js": "./js/i18n-es.js?v=4415200ab7",
+      "./js/i18n-fr.js": "./js/i18n-fr.js?v=c02e19d138",
+      "./js/i18n-it.js": "./js/i18n-it.js?v=6f5fce0431",
+      "./js/i18n-keys.js": "./js/i18n-keys.js?v=4343221a2f",
+      "./js/i18n-nl.js": "./js/i18n-nl.js?v=ed1615425c",
+      "./js/i18n-pl.js": "./js/i18n-pl.js?v=ad60fb1f50",
+      "./js/i18n-pt.js": "./js/i18n-pt.js?v=f06dc4f210",
+      "./js/i18n-ru.js": "./js/i18n-ru.js?v=bed6b319a5",
+      "./js/i18n-tr.js": "./js/i18n-tr.js?v=5386bb6cdd",
+      "./js/i18n.js": "./js/i18n.js?v=4550a5388d",
+      "./js/intro.js": "./js/intro.js?v=91b52e9132",
+      "./js/kuendigen.js": "./js/kuendigen.js?v=0908c3d587",
+      "./js/landing.js": "./js/landing.js?v=d63600a119",
+      "./js/launch.js": "./js/launch.js?v=0fd38405df",
+      "./js/library.js": "./js/library.js?v=18de8e88ef",
+      "./js/look-builder.js": "./js/look-builder.js?v=7fb22ef480",
+      "./js/obs-setup.js": "./js/obs-setup.js?v=3ab00b3752",
+      "./js/obs-ws.js": "./js/obs-ws.js?v=d1b1d7463c",
+      "./js/overlay-anniversary.js": "./js/overlay-anniversary.js?v=697507dd0e",
+      "./js/overlay-emoterain.js": "./js/overlay-emoterain.js?v=ccb1b9951d",
+      "./js/overlay-extras.js": "./js/overlay-extras.js?v=0c14352815",
+      "./js/overlay-hack.js": "./js/overlay-hack.js?v=5ca451921f",
+      "./js/overlay-modules.js": "./js/overlay-modules.js?v=6cf132f959",
+      "./js/overlay-stage.js": "./js/overlay-stage.js?v=1709d9784b",
+      "./js/overlay-usage.js": "./js/overlay-usage.js?v=c51b368be2",
+      "./js/overlay.js": "./js/overlay.js?v=cb7c070e07",
+      "./js/pad-page.js": "./js/pad-page.js?v=af20dc7ced",
+      "./js/pet-species.js": "./js/pet-species.js?v=ccc5a9c9c9",
+      "./js/pet.js": "./js/pet.js?v=d40129fa2c",
+      "./js/platform-gate.js": "./js/platform-gate.js?v=f7bbf2bf31",
+      "./js/platform-notices.js": "./js/platform-notices.js?v=2e1994fbf3",
+      "./js/prank-fx.js": "./js/prank-fx.js?v=1c40a17a79",
+      "./js/pro-page.js": "./js/pro-page.js?v=65432d25d3",
+      "./js/pro.js": "./js/pro.js?v=bb9c3d3509",
+      "./js/profile.js": "./js/profile.js?v=179c7737c3",
+      "./js/questions.js": "./js/questions.js?v=9749040be0",
+      "./js/random.js": "./js/random.js?v=15aa4d00fa",
+      "./js/record.js": "./js/record.js?v=1cd418223e",
+      "./js/rexi-sfx.js": "./js/rexi-sfx.js?v=a1036a43c2",
+      "./js/screen-holes.js": "./js/screen-holes.js?v=ebb20f0416",
+      "./js/secret-store.js": "./js/secret-store.js?v=086d5c4808",
+      "./js/security.js": "./js/security.js?v=f63e349e70",
+      "./js/shop.js": "./js/shop.js?v=fcc50151a8",
+      "./js/social-icons.js": "./js/social-icons.js?v=5a363186bc",
+      "./js/sponsor-files.js": "./js/sponsor-files.js?v=b7abefe613",
+      "./js/sponsoring.js": "./js/sponsoring.js?v=7572e11dab",
+      "./js/supabase-js.js": "./js/supabase-js.js?v=397c32fbeb",
+      "./js/theme-packs.js": "./js/theme-packs.js?v=90faabe1ce",
+      "./js/ticker.js": "./js/ticker.js?v=f42d43ff2c",
+      "./js/tour.js": "./js/tour.js?v=c499758325",
+      "./js/tts-voice.js": "./js/tts-voice.js?v=3a37b18618",
+      "./js/twitch-chat.js": "./js/twitch-chat.js?v=1b6eb8553c",
+      "./js/watch-import.js": "./js/watch-import.js?v=ee7e14f2c7",
+      "./js/wheel.js": "./js/wheel.js?v=d81e65a827",
+      "./js/youtube-chat.js": "./js/youtube-chat.js?v=bf81b00d4e",
+      "./js/youtube-connect.js": "./js/youtube-connect.js?v=dee2b757f5",
+      "./js/vendor/three-console.min.js": "./js/vendor/three-console.min.js?v=fdeadfdf0e",
+      "./js/vendor/yami-landing.js": "./js/vendor/yami-landing.js?v=3fa958ca19"
+    }
+  }</script>
+  <script type="module">import './js/admin.js';</script>
+  <!-- versions:end -->
+</head>
+<body>
+  <!-- UMBAU-HINWEIS: entfernen, sobald der Umzug auf die .de-Domain abgeschlossen ist -->
+  <div class="umbau-banner" role="status" style="position:relative;z-index:2147483000;margin:0;padding:10px 16px;background:#facc15;color:#1a1a1a;border-bottom:3px solid #b45309;font:600 15px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;text-align:center">
+    &#9888;&#65039; <strong>Heads up: This website is currently being rebuilt.</strong> StreamHelp is moving to its own <strong>.de domain</strong> soon &ndash; until then, some features may be limited.
+  </div>
+  <div id="demo-banner" class="demo-banner" hidden>
+    Demo-Modus: Passwort <code>demo</code>. Angezeigt werden nur die Daten aus diesem Browser.
+  </div>
+
+  <!-- ============ LOGIN ============ -->
+  <main id="admin-login" class="admin-login" hidden>
+    <form id="admin-form" class="auth-card admin-card" novalidate>
+      <div class="brand">
+        <img src="assets/favicon.svg" alt="" width="36" height="36">
+        <span>StreamHelp</span>
+      </div>
+      <p class="eyebrow">Nur für das Team</p>
+      <h1>StreamHelp-Admin</h1>
+      <p class="admin-lead">Live-Daten zu Nutzern, Glücksrad und Twitch-Verbindung. Ohne Registrierung, nur mit dem Admin-Passwort.</p>
+      <label class="field">
+        <span>Admin-Passwort</span>
+        <input name="password" type="password" autocomplete="current-password" required placeholder="••••••••••••">
+      </label>
+      <label class="field">
+        <span>Zwei-Faktor-Code</span>
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="6 Ziffern aus der App">
+        <small class="field-hint">Beim allerersten Login leer lassen – danach richtest du den Code ein.</small>
+      </label>
+      <p class="form-msg" role="alert"></p>
+      <button class="btn btn--primary btn--block" type="submit">Einloggen</button>
+      <a class="back-link" href="./">← Zur Webseite</a>
+    </form>
+  </main>
+
+  <!-- ============ ZWEI-FAKTOR-CODE EINRICHTEN (Pflicht) ============ -->
+  <main id="admin-mfa" class="admin-login" hidden>
+    <form id="mfa-form" class="auth-card admin-card admin-mfa" novalidate>
+      <p class="eyebrow">Einmal nötig · Pflicht</p>
+      <h1>Zwei-Faktor-Code</h1>
+      <p class="admin-lead">Der Admin-Bereich verlangt zusätzlich zum Passwort einen Code aus einer Authenticator-App
+        (z. B. Google Authenticator, Microsoft Authenticator, 2FAS, Aegis). Ohne ihn geht es hier nicht weiter.</p>
+      <div class="mfa-setup" id="mfa-setup">
+        <img id="mfa-qr" class="mfa-qr" alt="QR-Code für die Authenticator-App" width="200" height="200" hidden>
+        <p class="mfa-secret">Oder von Hand eintragen: <code id="mfa-secret">…</code></p>
+      </div>
+      <label class="field">
+        <span>Code aus der App</span>
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" required>
+      </label>
+      <p class="form-msg" role="alert"></p>
+      <button class="btn btn--primary btn--block" type="submit">Bestätigen &amp; weiter</button>
+      <button class="btn btn--ghost btn--block" type="button" id="mfa-cancel">Abmelden</button>
+    </form>
+  </main>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div id="admin-app" class="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <img src="assets/favicon.svg" alt="" width="30" height="30">
+        <span>StreamHelp-Admin</span>
+      </div>
+      <div class="topbar-actions">
+        <span id="live" class="live-pill" role="status"><span class="live-dot" aria-hidden="true"></span><span class="live-text">Verbinde …</span></span>
+        <button id="site-btn" class="btn btn--primary btn--sm" type="button">Webseite als Admin öffnen</button>
+        <button id="logout-btn" class="btn btn--ghost btn--sm" type="button">Abmelden</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <section id="kpis" class="kpis" aria-label="Kennzahlen"></section>
+
+      <div class="admin-grid">
+        <section class="panel panel--chart" aria-labelledby="chart-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="chart-title">Drehungen pro Tag</h2>
+              <p class="panel-sub">Letzte 14 Tage</p>
+            </div>
+            <ul class="legend" aria-label="Legende">
+              <li><span class="key key--twitch"></span>Kanalpunkte</li>
+              <li><span class="key key--web"></span>Webseite</li>
+            </ul>
+          </div>
+          <div id="chart" class="chart"></div>
+          <details class="table-view">
+            <summary>Als Tabelle anzeigen</summary>
+            <table id="chart-table"></table>
+          </details>
+        </section>
+
+        <section class="panel" aria-labelledby="twitch-title">
+          <div class="panel-head">
+            <h2 id="twitch-title">Twitch</h2>
+            <button id="twitch-check" class="btn btn--ghost btn--sm" type="button">Live bei Twitch prüfen</button>
+          </div>
+          <dl id="twitch-panel" class="status-list"></dl>
+          <p id="twitch-check-result" class="check-result" role="status"></p>
+
+          <!-- Chat-Bots: nur hier verbindbar, nicht auf der Webseite. Zwei Plätze (…_bot_stats.sql),
+               jeder Kanal wählt im Dashboard, welcher bei ihm schreibt. -->
+          <div class="bot-panel" id="bot-panel">
+            <p class="bot-panel-text" id="bot-text">Chat-Bots werden geladen …</p>
+            <div class="bot-slots" id="bot-slots"></div>
+            <p id="bot-msg" class="check-result" role="status"></p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="botlog-title">
+          <div class="panel-head">
+            <h2 id="botlog-title">Bot-Protokoll</h2>
+            <label class="inline-check"><input type="checkbox" id="botlog-problems"> nur Probleme</label>
+            <button id="botlog-load" class="btn btn--ghost btn--sm" type="button">Laden</button>
+          </div>
+          <p class="panel-sub" id="botlog-sum">Kommen die Nachrichten der Bots in allen Kanälen an?</p>
+          <div class="botlog-wrap"><table class="botlog-table" id="botlog-channels" hidden></table></div>
+          <ol class="botlog-feed" id="botlog-feed"></ol>
+        </section>
+
+        <section class="panel panel--feed" aria-labelledby="feed-title">
+          <div class="panel-head">
+            <h2 id="feed-title">Live-Feed</h2>
+            <p class="panel-sub">Letzte 40 Drehungen</p>
+          </div>
+          <ol id="feed" class="feed"></ol>
+        </section>
+
+        <section class="panel" aria-labelledby="variants-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="variants-title">Varianten</h2>
+              <p class="panel-sub">Letzte 14 Tage</p>
+            </div>
+          </div>
+          <div id="variants" class="hbars"></div>
+        </section>
+
+        <!-- Plattform steuern (js/admin.js, Migration …_channel_moderation.sql) -->
+        <section class="panel panel--wide" aria-labelledby="platform-title" id="platform-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="platform-title">Plattform steuern</h2>
+              <p class="panel-sub">Notfall-Schalter für alle Kanäle, Wartung, Updates ausrollen und Neuigkeiten für Streamer und Mods.</p>
+            </div>
+          </div>
+          <p id="platform-note" class="check-result" role="status"></p>
+          <div class="pf-grid">
+            <div class="pf-box" data-switch="overlays">
+              <h3>📺 Alle Overlays</h3>
+              <p class="pf-state" data-state>–</p>
+              <div class="pf-row">
+                <select data-minutes aria-label="Dauer"><option value="">bis zum Aufheben</option><option value="15">15 Minuten</option><option value="60" selected>1 Stunde</option><option value="360">6 Stunden</option><option value="1440">24 Stunden</option><option value="4320">3 Tage</option><option value="10080">7 Tage</option><option value="43200">30 Tage</option></select>
+                <input data-reason maxlength="300" placeholder="Grund (für dich)" aria-label="Grund">
+              </div>
+              <div class="pf-row"><button class="btn btn--primary btn--sm" type="button" data-on>Pausieren</button><button class="btn btn--ghost btn--sm" type="button" data-off>Aufheben</button></div>
+              <p class="field-hint">Alle Overlays zeigen nichts (kein Bild, kein Ton) und laufen danach von selbst weiter.</p>
+            </div>
+            <div class="pf-box" data-switch="bots">
+              <h3>🤖 Chat-Bot (alle Kanäle)</h3>
+              <p class="pf-state" data-state>–</p>
+              <div class="pf-row">
+                <select data-minutes aria-label="Dauer"><option value="">bis zum Aufheben</option><option value="15">15 Minuten</option><option value="60" selected>1 Stunde</option><option value="360">6 Stunden</option><option value="1440">24 Stunden</option><option value="4320">3 Tage</option><option value="10080">7 Tage</option><option value="43200">30 Tage</option></select>
+                <input data-reason maxlength="300" placeholder="Grund (für dich)" aria-label="Grund">
+              </div>
+              <div class="pf-row"><button class="btn btn--primary btn--sm" type="button" data-on>Stummschalten</button><button class="btn btn--ghost btn--sm" type="button" data-off>Aufheben</button></div>
+              <p class="field-hint">Der Bot liest und schreibt nichts mehr – keine Befehle, keine Moderation, kein Danke.</p>
+            </div>
+            <div class="pf-box" id="pf-maint">
+              <h3>🛠️ Wartung</h3>
+              <p class="pf-state" data-state>–</p>
+              <div class="pf-row">
+                <select data-minutes aria-label="Dauer"><option value="">bis zum Beenden</option><option value="15">15 Minuten</option><option value="60" selected>1 Stunde</option><option value="360">6 Stunden</option><option value="1440">24 Stunden</option><option value="4320">3 Tage</option><option value="10080">7 Tage</option><option value="43200">30 Tage</option></select>
+                <input data-message maxlength="300" placeholder="Hinweis für Streamer, z. B. „Update läuft“" aria-label="Hinweis">
+              </div>
+              <label class="pf-check"><input type="checkbox" data-overlays> Overlays solange leer</label>
+              <div class="pf-row"><button class="btn btn--primary btn--sm" type="button" data-on>Wartung starten</button><button class="btn btn--ghost btn--sm" type="button" data-off>Beenden</button></div>
+              <p class="field-hint">Streamer sehen den Hinweis oben im Dashboard. Beim Beenden laden alle die neue Version.</p>
+            </div>
+            <div class="pf-box" id="pf-reload">
+              <h3>🔄 Update ausrollen</h3>
+              <p class="pf-state" data-state>–</p>
+              <div class="pf-row"><button class="btn btn--primary btn--sm" type="button" data-reload>Alle Overlays &amp; Dashboards neu laden</button></div>
+              <p class="field-hint">Offene Overlays in OBS und Dashboards holen sich innerhalb einer Minute die neue Version. Dashboards zeigen vorher 10 s einen Hinweis.</p>
+            </div>
+          </div>
+          <div class="pf-updates">
+            <h3>🆕 Was ist neu – Neuigkeiten für Streamer und ihre Mods</h3>
+            <form id="pf-update-form" class="pf-update-form" novalidate>
+              <input name="title" maxlength="120" placeholder="Titel, z. B. „Neu: Song-Wünsche“" aria-label="Titel" required>
+              <textarea name="body" maxlength="4000" rows="4" placeholder="Was ist neu? Kurz und verständlich." aria-label="Text" required></textarea>
+              <div class="pf-row"><button class="btn btn--primary btn--sm" type="submit">Veröffentlichen</button><span class="field-hint">Streamer und Mods sehen sie einmal beim nächsten Öffnen des Dashboards.</span></div>
+            </form>
+            <ul id="pf-updates" class="pf-update-list"></ul>
+          </div>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="channels-title" id="channels-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="channels-title">Streamer-Kanäle <span id="channels-count" class="count"></span></h2>
+              <p class="panel-sub">Neue Streamer melden sich mit Twitch an und warten, bis du sie hier freischaltest.</p>
+            </div>
+          </div>
+          <p id="channels-note" class="check-result" role="status"></p>
+          <!-- Mehrere Kanäle auf einmal: Timeout, Overlay aus, Verwarnung -->
+          <div class="ch-bulk" id="ch-bulk">
+            <span class="ch-bulk-count" id="ch-bulk-count">Keine Kanäle ausgewählt</span>
+            <select id="ch-bulk-minutes" aria-label="Dauer"><option value="">bis zum Aufheben (nur Overlay)</option><option value="15">15 Minuten</option><option value="60" selected>1 Stunde</option><option value="360">6 Stunden</option><option value="1440">24 Stunden</option><option value="4320">3 Tage</option><option value="10080">7 Tage</option><option value="43200">30 Tage</option></select>
+            <input id="ch-bulk-reason" maxlength="500" placeholder="Grund / Text der Verwarnung (sieht der Streamer)" aria-label="Grund">
+            <button class="btn btn--primary btn--sm" type="button" data-bulk="timeout">⏱️ Timeout</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-bulk="overlay_off">📺 Overlay aus</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-bulk="warn">⚠️ Verwarnen</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-bulk="untimeout">Timeout aufheben</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-bulk="overlay_on">Overlay an</button>
+            <button class="btn btn--ghost btn--sm" type="button" data-bulk="unwarn">Verwarnung weg</button>
+          </div>
+          <div class="table-wrap">
+            <table class="users channels">
+              <thead>
+                <tr><th><input type="checkbox" id="ch-all" aria-label="Alle auswählen"></th><th>Kanal</th><th>Status</th><th>Nachricht</th><th>Angemeldet</th><th>Twitch</th><th>Aktion</th></tr>
+              </thead>
+              <tbody id="channels"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="billing-title" id="billing-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="billing-title">Pro &amp; Bezahlung</h2>
+              <p class="panel-sub">Bezahlte Abos über Stripe, „Verträge hier kündigen“ und die Warteliste fürs StreamHelp Pad. Was vor dem Start zu tun ist, steht Schritt für Schritt in <code>STARTKLAR.md</code>.</p>
+            </div>
+          </div>
+          <p id="billing-stats" class="panel-sub"></p>
+          <details class="spons-check" open>
+            <summary>Start-Check <span id="billing-check-state" class="muted"></span></summary>
+            <ul id="billing-check" class="spons-check-list"><li class="muted">Lädt …</li></ul>
+          </details>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="charity-title" id="charity-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="charity-title">🎗️ Spendenpool für krebskranke Kinder</h2>
+              <p class="panel-sub">Der Sammelpool auf der Startseite liest den Stand einer <b>betterplace.org-Spendenaktion</b> für die Deutsche Kinderkrebsstiftung (das Geld geht direkt an die Stiftung). Wird ein Meilenstein erreicht, feiert die Startseite, der Bot sagt es in jedem Kanal an, der gerade live ist, und das Overlay zeigt den Alert „🎗️ Spenden-Meilenstein“.</p>
+            </div>
+          </div>
+          <p id="charity-note" class="check-result" role="status"></p>
+          <p id="charity-stand" class="panel-sub"></p>
+          <form id="charity-form" class="pf-update-form" novalidate>
+            <label class="pf-check"><input type="checkbox" name="enabled"> Sammelpool auf der Startseite zeigen</label>
+            <input name="event" maxlength="300" placeholder="Link zur Spendenaktion, z. B. https://www.betterplace.org/de/fundraising-events/12345-…" aria-label="Link zur betterplace-Spendenaktion">
+            <h3>Meilensteine</h3>
+            <ol id="charity-steps" class="ch-steps"></ol>
+            <div class="pf-row">
+              <button class="btn btn--ghost btn--sm" type="button" id="charity-add">+ Meilenstein</button>
+              <button class="btn btn--primary btn--sm" type="submit">Speichern</button>
+            </div>
+            <p class="field-hint">Betrag in Euro und was dann passiert (steht auf der Startseite, im Chat und im Overlay). Meilensteine unter dem aktuellen Stand gelten beim Speichern still als erreicht – ohne Ansage.</p>
+          </form>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="spons-title" id="spons-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="spons-title">Sponsoring-Börse <span id="spons-count" class="count"></span></h2>
+              <p class="panel-sub">Angebote von Firmen (sponsoring.html) prüfen und freigeben. Erst freigegebene Angebote sehen passende Streamer. Bei „Abrechnung über StreamHelp“ hier den Stand pflegen – Zahlungen laufen noch von Hand. <b>Noch geschlossen</b> (Gewerbe in Anmeldung): Firmen und Streamer sehen nur einen Hinweis. Öffnen: <code>node tools/launch.mjs --sponsoring</code> und das Supabase-Secret <code>SPONSORING_OPEN=1</code> (siehe STARTKLAR.md).</p>
+            </div>
+            <label class="inbox-filter"><input type="checkbox" id="spons-all"> Alle Angebote zeigen</label>
+          </div>
+          <details class="spons-check">
+            <summary>Start-Check <span id="spons-check-state" class="muted"></span></summary>
+            <ul id="spons-check" class="spons-check-list"><li class="muted">Lädt …</li></ul>
+          </details>
+          <p id="spons-note" class="check-result" role="status"></p>
+          <ul id="spons-list" class="ar-adm-list"><li class="muted">Lädt …</li></ul>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="artists-title" id="artists-panel">
+          <div class="panel-head">
+            <div>
+              <h2 id="artists-title">Artists <span id="artists-count" class="count"></span></h2>
+              <p class="panel-sub">Bewerbungen freischalten und Uploads prüfen. Erst freigegebene Designs stehen in der Design-Bibliothek – kostenlos, mit Credit für den Artist.</p>
+            </div>
+            <label class="inbox-filter"><input type="checkbox" id="artists-all"> Alle Artists zeigen</label>
+          </div>
+          <p id="artists-note" class="check-result" role="status"></p>
+          <h3 class="ar-adm-h">Uploads zur Prüfung <span id="artists-assets-count" class="count"></span></h3>
+          <ul id="artists-assets" class="ar-adm-assets"><li class="muted">Lädt …</li></ul>
+          <h3 class="ar-adm-h">Bewerbungen</h3>
+          <ul id="artists-list" class="ar-adm-list"><li class="muted">Lädt …</li></ul>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="inbox-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="inbox-title">Postfach <span id="inbox-count" class="count"></span></h2>
+              <p class="panel-sub">Nachrichten aus dem Kontaktformular der Startseite. Antworten per E-Mail aus deinem eigenen Postfach.</p>
+            </div>
+            <label class="inbox-filter"><input type="checkbox" id="inbox-done"> Erledigte zeigen</label>
+          </div>
+          <ul id="inbox" class="inbox"><li class="muted">Lädt …</li></ul>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="security-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="security-title">Sicherheits-Check</h2>
+              <p class="panel-sub">Prüft die Datenbank wie die Supabase-Advisors: RLS, Funktionen, geheime Tabellen, Rate-Limit, 2FA.</p>
+            </div>
+            <button id="security-check" class="btn btn--outline btn--sm" type="button">Jetzt prüfen</button>
+          </div>
+          <ul id="security" class="security-list"><li class="muted">Noch nicht geprüft.</li></ul>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="providers-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="providers-title">Anmelde-Möglichkeiten</h2>
+              <p class="panel-sub">Einschalten in Supabase unter Authentication → Sign In / Providers</p>
+            </div>
+          </div>
+          <ul id="providers" class="providers"></ul>
+        </section>
+
+        <section class="panel panel--wide" aria-labelledby="users-title">
+          <div class="panel-head">
+            <h2 id="users-title">Nutzer <span id="users-count" class="count"></span></h2>
+            <input id="users-search" class="search" type="search" placeholder="Suchen …" aria-label="Nutzer suchen">
+          </div>
+          <div class="table-wrap">
+            <table class="users">
+              <thead>
+                <tr><th>Name</th><th>Angemeldet über</th><th>E-Mail</th><th>Registriert</th><th>Letzter Login</th><th>Bestätigt</th><th>Admin</th></tr>
+              </thead>
+              <tbody id="users"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="chart-tip" class="chart-tip" role="tooltip" hidden></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>

@@ -1,0 +1,424 @@
+/* ==========================================================
+   OBS-Overlay: Overlay-Designs (otheme), Szenen, Kamera-Rahmen,
+   Info-Leiste und Ziel-Balken – js/overlay-stage.js
+   Themes nutzen :where(), damit eigene Designs einzelner Karten
+   (Bingo-Stil, Alert-Designs, Laufband-Stil) weiter gewinnen.
+   ========================================================== */
+
+/* ---------- Overlay-Designs ---------- */
+html[data-theme="neon"] { --accent: #ff4fd8; }
+:where(html[data-theme="neon"]) .ov-card {
+  background: rgba(5, 3, 12, calc(.9 * var(--bga) + .05)); border: .12em solid color-mix(in srgb, var(--c, var(--accent)) 80%, transparent); border-radius: .9em;
+  box-shadow: 0 0 .5em color-mix(in srgb, var(--c, var(--accent)) 70%, transparent), 0 0 2em color-mix(in srgb, var(--c, var(--accent)) 30%, transparent), inset 0 0 1em color-mix(in srgb, var(--c, var(--accent)) 18%, transparent);
+}
+:where(html[data-theme="neon"]) .ov-head { background: transparent; color: #fff; text-shadow: 0 0 .4em var(--c, var(--accent)), 0 0 1em var(--c, var(--accent)); border-bottom-color: color-mix(in srgb, var(--c, var(--accent)) 35%, transparent); }
+
+:where(html[data-theme="glass"]) .ov-card {
+  /* Ohne backdrop-filter: In OBS ist hinter dem Overlay nichts (durchsichtig) – die Unschärfe sähe man nicht,
+     kostet aber bei jeder Bewegung einen zusätzlichen Durchgang. Dafür etwas mehr Deckkraft. */
+  background: rgba(255, 255, 255, calc(.14 * var(--bga) + .05)); border: 1px solid rgba(255, 255, 255, .28); border-radius: 1.8em;
+  box-shadow: 0 1.4em 3em -1em rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+:where(html[data-theme="glass"]) .ov-head { background: rgba(255, 255, 255, .06); color: #f1ecff; border-bottom-color: rgba(255, 255, 255, .14); }
+
+html[data-theme="gamer"] { --accent: #ff2e4d; --font-display: "Barlow Condensed", Impact, sans-serif; }
+:where(html[data-theme="gamer"]) .ov-card {
+  border-radius: 0; border: 0; background: linear-gradient(135deg, rgba(20, 8, 12, calc(.94 * var(--bga) + .04)), rgba(8, 8, 14, calc(.94 * var(--bga) + .04)));
+  box-shadow: inset .25em 0 0 var(--c, var(--accent));
+}
+/* Schräge Ecken – nicht bei Alerts (ihr Leuchten läge sonst außerhalb) und Laufband */
+:where(html[data-theme="gamer"] .ov-card:not(.ov-alert, .ov-ticker)) { clip-path: polygon(0 0, calc(100% - 1.2em) 0, 100% 1.2em, 100% 100%, 1.2em 100%, 0 calc(100% - 1.2em)); }
+:where(html[data-theme="gamer"]) .ov-head { background: var(--c, var(--accent)); color: #fff; font-weight: 800; letter-spacing: .22em; border: 0; }
+:where(html[data-theme="gamer"]) .ov-head .ov-dot { background: #fff; box-shadow: none; }
+
+html[data-theme="retro"] { --accent: #3ddc84; --font-display: var(--font-mono); }
+:where(html[data-theme="retro"]) .ov-card {
+  border-radius: 0; border: 0; background: #0b0b16 repeating-linear-gradient(0deg, rgba(0, 0, 0, .25) 0 2px, transparent 2px 4px);
+  box-shadow: 0 0 0 .2em #fff, 0 0 0 .4em var(--c, var(--accent)), .6em .6em 0 .4em rgba(0, 0, 0, .55);
+}
+:where(html[data-theme="retro"]) .ov-head { background: transparent; color: var(--c, var(--accent)); border-bottom: .2em dashed color-mix(in srgb, var(--c, var(--accent)) 60%, transparent); }
+
+html[data-theme="gold"] { --accent: #e8c46a; }
+:where(html[data-theme="gold"]) .ov-card { border-radius: .4em; background: linear-gradient(160deg, rgba(26, 20, 8, calc(.95 * var(--bga) + .03)), rgba(7, 6, 4, calc(.95 * var(--bga) + .03))); border: .1em solid #e8c46a; box-shadow: 0 0 0 .3em rgba(232, 196, 106, .12), 0 1.2em 3em -1em rgba(0, 0, 0, .7); }
+:where(html[data-theme="gold"]) .ov-head { background: transparent; color: #e8c46a; border-bottom-color: rgba(232, 196, 106, .35); font-family: Georgia, "Times New Roman", serif; letter-spacing: .24em; }
+
+html[data-theme="candy"] { --accent: #ff7ac8; }
+:where(html[data-theme="candy"]) .ov-card {
+  border-radius: 2em; border: .18em solid transparent;
+  background: linear-gradient(rgba(34, 18, 52, calc(.94 * var(--bga) + .04)), rgba(24, 14, 40, calc(.94 * var(--bga) + .04))) padding-box, linear-gradient(135deg, #ff9fd0, #b8a6ff, #8ee8ff) border-box;
+  box-shadow: 0 1em 2.4em -1em rgba(255, 122, 200, .45);
+}
+:where(html[data-theme="candy"]) .ov-head { background: rgba(255, 255, 255, .06); color: #ffd1ec; border-bottom-color: rgba(255, 159, 208, .25); }
+
+:where(html[data-theme="minimal"]) .ov-card { background: rgba(0, 0, 0, calc(.35 * var(--bga))); border: 0; border-left: .25em solid var(--c, var(--accent)); border-radius: .3em; box-shadow: none; }
+:where(html[data-theme="minimal"]) .ov-head { background: transparent; border: 0; color: #fff; text-shadow: 0 .1em .3em rgba(0, 0, 0, .9); }
+
+/* Weltraum: Nachtblau mit Sternen, weiche Leuchtkante */
+html[data-theme="space"] { --accent: #8ea2ff; }
+:where(html[data-theme="space"]) .ov-card {
+  border-radius: 1.4em; border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 55%, transparent);
+  background: radial-gradient(circle at 18% 22%, rgba(255, 255, 255, .55) 0 1px, transparent 1.5px) 0 0 / 3.2em 3.2em,
+    radial-gradient(circle at 70% 64%, rgba(255, 255, 255, .35) 0 1px, transparent 1.5px) 0 0 / 4.6em 4.6em,
+    linear-gradient(160deg, rgba(16, 20, 54, calc(.94 * var(--bga) + .04)), rgba(6, 6, 22, calc(.94 * var(--bga) + .04)));
+  box-shadow: 0 0 1.6em color-mix(in srgb, var(--c, var(--accent)) 28%, transparent), inset 0 0 1.2em rgba(120, 140, 255, .12);
+}
+:where(html[data-theme="space"]) .ov-head { background: linear-gradient(90deg, color-mix(in srgb, var(--c, var(--accent)) 30%, transparent), transparent); color: #dfe4ff; border-bottom-color: rgba(142, 162, 255, .25); }
+
+/* Sci-Fi-HUD: durchsichtig, feine Linien, Eckklammern, Mono-Schrift */
+html[data-theme="hud"] { --accent: #35f0ff; --font-display: var(--font-mono); }
+:where(html[data-theme="hud"]) .ov-card {
+  border-radius: 0; border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 45%, transparent);
+  background:
+    linear-gradient(var(--c, var(--accent)), var(--c, var(--accent))) 0 0 / 1.4em .18em, linear-gradient(var(--c, var(--accent)), var(--c, var(--accent))) 0 0 / .18em 1.4em,
+    linear-gradient(var(--c, var(--accent)), var(--c, var(--accent))) 100% 100% / 1.4em .18em, linear-gradient(var(--c, var(--accent)), var(--c, var(--accent))) 100% 100% / .18em 1.4em,
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--c, var(--accent)) 7%, transparent) 0 1px, transparent 1px 4px),
+    rgba(2, 14, 22, calc(.8 * var(--bga) + .05));
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, no-repeat;
+  box-shadow: 0 0 1.2em color-mix(in srgb, var(--c, var(--accent)) 22%, transparent);
+}
+:where(html[data-theme="hud"]) .ov-head { background: transparent; color: var(--c, var(--accent)); border-bottom: 1px dashed color-mix(in srgb, var(--c, var(--accent)) 50%, transparent); letter-spacing: .3em; }
+
+/* Kawaii: Pastellrosa, sehr rund, gepunkteter Rand */
+html[data-theme="kawaii"] { --accent: #ff8fc8; }
+:where(html[data-theme="kawaii"]) .ov-card {
+  border-radius: 2.2em; border: .2em dotted #ffc3e1;
+  background: radial-gradient(circle, rgba(255, 255, 255, .1) 0 .18em, transparent .2em) 0 0 / 1.6em 1.6em, linear-gradient(180deg, rgba(74, 32, 70, calc(.92 * var(--bga) + .05)), rgba(48, 22, 58, calc(.92 * var(--bga) + .05)));
+  box-shadow: 0 .5em 0 rgba(255, 143, 200, .35), 0 1.4em 2.4em -1em rgba(255, 143, 200, .5);
+}
+:where(html[data-theme="kawaii"]) .ov-head { background: #ffc3e1; color: #6a2350; border: 0; border-radius: 2em 2em 0 0; font-weight: 800; }
+:where(html[data-theme="kawaii"]) .ov-head .ov-dot { background: #fff; box-shadow: none; }
+
+/* Horror: tiefes Rot, harte Kante, Schatten wie Blut */
+html[data-theme="horror"] { --accent: #d1162f; --font-display: Georgia, "Times New Roman", serif; }
+:where(html[data-theme="horror"]) .ov-card {
+  border-radius: .2em; border: 0; border-top: .22em solid var(--c, var(--accent));
+  background: radial-gradient(120% 80% at 50% 0%, rgba(90, 0, 12, calc(.5 * var(--bga))), transparent 70%), linear-gradient(180deg, rgba(18, 4, 6, calc(.95 * var(--bga) + .03)), rgba(6, 2, 3, calc(.95 * var(--bga) + .03)));
+  box-shadow: 0 .4em 0 -.1em color-mix(in srgb, var(--c, var(--accent)) 60%, transparent), 0 1.4em 2.6em -1em rgba(0, 0, 0, .85), inset 0 0 2em rgba(0, 0, 0, .7);
+}
+:where(html[data-theme="horror"]) .ov-head { background: transparent; color: #ff9aa8; border-bottom-color: rgba(209, 22, 47, .3); font-family: Georgia, "Times New Roman", serif; letter-spacing: .3em; text-shadow: 0 0 .5em rgba(209, 22, 47, .7); }
+
+/* Wald: dunkles Grün, Holzkante, Blattgrün */
+html[data-theme="forest"] { --accent: #79c95a; }
+:where(html[data-theme="forest"]) .ov-card {
+  border-radius: 1em .3em 1em .3em; border: .14em solid #6b4a2b;
+  background: linear-gradient(170deg, rgba(22, 44, 26, calc(.94 * var(--bga) + .04)), rgba(10, 22, 14, calc(.94 * var(--bga) + .04)));
+  box-shadow: inset 0 0 0 .14em rgba(121, 201, 90, .25), 0 1.2em 2.4em -1em rgba(0, 0, 0, .7);
+}
+:where(html[data-theme="forest"]) .ov-head { background: linear-gradient(90deg, #6b4a2b, #8a6238); color: #f2e6c9; border: 0; }
+:where(html[data-theme="forest"]) .ov-head .ov-dot { background: #b8f08f; box-shadow: 0 0 .5em #79c95a; }
+
+/* Fantasy: Pergament-Dunkel mit Gold-Doppelrand, Serifenschrift */
+html[data-theme="fantasy"] { --accent: #d8a64a; --font-display: Georgia, "Times New Roman", serif; }
+:where(html[data-theme="fantasy"]) .ov-card {
+  border-radius: .6em; border: .12em solid #d8a64a;
+  background: radial-gradient(130% 100% at 50% 0%, rgba(80, 52, 22, calc(.5 * var(--bga))), transparent 70%), linear-gradient(180deg, rgba(36, 24, 14, calc(.95 * var(--bga) + .03)), rgba(16, 10, 6, calc(.95 * var(--bga) + .03)));
+  box-shadow: inset 0 0 0 .3em rgba(16, 10, 6, .9), inset 0 0 0 .4em rgba(216, 166, 74, .5), 0 1.2em 2.6em -1em rgba(0, 0, 0, .75);
+}
+:where(html[data-theme="fantasy"]) .ov-head { background: transparent; color: #f0cf87; border-bottom-color: rgba(216, 166, 74, .35); font-family: Georgia, "Times New Roman", serif; letter-spacing: .2em; }
+
+/* Ozean: Türkis-Verlauf, weiche Wellenkante */
+html[data-theme="ocean"] { --accent: #2fd3c6; }
+:where(html[data-theme="ocean"]) .ov-card {
+  border-radius: 1.6em; border: 1px solid rgba(120, 240, 230, .35);
+  background: radial-gradient(60% 40% at 100% 100%, rgba(47, 211, 198, .22), transparent 70%), linear-gradient(170deg, rgba(6, 46, 66, calc(.92 * var(--bga) + .05)), rgba(3, 18, 34, calc(.92 * var(--bga) + .05)));
+  box-shadow: 0 1.2em 2.6em -1em rgba(0, 30, 50, .8), inset 0 1px 0 rgba(160, 255, 245, .25);
+}
+:where(html[data-theme="ocean"]) .ov-head { background: linear-gradient(90deg, rgba(47, 211, 198, .25), transparent); color: #c9fff8; border-bottom-color: rgba(120, 240, 230, .2); }
+
+/* Halloween: Kürbis-Orange und Lila */
+html[data-theme="spooky"] { --accent: #ff8a1c; }
+:where(html[data-theme="spooky"]) .ov-card {
+  border-radius: .9em; border: .14em solid var(--c, var(--accent));
+  background: linear-gradient(160deg, rgba(42, 16, 56, calc(.94 * var(--bga) + .04)), rgba(16, 6, 22, calc(.94 * var(--bga) + .04)));
+  box-shadow: 0 0 1.2em rgba(255, 138, 28, .35), inset 0 -.3em 0 rgba(140, 60, 200, .4);
+}
+:where(html[data-theme="spooky"]) .ov-head { background: var(--c, var(--accent)); color: #2a1038; border: 0; font-weight: 800; }
+:where(html[data-theme="spooky"]) .ov-head .ov-dot { background: #2a1038; box-shadow: none; }
+
+/* Weihnachten: Rot und Tannengrün, Schneekante */
+html[data-theme="xmas"] { --accent: #e3283e; }
+:where(html[data-theme="xmas"]) .ov-card {
+  border-radius: 1.1em; border: .14em solid #fff;
+  background: radial-gradient(circle, rgba(255, 255, 255, .5) 0 1px, transparent 1.6px) 0 0 / 2.4em 2.4em, linear-gradient(170deg, rgba(20, 70, 44, calc(.94 * var(--bga) + .04)), rgba(8, 34, 22, calc(.94 * var(--bga) + .04)));
+  box-shadow: 0 0 0 .3em var(--c, var(--accent)), 0 1.2em 2.6em -1em rgba(0, 0, 0, .7);
+}
+:where(html[data-theme="xmas"]) .ov-head { background: var(--c, var(--accent)); color: #fff; border: 0; font-weight: 800; }
+:where(html[data-theme="xmas"]) .ov-head .ov-dot { background: #fff; box-shadow: none; }
+
+/* Lo-Fi: warmes Lampenlicht, gedämpftes Lila, weiche Kante */
+html[data-theme="lofi"] { --accent: #f2a65a; }
+:where(html[data-theme="lofi"]) .ov-card {
+  border-radius: 1.2em; border: 1px solid rgba(242, 166, 90, .35);
+  background: radial-gradient(90% 70% at 100% 0%, rgba(242, 166, 90, .16), transparent 70%), linear-gradient(170deg, rgba(43, 35, 80, calc(.9 * var(--bga) + .06)), rgba(29, 24, 48, calc(.9 * var(--bga) + .06)));
+  box-shadow: 0 1.2em 2.4em -1em rgba(10, 6, 20, .7), inset 0 1px 0 rgba(255, 230, 200, .12);
+}
+:where(html[data-theme="lofi"]) .ov-head { background: transparent; color: #f6d9b2; border-bottom-color: rgba(242, 166, 90, .25); letter-spacing: .14em; }
+:where(html[data-theme="lofi"]) .ov-head .ov-dot { background: #f2a65a; box-shadow: 0 0 .6em rgba(242, 166, 90, .8); }
+
+/* Manga: Panel mit Tuscherand, Rasterpunkte, versetzter Schatten */
+html[data-theme="manga"] { --accent: #ff4d6d; }
+:where(html[data-theme="manga"]) .ov-card {
+  border-radius: .2em; border: .18em solid #fff;
+  background: radial-gradient(circle, rgba(255, 77, 109, .22) 0 .12em, transparent .14em) 0 0 / .6em .6em, linear-gradient(180deg, rgba(20, 9, 31, calc(.95 * var(--bga) + .03)), rgba(12, 6, 20, calc(.95 * var(--bga) + .03)));
+  box-shadow: .4em .4em 0 var(--c, var(--accent)), 0 1.2em 2em -1em rgba(0, 0, 0, .7);
+}
+:where(html[data-theme="manga"]) .ov-head { background: #fff; color: #14091f; border: 0; font-style: italic; font-weight: 900; letter-spacing: .08em; }
+:where(html[data-theme="manga"]) .ov-head .ov-dot { background: var(--c, var(--accent)); box-shadow: none; }
+
+/* Cyberpunk: abgeschrägte Ecke, gelber Streifen, Cyan-Kante */
+html[data-theme="cyberpunk"] { --accent: #fcee0a; }
+:where(html[data-theme="cyberpunk"]) .ov-card {
+  border-radius: 0; border: 1px solid rgba(53, 240, 255, .55);
+  clip-path: polygon(0 0, calc(100% - 1.2em) 0, 100% 1.2em, 100% 100%, 1.2em 100%, 0 calc(100% - 1.2em));
+  background: linear-gradient(90deg, var(--c, var(--accent)) 0 .3em, transparent .3em), repeating-linear-gradient(0deg, rgba(53, 240, 255, .05) 0 1px, transparent 1px 3px), linear-gradient(160deg, rgba(18, 10, 38, calc(.94 * var(--bga) + .04)), rgba(8, 6, 22, calc(.94 * var(--bga) + .04)));
+  box-shadow: 0 0 1.2em rgba(255, 61, 240, .3);
+}
+:where(html[data-theme="cyberpunk"]) .ov-head { background: var(--c, var(--accent)); color: #0a0820; border: 0; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; }
+:where(html[data-theme="cyberpunk"]) .ov-head .ov-dot { background: #0a0820; box-shadow: none; }
+
+/* Valentinstag: Rosé, rund, Herzglanz */
+html[data-theme="valentine"] { --accent: #ff5c8a; }
+:where(html[data-theme="valentine"]) .ov-card {
+  border-radius: 1.4em; border: .12em solid rgba(255, 154, 184, .65);
+  background: radial-gradient(70% 60% at 0% 0%, rgba(255, 154, 184, .22), transparent 70%), linear-gradient(170deg, rgba(122, 26, 62, calc(.92 * var(--bga) + .05)), rgba(42, 6, 20, calc(.92 * var(--bga) + .05)));
+  box-shadow: 0 0 1.4em rgba(255, 92, 138, .35), 0 1.2em 2.4em -1em rgba(0, 0, 0, .6);
+}
+:where(html[data-theme="valentine"]) .ov-head { background: linear-gradient(90deg, #ff5c8a, #ff9ab8); color: #fff; border: 0; font-weight: 800; }
+:where(html[data-theme="valentine"]) .ov-head .ov-dot { background: #fff; box-shadow: none; }
+
+/* Ostern: Frühlingsgrün mit Pastell-Punkten */
+html[data-theme="easter"] { --accent: #9be38b; }
+:where(html[data-theme="easter"]) .ov-card {
+  border-radius: 1.2em; border: .16em dashed #ffe08a;
+  background: radial-gradient(circle, rgba(255, 179, 199, .35) 0 .14em, transparent .16em) 0 0 / 1.4em 1.4em, linear-gradient(170deg, rgba(28, 74, 52, calc(.94 * var(--bga) + .04)), rgba(14, 44, 32, calc(.94 * var(--bga) + .04)));
+  box-shadow: 0 1.2em 2.4em -1em rgba(0, 0, 0, .6);
+}
+:where(html[data-theme="easter"]) .ov-head { background: #ffe08a; color: #2e4a1a; border: 0; font-weight: 800; border-radius: 1em 1em 0 0; }
+:where(html[data-theme="easter"]) .ov-head .ov-dot { background: #ff9ab8; box-shadow: none; }
+
+/* Sommer: Sonnenuntergang, Orange und Pink */
+html[data-theme="summer"] { --accent: #ffb02e; }
+:where(html[data-theme="summer"]) .ov-card {
+  border-radius: 1em; border: 1px solid rgba(255, 176, 46, .5);
+  background: radial-gradient(80% 60% at 100% 100%, rgba(255, 111, 97, .3), transparent 70%), linear-gradient(170deg, rgba(59, 29, 94, calc(.92 * var(--bga) + .05)), rgba(27, 18, 50, calc(.92 * var(--bga) + .05)));
+  box-shadow: 0 .3em 0 rgba(255, 111, 97, .55), 0 1.2em 2.4em -1em rgba(0, 0, 0, .6);
+}
+:where(html[data-theme="summer"]) .ov-head { background: linear-gradient(90deg, #ff6f61, #ffb02e); color: #2a1430; border: 0; font-weight: 800; }
+:where(html[data-theme="summer"]) .ov-head .ov-dot { background: #fff6c2; box-shadow: none; }
+
+/* Silvester: Nachtblau mit Gold und Funken */
+html[data-theme="newyear"] { --accent: #ffd76a; }
+:where(html[data-theme="newyear"]) .ov-card {
+  border-radius: .8em; border: .12em solid #ffd76a;
+  background: radial-gradient(circle, rgba(255, 215, 106, .55) 0 1px, transparent 1.6px) 0 0 / 2.2em 2.2em, radial-gradient(circle, rgba(255, 255, 255, .35) 0 1px, transparent 1.5px) 1.1em 1.1em / 3.1em 3.1em, linear-gradient(170deg, rgba(14, 18, 52, calc(.95 * var(--bga) + .03)), rgba(7, 10, 32, calc(.95 * var(--bga) + .03)));
+  box-shadow: 0 0 1.2em rgba(255, 215, 106, .3), 0 1.2em 2.4em -1em rgba(0, 0, 0, .7);
+}
+:where(html[data-theme="newyear"]) .ov-head { background: transparent; color: #ffd76a; border-bottom-color: rgba(255, 215, 106, .35); letter-spacing: .24em; }
+:where(html[data-theme="newyear"]) .ov-head .ov-dot { background: #ffd76a; box-shadow: 0 0 .6em #ffd76a; }
+
+/* ---------- Szenen-Bildschirm (hinter allen Karten) ---------- */
+.ov-scene {
+  position: fixed; inset: 0; z-index: -1; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 15%, color-mix(in srgb, var(--accent) 28%, #140c26), #07060d 70%);
+  animation: sc-in .9s ease both;
+}
+@keyframes sc-in { from { opacity: 0; } }
+/* Szenenwechsel: der Bildschirm öffnet sich als Kreis aus der Mitte (Chatting behält sein Kamera-Loch) */
+/* backwards statt both: Danach bleibt kein clip-path stehen – sonst schneidet der Browser den ganzen Bildschirm
+   in jedem Bild neu aus, obwohl der Kreis längst alles abdeckt */
+.ov-scene:not([data-scene="chat"]) { animation: sc-open .9s cubic-bezier(.7, 0, .2, 1) backwards; }
+@keyframes sc-open { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+/* Countdown vorbei: „Jetzt live“ / „Wieder da“ öffnet sich genauso über der Szene */
+.sc-live {
+  position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: .3em;
+  clip-path: circle(0% at 50% 50%); pointer-events: none; text-align: center;
+  background: radial-gradient(60% 50% at 35% 40%, color-mix(in srgb, var(--accent) 45%, transparent), transparent 70%), #0b0a14;
+}
+.sc-live.is-open { clip-path: circle(75% at 50% 50%); animation: sc-open .9s cubic-bezier(.7, 0, .2, 1) both; }
+.sc-live b { display: flex; align-items: center; gap: .35em; font-family: var(--font-display); font-weight: 800; font-size: 7vw; line-height: 1; color: #fff; letter-spacing: -.02em; }
+.sc-live b::before { content: ""; width: .28em; height: .28em; border-radius: 50%; background: #ff3b5c; box-shadow: 0 0 .4em #ff3b5c; animation: sc-pulse 1.4s ease-in-out infinite; }
+.sc-live span { font-family: var(--font-mono); font-size: 1.6vw; letter-spacing: .14em; text-transform: uppercase; color: rgba(255, 255, 255, .7); }
+.sc-live.is-open b { animation: sc-live-pop .7s var(--ease-spring) .5s both; }
+@keyframes sc-live-pop { from { transform: scale(.6); opacity: 0; } }
+@keyframes sc-pulse { 50% { opacity: .35; } }
+.is-edit .ov-scene { opacity: .45; }
+/* Lichtflecken: ein ruhiger Hintergrund aus drei Verläufen, einmal gezeichnet. Früher drei riesige, weich
+   gezeichnete Kreise, die ständig wanderten – das kostete OBS pro Bild mehr als alles andere zusammen. */
+.sc-bg {
+  position: absolute; inset: 0; pointer-events: none; --a1: .4;
+  background:
+    radial-gradient(circle 36vmax at 12vmax 8vmax, color-mix(in srgb, var(--accent) calc(var(--a1) * 150%), transparent), color-mix(in srgb, var(--accent) calc(var(--a1) * 75%), transparent) 50%, transparent),
+    var(--l2, radial-gradient(circle 36vmax at calc(100vw - 8vmax) calc(100vh - 4vmax), rgb(145 70 255 / .6), rgb(145 70 255 / .3) 50%, transparent)),
+    var(--l3, radial-gradient(circle 24vmax at calc(35vw + 19vmax) calc(45vh + 19vmax), rgb(53 199 255 / .38), rgb(53 199 255 / .18) 50%, transparent));
+}
+.sc-grid {
+  position: absolute; inset: -50% -10% 0; transform: perspective(600px) rotateX(62deg); transform-origin: 50% 100%;
+  background: linear-gradient(transparent 0 96%, color-mix(in srgb, var(--accent) 45%, transparent) 96%) 0 0 / 100% 80px,
+    linear-gradient(90deg, transparent 0 97%, color-mix(in srgb, var(--accent) 35%, transparent) 97%) 0 0 / 80px 100%;
+  mask-image: linear-gradient(transparent 40%, #000 90%); -webkit-mask-image: linear-gradient(transparent 40%, #000 90%);
+  animation: sc-grid 3s linear infinite; opacity: .5; will-change: transform;
+}
+/* Hintergrund eines Artists (scbg=…): Bild über die ganze Fläche, unten etwas abgedunkelt, damit der Text lesbar bleibt */
+.sc-art { position: absolute; inset: 0; pointer-events: none; background-size: cover; background-position: center; }
+.sc-art::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, .15), rgba(0, 0, 0, .55)); }
+.ov-scene.has-art .sc-grid { display: none; }
+/* ---------- Bewegte Szenen (scmove=…): nur transform und opacity ---------- */
+.sc-motion { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.sc-motion span { position: absolute; will-change: transform, opacity; }
+/* Lichter: drei große, vorab weiche Flecken (kein Blur-Filter) */
+.sc-motion[data-motion="lights"] span {
+  width: 70vmax; height: 70vmax; left: -15vmax; top: -20vmax; border-radius: 50%; opacity: .55;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 55%, transparent), transparent);
+  animation: scm-drift calc(46s + var(--i) * 9s) ease-in-out infinite alternate; animation-delay: calc(var(--i) * -11s);
+}
+.sc-motion[data-motion="lights"] span:nth-child(2) { left: 45vw; top: 30vh; background: radial-gradient(closest-side, rgb(145 70 255 / .5), transparent); }
+.sc-motion[data-motion="lights"] span:nth-child(3) { left: 10vw; top: 55vh; width: 50vmax; height: 50vmax; background: radial-gradient(closest-side, rgb(53 199 255 / .35), transparent); }
+@keyframes scm-drift { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(18vw, 8vh, 0) scale(1.15); } 100% { transform: translate3d(-6vw, 16vh, 0) scale(.95); } }
+/* Sterne: zwei Punkt-Raster, die funkeln und ganz leicht treiben */
+.sc-motion[data-motion="stars"] span {
+  inset: -10%; background-image: radial-gradient(1.6px 1.6px at 20% 30%, #fff, transparent), radial-gradient(1.2px 1.2px at 70% 80%, #fff, transparent),
+    radial-gradient(1px 1px at 45% 60%, color-mix(in srgb, var(--accent) 70%, #fff), transparent), radial-gradient(1.4px 1.4px at 85% 15%, #fff, transparent);
+  background-size: 230px 230px; animation: scm-twinkle 5s ease-in-out infinite alternate, scm-float 90s linear infinite;
+}
+.sc-motion[data-motion="stars"] span:nth-child(2) { background-size: 370px 370px; animation-duration: 7s, 140s; animation-delay: -3s, -40s; }
+@keyframes scm-twinkle { from { opacity: .25; } to { opacity: .9; } }
+@keyframes scm-float { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-230px, -115px, 0); } }
+/* Wellen: Formen als Maske, Farbe aus der Akzentfarbe */
+.sc-motion[data-motion="waves"] span {
+  left: 0; bottom: 0; width: 200%; height: calc(16vh + var(--i) * 5vh); opacity: calc(.42 - var(--i) * .1);
+  background: color-mix(in srgb, var(--accent) 70%, #1a0f35);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 100' preserveAspectRatio='none'%3E%3Cpath d='M0 50 Q100 0 200 50 T400 50 T600 50 T800 50 V100 H0Z'/%3E%3C/svg%3E") 0 0 / 50% 100% repeat-x;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 100' preserveAspectRatio='none'%3E%3Cpath d='M0 50 Q100 0 200 50 T400 50 T600 50 T800 50 V100 H0Z'/%3E%3C/svg%3E") 0 0 / 50% 100% repeat-x;
+  animation: scm-wave calc(18s + var(--i) * 8s) linear infinite; animation-direction: normal;
+}
+.sc-motion[data-motion="waves"] span:nth-child(2) { animation-direction: reverse; }
+@keyframes scm-wave { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+/* Funken: kleine Punkte steigen auf und verglühen */
+.sc-motion[data-motion="sparks"] span {
+  left: var(--x); bottom: -20px; width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, #fff, color-mix(in srgb, var(--accent) 80%, #fff) 45%, transparent 70%);
+  animation: scm-rise var(--d) linear infinite; animation-delay: var(--w);
+}
+@keyframes scm-rise { 0% { transform: translate3d(0, 0, 0); opacity: 0; } 10% { opacity: .9; } 80% { opacity: .5; } 100% { transform: translate3d(var(--sway), -110vh, 0); opacity: 0; } }
+/* Polarlicht: zwei breite, schräge Farbbänder */
+.sc-motion[data-motion="aurora"] span {
+  left: -20%; top: -10%; width: 140%; height: 55%; opacity: .45; transform-origin: 50% 0;
+  background: linear-gradient(100deg, transparent 10%, color-mix(in srgb, var(--accent) 60%, transparent) 35%, rgb(61 220 132 / .35) 55%, transparent 80%);
+  animation: scm-aurora calc(24s + var(--i) * 10s) ease-in-out infinite alternate; animation-delay: calc(var(--i) * -9s);
+  -webkit-mask-image: linear-gradient(transparent, #000 35%, #000 60%, transparent); mask-image: linear-gradient(transparent, #000 35%, #000 60%, transparent);
+}
+.sc-motion[data-motion="aurora"] span:nth-child(2) { top: 5%; opacity: .3; background: linear-gradient(80deg, transparent 15%, rgb(145 70 255 / .45) 45%, rgb(53 199 255 / .3) 65%, transparent 85%); }
+@keyframes scm-aurora { 0% { transform: translate3d(-6%, 0, 0) skewX(-12deg) scaleY(.85); } 100% { transform: translate3d(6%, 4vh, 0) skewX(10deg) scaleY(1.15); } }
+@media (prefers-reduced-motion: reduce) { .sc-motion span { animation: none !important; } .sc-motion[data-motion="sparks"] span { opacity: .5; } }
+/* Das Gitter rückt per transform (Grafikkarte) eine Linie weiter statt per background-position (Neuzeichnen pro Bild) */
+@keyframes sc-grid { from { transform: perspective(600px) rotateX(62deg) translateY(0); } to { transform: perspective(600px) rotateX(62deg) translateY(80px); } }
+.sc-center { position: relative; display: grid; justify-items: center; gap: 20px; text-align: center; padding: 40px; max-width: 1500px; }
+.sc-tag { font-family: var(--font-mono); font-size: 26px; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); animation: sc-pulse 2s ease-in-out infinite; }
+.sc-title { font-family: var(--font-display); font-size: 140px; font-weight: 800; text-transform: uppercase; line-height: .92; color: #fff; text-shadow: 0 .05em .3em rgba(0, 0, 0, .6), 0 0 .6em color-mix(in srgb, var(--accent) 40%, transparent); animation: sc-rise 1s var(--ease-out) .2s both; }
+.sc-sub { font-size: 38px; color: #d6dbe8; animation: sc-rise 1s var(--ease-out) .4s both; }
+.sc-clock { font-family: var(--font-mono); font-size: 110px; color: var(--accent); font-variant-numeric: tabular-nums; text-shadow: 0 0 .4em color-mix(in srgb, var(--accent) 50%, transparent); animation: sc-rise 1s var(--ease-out) .6s both; }
+.sc-clock.is-done { font-size: 80px; animation: sc-pulse 1.4s ease-in-out infinite; }
+.sc-thanks { display: grid; justify-items: center; gap: 12px; margin-top: 16px; animation: sc-rise 1s var(--ease-out) .7s both; }
+.sc-thanks > span { font-family: var(--font-mono); font-size: 22px; letter-spacing: .2em; text-transform: uppercase; color: #a7b0c2; }
+.sc-thanks p { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 16px; max-width: 1300px; }
+.sc-thanks p span { padding: 10px 22px; border-radius: 999px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); font: 700 32px var(--font-display); color: #fff; }
+.sc-foot { position: absolute; left: 60px; top: 50px; display: flex; align-items: center; gap: 16px; font-size: 28px; color: #c9cfdd; }
+.sc-foot b { font-family: var(--font-display); font-size: 40px; color: #fff; }
+.sc-url { font-family: var(--font-mono); font-size: 22px; color: #8f99ae; }
+.sc-live-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 1em var(--accent); animation: sc-pulse 1.6s ease-in-out infinite; }
+.ov-scene[data-scene="end"] .sc-live-dot { background: #8f99ae; box-shadow: none; animation: none; }
+@keyframes sc-pulse { 50% { opacity: .45; } }
+@keyframes sc-rise { from { opacity: 0; transform: translateY(.4em); } }
+
+/* ---------- Kamera-Rahmen ---------- */
+.ov-camframe { position: fixed; pointer-events: none; --cf: var(--accent); border-radius: 1.4vmin; }
+.ov-camframe[data-style="glow"] { border: .45vmin solid var(--cf); box-shadow: 0 0 2.4vmin color-mix(in srgb, var(--cf) 70%, transparent), inset 0 0 1.6vmin color-mix(in srgb, var(--cf) 35%, transparent); }
+.ov-camframe[data-style="clean"] { border: .35vmin solid rgba(255, 255, 255, .9); box-shadow: 0 1vmin 3vmin rgba(0, 0, 0, .45); }
+.ov-camframe[data-style="neon"] { border: .35vmin solid #fff; box-shadow: 0 0 0 .35vmin var(--cf), 0 0 2vmin var(--cf), 0 0 4vmin var(--cf); animation: cf-flicker 4s steps(1) infinite; }
+.ov-camframe[data-style="corners"] { border-radius: 0; }
+.cf-c { display: none; position: absolute; width: 18%; height: 18%; max-width: 8vmin; max-height: 8vmin; border: .6vmin solid var(--cf); }
+.ov-camframe[data-style="corners"] .cf-c { display: block; filter: drop-shadow(0 0 .8vmin color-mix(in srgb, var(--cf) 80%, transparent)); }
+.cf-tl { left: -.3vmin; top: -.3vmin; border-right: 0; border-bottom: 0; }
+.cf-tr { right: -.3vmin; top: -.3vmin; border-left: 0; border-bottom: 0; }
+.cf-bl { left: -.3vmin; bottom: -.3vmin; border-right: 0; border-top: 0; }
+.cf-br { right: -.3vmin; bottom: -.3vmin; border-left: 0; border-top: 0; }
+@keyframes cf-flicker { 0%, 100% { opacity: 1; } 3% { opacity: .6; } 5% { opacity: 1; } 48% { opacity: 1; } 49% { opacity: .7; } 50% { opacity: 1; } }
+.cf-tag {
+  position: absolute; left: 1.4vmin; bottom: -1.8vmin; display: inline-flex; align-items: center; gap: .8vmin;
+  padding: .7vmin 1.6vmin; border-radius: 99px; background: var(--cf); color: #fff; font: 800 2.2vmin var(--font-display);
+  text-transform: uppercase; letter-spacing: .04em; box-shadow: 0 .6vmin 1.6vmin rgba(0, 0, 0, .45);
+}
+.cf-tag i { width: 1.1vmin; height: 1.1vmin; border-radius: 50%; background: #fff; animation: sc-pulse 1.4s ease-in-out infinite; }
+html[data-theme="gamer"] .cf-tag, html[data-theme="retro"] .cf-tag { border-radius: 0; }
+
+/* ---------- Info-Leiste ---------- */
+.ov-labels { font-size: calc(16px * var(--lbs, 1)); display: flex; align-items: stretch; animation: ov-in .6s var(--ease-out) both; }
+.lb-item { display: flex; align-items: center; gap: .6em; padding: .7em 1.2em; min-width: 0; max-width: 18em; }
+.lb-item + .lb-item { border-left: 1px solid rgba(255, 255, 255, .1); }
+.lb-ico { font-size: 1.5em; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.lb-text { display: grid; min-width: 0; }
+.lb-text small { font-family: var(--font-mono); font-size: .62em; letter-spacing: .14em; text-transform: uppercase; color: #8f99ae; white-space: nowrap; }
+.lb-text b { font-family: var(--font-display); font-size: 1.35em; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-item.is-new b { animation: ov-pop .6s var(--ease-spring); color: #fff; text-shadow: 0 0 .6em color-mix(in srgb, var(--accent) 80%, transparent); }
+.lb-item[data-item="viewers"] b::before { content: ""; display: inline-block; width: .45em; height: .45em; margin-right: .35em; border-radius: 50%; background: #ff4d4d; vertical-align: .15em; animation: sc-pulse 1.6s ease-in-out infinite; }
+
+/* ---------- Ziel-Balken ---------- */
+.ov-goal { --c: var(--accent); font-size: calc(16px * var(--gs, 1)); width: 26em; padding: .9em 1.1em 1em; animation: ov-in .6s var(--ease-out) both; }
+.ov-goal[data-kind="follow"] { --c: #b186ff; }
+.ov-goal[data-kind="sub"] { --c: #ffb81c; }
+.ov-goal[data-kind="bits"] { --c: #35c7ff; }
+.gl-top { display: flex; align-items: baseline; gap: .5em; margin-bottom: .55em; }
+.gl-ico { font-size: 1.3em; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+.gl-title { flex: 1; min-width: 0; font-family: var(--font-display); font-size: 1.4em; font-weight: 800; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-count { font-family: var(--font-mono); font-size: .85em; color: #c4cad6; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gl-bar { position: relative; height: 1.6em; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; box-shadow: inset 0 .1em .3em rgba(0, 0, 0, .5); }
+.gl-fill {
+  position: relative; height: 100%; width: 0; border-radius: inherit; overflow: hidden;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 55%, #fff), var(--c));
+  box-shadow: 0 0 1em color-mix(in srgb, var(--c) 60%, transparent);
+  transition: width 1.2s cubic-bezier(.2, .9, .3, 1.05);
+}
+.gl-fill::before { content: ""; position: absolute; inset: 0 0 0 -1.414em; background: repeating-linear-gradient(-45deg, rgba(255, 255, 255, .18) 0 .5em, transparent .5em 1em); background-size: 1.414em 1.414em; animation: gl-stripes 1s linear infinite; will-change: transform; }
+.gl-shine { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .5) 50%, transparent 70%); transform: translateX(-100%); }
+.ov-goal.is-up .gl-shine { animation: ov-al-shine 1.2s ease-out .3s; }
+.ov-goal.is-up .gl-count { animation: ov-pop .6s var(--ease-spring); color: #fff; }
+.gl-pct { position: absolute; right: .7em; top: 50%; transform: translateY(-50%); font: 700 .8em var(--font-mono); color: #fff; text-shadow: 0 .1em .3em rgba(0, 0, 0, .8); }
+.ov-goal.is-done { box-shadow: 0 0 0 .14em var(--c), 0 0 2.4em color-mix(in srgb, var(--c) 55%, transparent); }
+.ov-goal.is-done .gl-title::after { content: " ✓ Geschafft!"; color: var(--c); }
+.ov-goal.is-celebrate { animation: gl-party 1s var(--ease-spring) 2; }
+@keyframes gl-stripes { to { transform: translateX(1.414em); } }
+@keyframes gl-party { 30% { transform: scale(1.06) rotate(-1deg); } 60% { transform: scale(.98) rotate(1deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-scene, .ov-scene *, .ov-camframe, .gl-fill::before { animation: none !important; }
+}
+/* Chatting: kein Text in der Mitte – dort ist die Kamera */
+.ov-scene[data-scene="chat"] .sc-center { display: none; }
+.ov-scene[data-scene="chat"] .sc-foot { top: auto; bottom: 110px; left: auto; right: 60px; }
+
+/* Szenen je Overlay-Design: eigener Hintergrund (assets/bg-<design>.svg), das Perspektiv-Gitter passt nur zu Neon & Co. */
+html[data-theme="space"] .ov-scene, html[data-theme="hud"] .ov-scene, html[data-theme="kawaii"] .ov-scene, html[data-theme="horror"] .ov-scene,
+html[data-theme="forest"] .ov-scene, html[data-theme="fantasy"] .ov-scene, html[data-theme="ocean"] .ov-scene, html[data-theme="spooky"] .ov-scene,
+html[data-theme="xmas"] .ov-scene,
+html[data-theme="lofi"] .ov-scene, html[data-theme="manga"] .ov-scene, html[data-theme="cyberpunk"] .ov-scene, html[data-theme="valentine"] .ov-scene, html[data-theme="easter"] .ov-scene, html[data-theme="summer"] .ov-scene, html[data-theme="newyear"] .ov-scene { background: linear-gradient(180deg, rgba(5, 4, 12, .25), rgba(5, 4, 12, .6)), var(--scene-bg) center / cover; }
+html[data-theme="space"] { --scene-bg: url("../assets/bg-space.svg"); }
+html[data-theme="hud"] { --scene-bg: url("../assets/bg-hud.svg"); }
+html[data-theme="kawaii"] { --scene-bg: url("../assets/bg-kawaii.svg"); }
+html[data-theme="horror"] { --scene-bg: url("../assets/bg-horror.svg"); }
+html[data-theme="forest"] { --scene-bg: url("../assets/bg-forest.svg"); }
+html[data-theme="fantasy"] { --scene-bg: url("../assets/bg-fantasy.svg"); }
+html[data-theme="ocean"] { --scene-bg: url("../assets/bg-ocean.svg"); }
+html[data-theme="spooky"] { --scene-bg: url("../assets/bg-spooky.svg"); }
+html[data-theme="xmas"] { --scene-bg: url("../assets/bg-xmas.svg"); }
+html[data-theme="lofi"] { --scene-bg: url("../assets/bg-lofi.svg"); }
+html[data-theme="manga"] { --scene-bg: url("../assets/bg-manga.svg"); }
+html[data-theme="cyberpunk"] { --scene-bg: url("../assets/bg-cyberpunk.svg"); }
+html[data-theme="valentine"] { --scene-bg: url("../assets/bg-valentine.svg"); }
+html[data-theme="easter"] { --scene-bg: url("../assets/bg-easter.svg"); }
+html[data-theme="summer"] { --scene-bg: url("../assets/bg-summer.svg"); }
+html[data-theme="newyear"] { --scene-bg: url("../assets/bg-newyear.svg"); }
+:is(html[data-theme="space"], html[data-theme="kawaii"], html[data-theme="horror"], html[data-theme="forest"], html[data-theme="fantasy"], html[data-theme="ocean"], html[data-theme="spooky"], html[data-theme="xmas"], html[data-theme="lofi"], html[data-theme="manga"], html[data-theme="cyberpunk"], html[data-theme="valentine"], html[data-theme="easter"], html[data-theme="summer"], html[data-theme="newyear"]) .sc-grid { display: none; }
+/* Eigener Hintergrund: nur ein schwacher Lichtfleck in der Design-Farbe, keine lila-blauen Schleier */
+:is(html[data-theme="space"], html[data-theme="hud"], html[data-theme="kawaii"], html[data-theme="horror"], html[data-theme="forest"], html[data-theme="fantasy"], html[data-theme="ocean"], html[data-theme="spooky"], html[data-theme="xmas"], html[data-theme="lofi"], html[data-theme="manga"], html[data-theme="cyberpunk"], html[data-theme="valentine"], html[data-theme="easter"], html[data-theme="summer"], html[data-theme="newyear"]) .sc-bg { --l2: none; --l3: none; --a1: .22; }
+html[data-theme="horror"] .sc-title, html[data-theme="fantasy"] .sc-title { font-family: Georgia, "Times New Roman", serif; text-transform: none; }
+html[data-theme="kawaii"] .sc-title { color: #fff; text-shadow: 0 .06em 0 #ff8fc8, 0 .12em .3em rgba(106, 35, 80, .6); }

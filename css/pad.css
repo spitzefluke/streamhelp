@@ -1,0 +1,11 @@
+/* StreamHelp Pad (pad.html): Warteliste – baut auf css/profile.css und css/pro.css auf */
+.pad-form { display: grid; gap: 12px; margin-top: 6px; }
+.pad-field { display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
+.pad-field input { padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; }
+.pad-field input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.pad-field input:disabled, .pad-form input[type=checkbox]:disabled { opacity: .55; cursor: not-allowed; }
+.pad-form .pr-cta:disabled { opacity: .55; cursor: not-allowed; }
+.pad-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.pad-status { margin: 0; padding: 14px 18px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--text); line-height: 1.5; }
+.pad-status.is-ok { border-color: rgba(80, 200, 120, .5); }
+.pad-status.is-bad { border-color: rgba(255, 110, 110, .5); }

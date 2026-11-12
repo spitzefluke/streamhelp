@@ -1,0 +1,8555 @@
+import { CONFIG } from './config.js';
+import { createApi, germanError, missingFunction } from './api.js';
+import { Wheel } from './wheel.js';
+import { DEFAULT_TILES, RARITY_WHEEL, bonusWheel, spinTitle } from './defaults.js';
+import { PRO_PRICE, isProKind, proLocked } from './pro.js';
+import { ALERT_KINDS, ALERT_LOOKS, ALERT_PRESETS, ALERT_SFX, ALERT_SOUND_BYTES, ALERT_SOUND_SECONDS, playAlertSound } from './alerts.js';
+import { BOARD, ITEMS, MAX_SOUND_SECONDS, SFX_EQ, SFX_REVERB, Sfx, prankEmoji, prankText, setItemIcon, setPrankIcon, setSfxFx, throwItem } from './prank-fx.js';
+import { CATEGORIES, MAX_AMOUNT, RARITIES, amountFromFile, bingoState, categoryFromName, categoryOf, distinctCount, drawCard, fullBetLines, imageKey, nameFromFile, rarityFromFile, rarityName, renderBingoGrid, shrinkImage } from './bingo.js';
+import { DEFAULT_STAGE, OUTCOME_LABEL, STATUS_LABEL, paintQuestionCard } from './questions.js';
+import { setupLanding } from './landing.js';
+import { COSTUMES, DEFAULT_PET, Dino, costumeName, dinoSvg, hungerOf, isFrenzy, isHungry, isStarving, runDino } from './pet.js';
+import { SPECIES, STAGES, speciesOf, stageName } from './pet-species.js';
+import { DEFAULT_TICKER } from './ticker.js';
+import {
+  DEFAULT_SHOP, GOLD, PLAYER_COLORS, catalogFromText, pointsText, catalogToText, chestSvg, coinsLeft, colorOf, itemIcon, priceOf, renderLoadout, renderTug,
+  scoreOf, sortByRarity, versusIntro, versusOrder, versusWinner, winnersOf,
+} from './shop.js';
+import {
+  KINDS, challengeBurst, challengeSummary, currentStage, doneCount, heartsHtml, pipsHtml, stageDone, stageLabel,
+} from './challenge.js';
+import { EXTRA_KINDS, buildExtraTile, extraIcon, guardActive, guardSet, listRewards, loadExtras, obsStatus, openExtra, renderGuard, setupExtras } from './extras.js';
+import { autoOpenObsSetup, openObsSetup, setupObsSetup } from './obs-setup.js';
+import { guardFrame } from './frame-guard.js';
+import { installAlertPreset, openAlertDesigner, setupAlertDesigner, useAlertColor, useAlertMedia, useAlertPreset } from './alert-designer.js';
+import { isLookPreset } from './look-builder.js';
+import { createExtrasApi } from './extras-api.js';
+import { openLibrary, setupLibrary, showLibraryView } from './library.js';
+import { OVERLAY_THEMES } from './overlay-stage.js';
+import { THEME_PACKS } from './theme-packs.js';
+import {
+  channelFromUrl, channelParam, cleanChannel, rememberChannel, rememberedChannel, setChannel, withChannelParam,
+} from './channel.js';
+import { h } from './extras-core.js';
+import { maybeOpenIntro, openIntro, setupIntro } from './intro.js';
+import { applyI18n, initI18n, LANGS, langPicker, t as tr, watchI18n } from './i18n.js';
+import { avatarSrc } from './avatar.js';
+import { setupConsent } from './consent.js';
+import { setupHelp } from './help.js';
+import { botTrap, captchaToken, looksLikeBot, mfaGate, mountCaptcha, renderModSecurity, renderSecurityPage, resetCaptcha, setupSecurity } from './security.js';
+import { DEFAULT_GAMES, GAME_GROUPS, GAMES, activeGames, gameById, liveGameId, splitTiles } from './games.js';
+import { forgetSecret, loadSecret, saveSecret } from './secret-store.js';
+import { markStart, renderStart, showStartAgain } from './dash-start.js';
+import { renderProfile } from './dash-profile.js';
+import { renderArtist } from './dash-artist.js';
+import { renderDiscord } from './dash-discord.js';
+import { renderConsole } from './dash-console.js';
+import { renderRaids, renderReferrals } from './dash-network.js';
+import { renderMoney } from './dash-money.js';
+import { extractColors, inkOn } from './brand-colors.js';
+import { renderStats } from './dash-stats.js';
+import { renderBotPlus } from './bot-plus.js';
+import { renderBotStudio } from './bot-studio.js';
+import { renderBotLog, renderBotPick, setupBotLog } from './dash-bot.js';
+import { loadUpdates, setMyChannel, startPlatformNotices } from './platform-notices.js';
+import { noAffiliate, setAffiliate } from './affiliate.js';
+import { renderYoutube } from './youtube-connect.js';
+import { LAYERS, MODULES, layerName, moduleUrl } from './overlay-modules.js';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+// index.html?obs: nur die OBS-Einstellungen, als eigenes Fenster
+const OBS_PAGE = new URLSearchParams(location.search).has('obs');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+const state = {
+  pro: { for: null, has: false }, // StreamHelp Pro des Kanals (channelPro)
+  api: null,
+  user: null,
+  profile: null,
+  tiles: [],
+  variants: [],
+  variantId: null,
+  twitch: { connected: false },
+  // Der Streamer dieser Seite: der verbundene Twitch-Kanal (sonst CHANNEL aus js/config.js)
+  streamer: { connected: false, name: CONFIG.CHANNEL, login: CONFIG.CHANNEL },
+  // Meine Rechte (my_access): Admin – auch als freigegebener Mod –, Mod, Streamer
+  access: null,
+  mods: [],
+  // Dashboard: aktuelle Seite, Seite nach einer Weiterleitung von Twitch
+  page: 'ideas',
+  pendingPage: null,
+  // Twitch-Gesundheitscheck (twitch_health)
+  health: { data: null, busy: false, subscribed: false, timer: 0, told: '' },
+  spins: [],
+  ideas: [],
+  ideasOn: false,
+  spinning: false,
+  queue: [],
+  held: [],
+  resetAuth: null,
+  wheel: null,
+  activeTile: null,
+  spinSubscribed: false,
+  // Ärgere den Streamer
+  prank: {
+    on: false,          // Migration …_pranks.sql eingespielt?
+    settings: { enabled: true, cooldown_seconds: 20, allow_uploads: true },
+    sounds: [],
+    rewards: null,      // Sounds mit eigener Belohnung (…_sound_rewards.sql); null = Migration fehlt
+    log: [],
+    seen: new Set(),    // eigene Aktionen kommen auch über Realtime – nicht doppelt zeigen
+    until: 0,           // Ende der Pause bis zur nächsten Aktion
+    timer: 0,
+    subscribed: false,
+    sfx: null,
+  },
+  // Fortnite-Bingo
+  bingo: {
+    on: false,          // Migration …_bingo.sql eingespielt?
+    items: [],
+    cat: 'all',         // Filter der Bild-Liste nach Kategorie (js/bingo.js, CATEGORIES)
+    card: null,
+    lines: 0,           // volle Linien – steigt die Zahl, gibt es "Bingo!"
+    subscribed: false,
+    tab: null,          // 'dave' oder 'mine'
+    mine: null,         // eigene Karte
+    mineLoaded: false,
+  },
+  // Unangenehme Fragen
+  questions: {
+    on: false,          // Migration …_questions_pet.sql eingespielt?
+    error: '',
+    list: [],           // eigene Fragen, für Admins alle
+    stage: null,        // was gerade im Stream steht
+    subscribed: false,
+  },
+  // Win-Challenge (nur der Streamer trägt ein)
+  challenge: {
+    on: false,
+    error: '',
+    data: null,
+    access: { can_edit: false, is_owner: false, admins_can_edit: false },
+    mods: [],
+    editing: false,     // Editor geändert, noch nicht gespeichert
+    subscribed: false,
+  },
+  // Kisten-Shop
+  shop: {
+    on: false,
+    error: '',
+    settings: null,
+    mode: 'solo',       // 'solo' oder 'koop'
+    run: null,          // aktuelle eigene Runde
+    chests: null,       // aufgedeckte Kisten (nur direkt nach dem Öffnen)
+    chestsFor: null,
+    lobby: null,        // Koop-Runde (ohne Kisten-Werte)
+    lobbyRuns: [],
+    timer: 0,
+    subscribed: false,
+  },
+  // Stream-Dino
+  pet: {
+    on: false,
+    data: null,
+    events: [],
+    subscribed: false,
+    dino: null,         // läuft im Dialog, solange er offen ist
+    stopBrain: null,
+    sfx: null,
+  },
+};
+
+if (guardFrame()) boot();
+
+// ============================================================
+// Start
+// ============================================================
+async function boot() {
+  const params = new URLSearchParams(location.search);
+  // Sprache für Startseite und Anmeldung (js/i18n.js) – vor allem anderen, die Startseite liest ihre Texte beim Aufbau
+  await initI18n();
+  rememberReferral(params.get('ref')); // erst nach dem ersten await: REF_KEY steht weiter unten im Modul
+  applyI18n($('#landing'));
+  applyI18n($('#auth'));
+  document.title = tr(document.title);
+  $('#landing .lp-login')?.before(langPicker('lang-pick--nav'));
+  $('#auth .auth-back')?.after(langPicker('lang-pick--auth'));
+  // Dashboard: Sprache im Konto-Menü; Seiten, Hinweise und Dialoge werden beim Einfügen übersetzt
+  $('#logout-btn')?.before(Object.assign(document.createElement('label'), { className: 'pop-item pop-item--lang' }));
+  $('.pop-item--lang')?.append(Object.assign(document.createElement('span'), { className: 'pop-item-ico', textContent: '🌐', ariaHidden: 'true' }), langPicker('lang-pick--acct'));
+  watchI18n(document.body, { skip: '#landing' });
+  setupConsent(); // Cookie-Fenster (js/consent.js) – nach der Sprache, damit es übersetzt ist
+
+  // Rückweg vom Chat-Bot-Verbinden im Admin-Bereich: Das Ergebnis gehört dorthin,
+  // auch wenn die Weiterleitung hier gelandet ist. Aus dem Dashboard verbundene
+  // Bots landen hier und bekommen die Meldung im Dashboard.
+  let botFlow = false;
+  let twitchFlow = false;
+  try {
+    botFlow = sessionStorage.getItem('zd_bot_flow') === '1';
+    twitchFlow = sessionStorage.getItem('zd_twitch_flow') === '1' || sessionStorage.getItem('zd_bot_dash') === '1';
+    sessionStorage.removeItem('zd_bot_flow');
+    sessionStorage.removeItem('zd_twitch_flow');
+    sessionStorage.removeItem('zd_bot_dash');
+  } catch { /* ignorieren */ }
+  // Schickt Twitch nach der Freigabe zur Supabase-Anmeldung statt zur
+  // StreamHelp-Funktion, meldet Supabase "OAuth state parameter is invalid".
+  // Ursache: In der Twitch-App fehlt die Redirect-URL der Funktion.
+  const oauthError = params.get('error_description') ?? new URLSearchParams(location.hash.slice(1)).get('error_description') ?? '';
+  const wrongRedirect = (botFlow || twitchFlow) && /state parameter is invalid/i.test(oauthError);
+  if (botFlow && (wrongRedirect || params.has('twitch'))) {
+    location.replace(wrongRedirect ? 'admin.html?twitch=error&reason=redirect_uri' : `admin.html${location.search}`);
+    return;
+  }
+  if (wrongRedirect) {
+    history.replaceState(null, '', location.pathname);
+    params.set('twitch', 'error');
+    params.set('reason', 'redirect_uri');
+  }
+  // Rückweg vom Anbieter-Login (Twitch & Co.): Klappt die Anmeldung dort nicht,
+  // soll das sichtbar sein statt einfach wieder die Startseite zu zeigen.
+  let oauthLogin = '';
+  try { oauthLogin = sessionStorage.getItem('zd_oauth_login') ?? ''; sessionStorage.removeItem('zd_oauth_login'); } catch { /* ignorieren */ }
+  const oauthTokens = /(^|[#&])(access_token|refresh_token)=/.test(location.hash) || params.has('code');
+  // Mit „Zurück“ von der Anbieter-Seite gekommen: kein Fehler
+  if (!oauthTokens && performance.getEntriesByType?.('navigation')?.[0]?.type === 'back_forward') oauthLogin = '';
+  const apiPromise = Promise.resolve(createApi());
+
+  // Einmal-Code vom Admin-Bereich ("Webseite als Admin öffnen")
+  let adminHash = null;
+  try { adminHash = sessionStorage.getItem('zd_admin_site'); sessionStorage.removeItem('zd_admin_site'); } catch { /* ignorieren */ }
+
+  setupShell();
+  try {
+    state.api = await apiPromise;
+  } catch (err) {
+    console.error(err);
+    showAuth();
+    toast('Verbindung zu Supabase fehlgeschlagen. Prüfe js/config.js.', 'error');
+    return;
+  }
+  if (state.api.demo) $('#demo-banner').hidden = false;
+  // Link auf einen Kanal (#/c/<login>): gilt auch nach dem Anmelden noch (Twitch-Login verliert die Adresse)
+  const linked = channelFromUrl();
+  if (linked) onceStore.set(LINK_ONCE, linked);
+  await previewChannel(linked);
+  loadStreamer();
+
+  // Zurück vom Google-Login (Edge Function youtube)
+  const youtubeReturn = params.get('youtube');
+  if (youtubeReturn) {
+    history.replaceState(null, '', location.pathname);
+    state.pendingPage = 'twitch';
+    const reasons = {
+      access_denied: 'Die Freigabe bei Google wurde abgebrochen.',
+      state: 'Die Anfrage ist abgelaufen. Bitte noch einmal versuchen.',
+      scope: 'Ohne das Recht „YouTube-Konto verwalten“ kann StreamHelp keine Livestreams starten. Bitte noch einmal verbinden und alles erlauben.',
+      no_channel: 'Zu diesem Google-Konto gibt es keinen YouTube-Kanal.',
+      no_refresh: 'Google hat keinen dauerhaften Zugang geschickt. Unter myaccount.google.com → Sicherheit → Drittanbieter-Zugriff StreamHelp entfernen und neu verbinden.',
+    };
+    queueMicrotask(() => (youtubeReturn === 'connected'
+      ? toast('▶️ YouTube ist verbunden. Unter „Twitch-Verbindung“ stellst du ein, ob YouTube mit Twitch startet und endet.', 'ok', 9000)
+      : toast(`YouTube-Verbindung fehlgeschlagen: ${reasons[params.get('reason')] ?? params.get('detail') ?? params.get('reason') ?? 'unbekannter Fehler'}`, 'error', 15000)));
+  }
+
+  const twitchReturn = params.get('twitch');
+  if (twitchReturn) {
+    history.replaceState(null, '', location.pathname);
+    queueMicrotask(() => showTwitchReturn(twitchReturn, params.get('reason'), params.get('detail'), params.get('bot')));
+  }
+
+  if (adminHash) {
+    try {
+      await state.api.adminSiteLogin(adminHash);
+    } catch (err) {
+      queueMicrotask(() => toast(`Admin-Anmeldung fehlgeschlagen: ${germanError(err)}`, 'error', 7000));
+    }
+  }
+
+  setupAuthForms();
+  setupSocial();
+  setupDialogs();
+
+  state.api.onAuthChange((user) => {
+    if (user && !state.user) enterApp(user, { animate: !$('#auth').hidden });
+    if (!user && state.user) leaveApp();
+  });
+  setupInstall();
+  // Als Handy-App gestartet (manifest.webmanifest): Abkürzungen wie #stats öffnen gleich die Seite,
+  // und ohne Anmeldung geht es direkt zur Anmeldung statt zur Startseite.
+  const appStart = params.has('app');
+  const appPage = location.hash.slice(1);
+  if (appStart && (Object.hasOwn(PAGE_TITLES, appPage) || appPage === 'alerts')) state.pendingPage = appPage;
+  const user = await state.api.getUser();
+  if (user) { if (!state.user) await enterApp(user); }
+  else if (appStart && !OBS_PAGE) showAuth();
+  else if ((oauthLogin || oauthTokens) && !oauthError && !params.has('error')) showLoginReturnError(oauthLogin, oauthTokens);
+  else if (location.hash === '#login' || oauthError || params.has('error') || OBS_PAGE) showAuth();
+  else showLanding();
+}
+
+// Handy-App (PWA): Service Worker (sw.js – nur Offline-Notfall) und „App installieren“ in der Leiste
+function setupInstall() {
+  if (OBS_PAGE) return;
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Service Worker:', err));
+  }
+  const btn = $('#install-btn');
+  if (!btn) return;
+  let prompt = null;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); prompt = e; btn.hidden = false; });
+  addEventListener('appinstalled', () => { btn.hidden = true; prompt = null; toast('StreamHelp ist jetzt als App installiert.', 'ok'); });
+  btn.addEventListener('click', async () => {
+    if (!prompt) return;
+    prompt.prompt();
+    await prompt.userChoice.catch(() => null);
+    prompt = null;
+    btn.hidden = true;
+  });
+}
+
+// Vom Anbieter zurück, aber keine Sitzung: Grund und Abhilfe anzeigen
+function showLoginReturnError(provider, hadTokens) {
+  const name = { twitch: 'Twitch', discord: 'Discord', google: 'Google', spotify: 'Spotify', github: 'GitHub' }[provider] ?? 'dem Anbieter';
+  const reason = state.api.authError;
+  const page = location.origin + location.pathname;
+  // Zugangsdaten nicht in der Adresszeile stehen lassen
+  history.replaceState(null, '', location.pathname);
+  showAuth();
+  const text = hadTokens
+    ? `Die Anmeldung mit ${name} kam zurück, aber Supabase hat daraus keine Sitzung gemacht${reason ? ` (${germanError(new Error(reason))})` : ''}. Versuch es noch einmal. Klappt es wieder nicht: Uhrzeit des Geräts prüfen und in Supabase unter Authentication → Providers → ${name} Client-ID und Secret der App kontrollieren.`
+    : `Die Anmeldung mit ${name} wurde nicht abgeschlossen – Supabase hat keine Anmeldedaten zurückgeschickt${reason ? ` (${germanError(new Error(reason))})` : ''}. In Supabase unter Authentication → URL Configuration muss ${page} bei „Redirect URLs“ stehen (die „Site URL“ allein reicht nicht, wenn sie anders lautet).`;
+  const msg = $('#social .social-msg');
+  if (msg) { msg.textContent = text; $('#social').hidden = false; }
+  else toast(text, 'error', 15000);
+  console.warn('Anmeldung ohne Sitzung zurück:', { provider, hadTokens, reason });
+}
+
+function showTwitchReturn(status, reason, detail, bot) {
+  if (status === 'connected') {
+    // Wer Twitch verbindet, ist der Streamer: gleich prüfen, ob alles läuft. Wartet der eigene Kanal noch
+    // auf die Freischaltung (Anmelden und Verbinden in einem Schritt), sagt das stattdessen der Konto-Dialog.
+    state.pendingPage = 'twitch';
+    state.twitchJustConnected = true;
+    return;
+  }
+  if (status === 'bot_connected') {
+    state.pendingPage = 'bot';
+    toast(`✓ Chat-Bot ${bot ?? ''} ist verbunden. Ab jetzt liest er den Chat mit und schreibt Ergebnisse hinein.`, 'ok', 9000);
+    return;
+  }
+  const reasons = {
+    wrong_account: 'Verbinden darf nur das Twitch-Konto, dem dieser Kanal gehört. Auf twitch.tv abmelden, mit dem richtigen Konto anmelden und noch einmal verbinden.',
+    not_owner: 'Twitch verbindet nur der Streamer selbst: Auf StreamHelp mit dem Konto anmelden, dem der Kanal gehört (bzw. mit dem Twitch-Konto des Kanals), und noch einmal verbinden.',
+    bot_is_broadcaster: 'Das war der Account des Streamers. Der Bot braucht einen eigenen: Auf twitch.tv abmelden, mit dem Bot-Account anmelden und noch einmal verbinden.',
+    no_broadcaster_login: 'In Supabase fehlt das Secret BROADCASTER_LOGIN (Twitch-Name des Streamers). Ohne es darf sich aus Sicherheitsgründen nur ein Admin verbinden. Secret unter Edge Functions → Secrets eintragen und erneut verbinden.',
+    redirect_uri: `Twitch hat nach der Freigabe nicht zu StreamHelp zurückgeleitet. In der Twitch-App (dev.twitch.tv → Console → Anwendungen → Verwalten) unter „OAuth Redirect URLs“ zusätzlich ${CONFIG.SUPABASE_URL}/functions/v1/twitch-oauth eintragen, speichern und noch einmal verbinden.`,
+    not_affiliate: 'Kanalpunkte gibt es nur für Twitch-Affiliates und Partner.',
+    reward_exists: 'Es gibt schon eine manuell erstellte Belohnung „Glücksrad“. Bitte im Twitch-Dashboard löschen und erneut verbinden.',
+    access_denied: 'Die Freigabe auf Twitch wurde abgebrochen.',
+    state: 'Die Anfrage ist abgelaufen. Bitte noch einmal versuchen.',
+  };
+  // Bei unerwarteten Fehlern schickt die Edge Function die eigentliche Meldung mit.
+  const text = reasons[reason] ?? detail ?? (reason && reason !== 'unknown' ? reason : null)
+    ?? 'Unbekannter Fehler – Details in Supabase unter Edge Functions → twitch-oauth → Logs.';
+  toast(`Twitch-Verbindung fehlgeschlagen: ${text}`, 'error', 20000);
+}
+
+// ============================================================
+// Anmelden / Registrieren
+// ============================================================
+function showAuth() {
+  $('#app').hidden = true;
+  $('#landing').hidden = true;
+  const auth = $('#auth');
+  auth.classList.remove('is-leaving', 'is-going');
+  auth.hidden = false;
+  document.body.classList.remove('in-app');
+  applyLook();
+  if (location.hash !== '#login' && !OBS_PAGE) history.replaceState(null, '', `${location.pathname}${location.search}#login`);
+  scrollTo(0, 0);
+  $('#form-login input[name="email"]')?.focus({ preventScroll: true });
+}
+
+// Was in StreamHelp steckt – für den Balken auf der Startseite, direkt aus den Listen im Code
+function landingFacts() {
+  const ideas = new Set(DEFAULT_TILES.map((t) => t.kind).filter((k) => k !== 'countdown')).size;
+  return [
+    { key: 'ideas', n: ideas, label: 'Content-Ideen zum Mitmachen' },
+    { key: 'packs', n: THEME_PACKS.length, label: 'Theme-Pakete' },
+    { key: 'langs', n: LANGS.length, label: 'Sprachen' },
+    { key: 'health', n: 30, unit: 'Min', label: 'Twitch-Gesundheitscheck' },
+    { key: 'pets', n: SPECIES.length, label: 'Tiere fürs Stream-Haustier' },
+    { key: 'games', n: GAMES.length, label: 'Games mit eigenem Bereich' },
+    { key: 'alert-looks', n: ALERT_PRESETS.length, label: 'Alert-Designs' },
+    { key: 'themes', n: OVERLAY_THEMES.length, label: 'Overlay-Designs' },
+  ];
+}
+
+function showLanding() {
+  $('#app').hidden = true;
+  $('#auth').hidden = true;
+  $('#landing').hidden = false;
+  setupLanding($('#landing'), { stats: () => state.api.platformStats(), charity: () => state.api.charityPool(), facts: landingFacts() });
+  setupHelp($('#landing'), state.api);
+  renderLandingChannels();
+  document.body.classList.remove('in-app');
+  applyLook();
+  if (location.hash === '#login') history.replaceState(null, '', `${location.pathname}${location.search}`);
+}
+
+// ============================================================
+// Hülle: Startseite (Menü), Seitenleiste, Streamer-/Modansicht
+// ============================================================
+const SB_KEY = 'sh_sidebar';
+const VIEW_KEY = 'sh_view';
+const PAGE_TITLES = {
+  ideas: 'Content-Ideen', community: 'Vorschläge & Archiv', bot: 'Bot & Chat', points: 'Kanalpunkte',
+  overlay: 'Overlay & OBS', record: 'Video aufnehmen', library: 'Design-Bibliothek', guard: 'Raid-Schutz', mods: 'Mods', twitch: 'Twitch-Verbindung',
+  security: 'Sicherheit', stats: 'Statistik', profile: 'Profil & Zeitplan', artist: 'Artist-Bereich', discord: 'Discord', console: 'Console (Entwurf)', raids: 'Raid-Netzwerk', referrals: 'Freunde werben', money: 'Trinkgeld & Sponsoren',
+};
+
+function setupShell() {
+  // Startseite: „Anmelden“ und „Zur Startseite“
+  document.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-go]');
+    if (go && !state.user) {
+      e.preventDefault();
+      // „Mit Twitch anmelden“: direkt zu Twitch, wenn der Anbieter in Supabase an ist
+      if (go.dataset.quick && state.providers?.[go.dataset.quick]) {
+        state.api.signInWithProvider(go.dataset.quick).catch((err) => { showAuth(); toast(germanError(err), 'error'); });
+        return;
+      }
+      if (go.dataset.go === 'login') { history.pushState(null, '', '#login'); showAuth(); }
+      else { history.pushState(null, '', location.pathname); showLanding(); }
+    }
+    const to = e.target.closest('[data-goto]');
+    if (to) setPage(to.dataset.goto);
+    if (e.target.closest('[data-open-obs]')) openObsWindow();
+    // Menü zu, sobald woanders hingeklickt wird
+    if (!e.target.closest('.lp-item')) closeLandingMenus();
+  });
+  addEventListener('popstate', () => {
+    if (state.user) return;
+    if (location.hash === '#login') showAuth();
+    else showLanding();
+  });
+  // Hover-Menü: mit Maus per Hover, per Tipp/Tastatur mit Klick (aria-expanded)
+  document.querySelectorAll('.lp-link').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      closeLandingMenus();
+      btn.setAttribute('aria-expanded', String(open));
+    });
+  });
+  document.querySelectorAll('.lp-drop a').forEach((a) => a.addEventListener('click', () => {
+    closeLandingMenus();
+    document.activeElement?.blur();
+  }));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLandingMenus(); });
+
+  // Seitenleiste: ausgeklappt alles (Standard), eingeklappt Symbol und Kurzname
+  const app = $('#app');
+  let open = true;
+  try { open = localStorage.getItem(SB_KEY) !== '0'; } catch { /* egal */ }
+  const narrow = () => matchMedia('(max-width: 860px)').matches;
+  const setOpen = (on, remember = true) => {
+    app.classList.toggle('sb-open', on);
+    $('#sb-toggle').setAttribute('aria-expanded', String(on));
+    $('#sb-toggle').title = on ? 'Leiste einklappen' : 'Leiste ausklappen';
+    $('#sb-mobile').setAttribute('aria-expanded', String(on));
+    $('#sb-scrim').hidden = !on;
+    if (remember && !narrow()) { try { localStorage.setItem(SB_KEY, on ? '1' : '0'); } catch { /* egal */ } }
+  };
+  setOpen(open && !narrow(), false);
+  $('#sb-toggle').addEventListener('click', () => setOpen(!app.classList.contains('sb-open')));
+  $('#sb-mobile').addEventListener('click', () => setOpen(!app.classList.contains('sb-open'), false));
+  $('#sb-scrim').addEventListener('click', () => setOpen(false, false));
+  // Fenster schmal gezogen: Schublade zu; wieder breit: wie zuletzt gewählt
+  matchMedia('(max-width: 860px)').addEventListener('change', (e) => {
+    let stored = true;
+    try { stored = localStorage.getItem(SB_KEY) !== '0'; } catch { /* egal */ }
+    setOpen(!e.matches && stored, false);
+  });
+  // Bereich suchen: filtert die Leiste; „/“ springt ins Suchfeld
+  const search = $('#sb-search');
+  const filterNav = () => {
+    const q = search.value.trim().toLowerCase();
+    let any = false;
+    document.querySelectorAll('#sidebar .sb-sec').forEach((sec) => {
+      let hits = 0;
+      sec.querySelectorAll('.sb-item').forEach((it) => {
+        const hit = !q || (it.querySelector('.sb-label')?.textContent ?? '').toLowerCase().includes(q);
+        it.hidden = !hit;
+        if (hit && getComputedStyle(it).display !== 'none') hits++;
+      });
+      sec.hidden = !hits;
+      if (hits) any = true;
+    });
+    $('#sb-empty').hidden = any;
+  };
+  search.addEventListener('input', filterNav);
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { search.value = ''; filterNav(); search.blur(); }
+    if (e.key === 'Enter') { $('#sidebar .sb-sec:not([hidden]) .sb-item:not([hidden])')?.click(); search.value = ''; filterNav(); }
+  });
+  $('#sb-search-btn').addEventListener('click', () => { setOpen(true); search.focus(); });
+  addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || app.hidden) return;
+    if (e.target.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('dialog[open]')) return;
+    e.preventDefault();
+    setOpen(true, !narrow());
+    search.focus();
+  });
+  state.filterNav = filterNav;
+  // Eingeklappt: Tooltip mit Namen und Zähler neben dem Symbol (die Leiste selbst schneidet alles ab)
+  const tip = document.createElement('div');
+  tip.className = 'sb-tip';
+  tip.setAttribute('role', 'tooltip');
+  tip.hidden = true;
+  document.body.append(tip);
+  const showTip = (item) => {
+    if (app.classList.contains('sb-open') || narrow()) return;
+    const label = item.querySelector('.sb-label')?.textContent ?? item.title;
+    const count = sbCount(item.dataset.page);
+    tip.replaceChildren(Object.assign(document.createElement('b'), { textContent: label }));
+    if (count) tip.append(Object.assign(document.createElement('span'), { textContent: count }));
+    const r = item.getBoundingClientRect();
+    tip.style.left = `${Math.round(r.right + 10)}px`;
+    tip.style.top = `${Math.round(r.top + r.height / 2)}px`;
+    tip.classList.toggle('is-mod', app.dataset.view === 'mod');
+    tip.hidden = false;
+  };
+  const hideTip = () => { tip.hidden = true; };
+  $('#sidebar').addEventListener('mouseover', (e) => { const item = e.target.closest('.sb-item'); if (item) showTip(item); });
+  $('#sidebar').addEventListener('mouseleave', hideTip);
+  $('#sidebar').addEventListener('focusin', (e) => { const item = e.target.closest('.sb-item'); if (item) showTip(item); });
+  $('#sidebar').addEventListener('focusout', hideTip);
+  $('#sidebar').addEventListener('click', (e) => {
+    hideTip();
+    const item = e.target.closest('.sb-item[data-page]');
+    if (!item) return;
+    setPage(item.dataset.page);
+    if (narrow()) setOpen(false, false);
+  });
+
+  // Streameransicht ↔ Modansicht
+  $('#view-switch').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-view]');
+    if (!btn || btn.disabled) return;
+    try { localStorage.setItem(VIEW_KEY, btn.dataset.view); } catch { /* egal */ }
+    applyView(btn.dataset.view);
+  });
+
+  $('#health-btn').addEventListener('click', () => setPage('twitch'));
+  setupLook();
+  setupPops();
+  $('#health-check').addEventListener('click', () => runHealth({ force: true, loud: true }));
+  // Fehlende Rechte oder abgelaufener Zugang: direkt neu verbinden (nicht „Mit Twitch anmelden“ –
+  // das meldet nur bei der Webseite an und erneuert den Streamer-Zugang nicht)
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-twitch-reconnect]');
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      try { sessionStorage.setItem('zd_twitch_flow', '1'); } catch { /* egal */ }
+      await state.api.twitchConnect(); // leitet zu Twitch weiter
+    } catch (err) {
+      toast(germanError(err), 'error', 7000);
+      btn.disabled = false;
+    }
+  });
+  $('#bot-connect').addEventListener('click', connectBot);
+  $('#bot-disconnect').addEventListener('click', disconnectBot);
+  // Aufnahme-Studio im eigenen Fenster (wie das OBS-Fenster)
+  $('#open-record').addEventListener('click', () => {
+    const url = withChannelParam(new URL('record.html', location.href));
+    const win = window.open(url.href, 'streamhelp-record');
+    if (win) win.focus();
+    else location.href = url.href;
+  });
+  $('#dash-obs-copy').addEventListener('click', async () => {
+    const input = $('#dash-obs-url');
+    try { await navigator.clipboard.writeText(input.value); toast('Adresse kopiert – in OBS als Browserquelle einfügen.', 'ok'); }
+    catch { input.select(); }
+  });
+  $('#points-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-points-open]');
+    if (btn) POINTS_OPEN[btn.dataset.pointsOpen]?.();
+  });
+}
+
+// ---------- Darstellung: Hell/Dunkel, Akzentfarbe, Kontrast (gilt nur im Dashboard, gemerkt im Browser) ----------
+const LOOK_KEY = 'sh_look';
+const LOOK_DEFAULT = { theme: 'dark', accent: 'lila', contrast: 'normal' };
+const LOOK_VALUES = { theme: ['dark', 'light'], accent: ['lila', 'logo', 'gruen', 'blau', 'pink'], contrast: ['normal', 'hoch'] };
+function readLook() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}') ?? {}; } catch { /* egal */ }
+  const look = { ...LOOK_DEFAULT };
+  for (const k of Object.keys(LOOK_VALUES)) if (LOOK_VALUES[k].includes(saved[k])) look[k] = saved[k];
+  return look;
+}
+// Startseite, Anmeldung und das OBS-Fenster bleiben wie gestaltet (dunkel, lila)
+function applyLook() {
+  const root = document.documentElement;
+  const on = document.body.classList.contains('in-app') && !OBS_PAGE;
+  const look = readLook();
+  for (const k of Object.keys(LOOK_VALUES)) {
+    if (on && look[k] !== LOOK_DEFAULT[k]) root.dataset[k] = look[k];
+    else delete root.dataset[k];
+  }
+  document.querySelectorAll('#look-pop [data-look]').forEach((group) => {
+    group.querySelectorAll('[data-value]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.value === look[group.dataset.look])));
+  });
+  const btn = $('#look-btn i');
+  if (btn) btn.className = `ph ${look.theme === 'light' ? 'ph-sun' : 'ph-moon-stars'}`;
+}
+function setupLook() {
+  $('#look-pop').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-value]');
+    const group = b?.closest('[data-look]');
+    if (!group) return;
+    const look = { ...readLook(), [group.dataset.look]: b.dataset.value };
+    try { localStorage.setItem(LOOK_KEY, JSON.stringify(look)); } catch { /* egal */ }
+    applyLook();
+  });
+  applyLook();
+}
+
+// Aufklapp-Menüs in der Kopfzeile (Darstellung, Konto): eins zur Zeit, Klick daneben oder Esc schließt
+function setupPops() {
+  const pairs = [['#look-btn', '#look-pop'], ['#acct-btn', '#acct-pop']];
+  const close = (except) => pairs.forEach(([b, p]) => {
+    if (p === except) return;
+    $(p).hidden = true;
+    $(b).setAttribute('aria-expanded', 'false');
+  });
+  for (const [b, p] of pairs) {
+    $(b).addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = $(p).hidden;
+      close(open ? p : null);
+      $(p).hidden = !open;
+      $(b).setAttribute('aria-expanded', String(open));
+    });
+  }
+  // Ein Klick auf einen Eintrag im Kontomenü schließt es
+  $('#acct-pop').addEventListener('click', (e) => { if (e.target.closest('button')) close(); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.pop-wrap')) close(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+}
+
+// Zähler für den Tooltip der eingeklappten Seitenleiste
+function sbCount(page) {
+  const n = (x, one, many) => (x ? `${x} ${x === 1 ? one : many}` : '');
+  if (page === 'ideas') return n(state.tiles.filter((t) => t.kind !== 'countdown').length, 'Kachel', 'Kacheln');
+  if (page === 'community') return n(state.ideas.length, 'Vorschlag', 'Vorschläge');
+  if (page === 'mods') return n(state.mods.length, 'Mod', 'Mods');
+  if (page === 'twitch') {
+    const b = $('#sb-alert-badge');
+    if (!b.hidden) return `${b.textContent} Twitch-${b.textContent === '1' ? 'Problem' : 'Probleme'}`;
+    return state.twitch?.connected ? 'verbunden' : 'nicht verbunden';
+  }
+  return '';
+}
+
+function closeLandingMenus() {
+  document.querySelectorAll('.lp-link[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+}
+
+// Rollen: Team = Streamer, Admins und freigegebene Mods (profile.is_admin)
+const isTeam = () => !!state.profile?.is_admin;
+// Die Streameransicht (Twitch verbinden, Mods freigeben) haben der Streamer und die Admins der Seite
+const canStreamerView = () => isTeam() && (state.access ? !!(state.access.is_owner || state.access.is_site_admin) : true);
+
+function applyView(want) {
+  const app = $('#app');
+  const sw = $('#view-switch');
+  let view = 'viewer';
+  if (isTeam()) view = canStreamerView() && want !== 'mod' ? 'streamer' : 'mod';
+  app.dataset.view = view;
+  if (state.page === 'ideas') renderStart(START);
+  sw.hidden = !isTeam();
+  sw.classList.toggle('is-locked', isTeam() && !canStreamerView());
+  sw.querySelectorAll('[data-view]').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.view === view));
+    b.disabled = b.dataset.view === 'streamer' && !canStreamerView();
+    b.title = b.disabled ? 'Die Streameransicht hat nur der Streamer.' : '';
+  });
+  // Seite gibt es in dieser Ansicht nicht? Dann zurück zu den Content-Ideen
+  const current = $('.sb-item[aria-current="page"]');
+  if (current && getComputedStyle(current).display === 'none') setPage('ideas');
+  renderTwitchPanel();
+}
+
+// Einstiegs-Checkliste (js/dash-start.js): was sie über den Kanal wissen muss
+const START = {
+  userId: () => state.user?.id,
+  channelId: () => state.channel?.id,
+  isStreamer: () => !OBS_PAGE && canStreamerView() && $('#app')?.dataset.view !== 'viewer',
+  twitchConnected: () => !!state.twitch?.connected,
+  modsEnabled: () => !!state.access?.mods_enabled,
+  mfaStatus: () => state.api.mfaStatus(),
+  setPage: (name) => setPage(name),
+  openObs: () => openObsWindow(),
+};
+
+function setPage(name) {
+  // Die frühere Seite „Alerts“ (alte Links, #alerts): der Alert-Designer steckt jetzt in der Design-Bibliothek
+  if (name === 'alerts') { showLibraryView('designer', { open: false }); name = 'library'; }
+  // Nur bekannte Seiten (der Name kann aus der Adresse kommen, z. B. #stats)
+  if (!Object.hasOwn(PAGE_TITLES, name)) name = 'ideas';
+  const item = $(`.sb-item[data-page="${name}"]`);
+  if (!item || getComputedStyle(item).display === 'none') name = 'ideas';
+  document.querySelectorAll('.sb-item[data-page]').forEach((b) => {
+    if (b.dataset.page === name) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('.page[data-page]').forEach((p) => { p.hidden = p.dataset.page !== name; });
+  $('#page-title').textContent = PAGE_TITLES[name] ?? 'StreamHelp';
+  state.page = name;
+  if (Object.hasOwn(PAGE_ENTER, name)) PAGE_ENTER[name]();
+  if (name !== 'twitch' && state.health.data) renderHealth();
+  if (!$('#app').hidden) scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+}
+
+// Beim Öffnen einer Seite frisch laden
+const PAGE_ENTER = {
+  bot: () => renderBotPanel(),
+  points: () => renderPoints(),
+  overlay: () => { $('#dash-obs-url').value = obsLiveUrl(); },
+  library: () => openLibrary(),
+  guard: () => renderGuard(),
+  mods: () => { loadMods(); renderModSecurity(); },
+  twitch: () => {
+    renderHealth();
+    if (!state.health.data) runHealth();
+    $('#health-banner').hidden = true;
+    // Twitch-Kanal, YouTube und Startseite gehören dem Streamer; Mods sehen nur den Gesundheitscheck
+    if (!canStreamerView()) return;
+    renderTwitchPanel();
+    loadShowcase();
+    renderYoutube($('#yt-card'), { api: state.api, toast, germanError });
+  },
+  security: () => renderSecurityPage(),
+  stats: () => renderStats($('#stats-slot'), state.api, STATS_OBS),
+  profile: () => renderProfile($('#profile-slot'), {
+    api: state.api, toast, germanError,
+    profileUrl: (login) => new URL(`profil.html?c=${encodeURIComponent(login ?? '')}`, location.href).href,
+  }),
+  artist: () => renderArtist($('#artist-slot'), { api: state.api, toast, germanError, openLibrary: () => setPage('library') }),
+  discord: () => renderDiscord($('#discord-slot'), {
+    api: state.api, toast, germanError, streamer: () => state.streamer.name, tiles: () => state.tiles ?? [],
+  }),
+  // Console (Entwurf): nur Plattform-Admins (Seitenleiste data-for="siteadmin", Datenbank prüft is_site_admin)
+  console: () => renderConsole($('#console-slot'), {
+    api: state.api, toast, germanError, setPage, guardActive, guardSet,
+    variants: () => state.variants, currentVariant, tiles: () => (state.tiles ?? []).filter((t) => !isArchived(t)),
+    streamer: () => state.streamer.name, openTile: (tile) => openTile(tile.id), me: () => state.profile?.username ?? '',
+  }),
+  raids: () => renderRaids($('#raids-slot'), { api: state.api, toast, germanError, confirm: (text) => Promise.resolve(confirm(text)) }),
+  referrals: () => renderReferrals($('#referrals-slot'), { api: state.api, toast, germanError }),
+  money: () => renderMoney($('#money-slot'), {
+    api: state.api, toast, germanError, testAlert,
+    webhookUrl: (id) => (state.api.demo ? 'https://…/functions/v1/tips?c=demo' : `${CONFIG.SUPABASE_URL}/functions/v1/tips?c=${encodeURIComponent(id ?? '')}`),
+  }),
+  ideas: () => renderStart(START),
+};
+
+function setupAuthForms() {
+  const seg = $('.segmented');
+  const tabs = { login: $('#tab-login'), register: $('#tab-register') };
+  const forms = { login: $('#form-login'), register: $('#form-register') };
+
+  const select = (name) => {
+    seg.dataset.active = name;
+    for (const key of Object.keys(tabs)) {
+      tabs[key].setAttribute('aria-selected', String(key === name));
+      forms[key].hidden = key !== name;
+    }
+  };
+  tabs.login.addEventListener('click', () => select('login'));
+  tabs.register.addEventListener('click', () => { select('register'); forms.register.dataset.shownAt = String(Date.now()); });
+
+  // Nach dem Einsteigen alles leeren: Sonst steht das Passwort nach dem
+  // Abmelden noch im Formular, und ein Klick meldet wieder an.
+  state.resetAuth = () => {
+    forms.login.reset();
+    forms.register.reset();
+    formMsg(forms.login, '');
+    formMsg(forms.register, '');
+    select('login');
+  };
+
+  // Bot-Schutz: verstecktes Fangfeld, beim Registrieren Mindestzeit, optional Cloudflare Turnstile (js/security.js)
+  botTrap(forms.login);
+  botTrap(forms.register);
+  forms.login.addEventListener('focusin', () => mountCaptcha(forms.login), { once: true });
+  forms.register.addEventListener('focusin', () => mountCaptcha(forms.register), { once: true });
+
+  forms.login.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const email = f.email.value.trim();
+    const password = f.password.value;
+    if (!email || !password) return authError(f, 'Bitte E-Mail und Passwort eingeben.', email ? 'password' : 'email');
+    if (f.website?.value) return authError(f, 'E-Mail oder Passwort ist falsch.');
+    setWarpOrigin(f.querySelector('[type=submit]'));
+    await withLoading(f, async () => {
+      try {
+        await state.api.signIn(email, password, await captchaToken(f));
+      } finally {
+        resetCaptcha(f);
+      }
+    });
+  });
+
+  // Neue Passwörter: lang genug und nicht zu leicht zu erraten (Supabase prüft zusätzlich selbst)
+  const COMMON = ['passwort', 'password', 'hallo123', 'qwertz', 'qwerty', 'fortnite', 'twitch', 'geheim', 'letmein', 'iloveyou'];
+  function passwordProblem(pw, personal) {
+    if (pw.length < 10) return 'Das Passwort braucht mindestens 10 Zeichen.';
+    const low = pw.toLowerCase();
+    if (/^(.)\1+$/.test(pw) || /^\d+$/.test(pw)) return 'Dieses Passwort ist zu leicht zu erraten.';
+    if (COMMON.some((w) => low.includes(w) && low.replace(w, '').replace(/[\d!.?_-]/g, '').length < 4)) return 'Dieses Passwort ist zu leicht zu erraten.';
+    if (personal.some((p) => p && p.length >= 3 && low.includes(p.toLowerCase()))) return 'Das Passwort darf nicht deinen Namen oder deine E-Mail enthalten.';
+    return '';
+  }
+
+  forms.register.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const username = f.username.value.trim();
+    const email = f.email.value.trim();
+    const password = f.password.value;
+    if (username.length < 3) return authError(f, 'Der Benutzername braucht mindestens 3 Zeichen.', 'username');
+    if (!/^\S+@\S+\.\S+$/.test(email)) return authError(f, 'Bitte eine gültige E-Mail eingeben.', 'email');
+    const weak = passwordProblem(password, [username, email.split('@')[0]]);
+    if (weak) return authError(f, weak, 'password');
+    if (looksLikeBot(f)) return authError(f, 'Das ging verdächtig schnell – bitte noch einmal absenden.');
+    setWarpOrigin(f.querySelector('[type=submit]'));
+    await withLoading(f, async () => {
+      let result;
+      try {
+        result = await state.api.signUp(username, email, password, await captchaToken(f));
+      } finally {
+        resetCaptcha(f);
+      }
+      const { needsConfirmation } = result;
+      if (needsConfirmation) {
+        select('login');
+        forms.login.email.value = email;
+        formMsg(forms.login, tr('Fast geschafft! Bestätige den Link in deiner E-Mail und melde dich dann an.'), true);
+      }
+    });
+  });
+}
+
+// ---------- Social-Logins (Twitch, Discord, Google, Spotify, GitHub) ----------
+async function setupSocial() {
+  const box = $('#social');
+  const msg = box.querySelector('.social-msg');
+
+  // Fehler, mit denen Supabase nach dem Anbieter-Login zurückleitet (?error=… oder #error=…)
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  const oauthError = query.get('error_description') ?? hash.get('error_description') ?? query.get('error') ?? hash.get('error');
+  if (oauthError) {
+    msg.textContent = `Anmeldung fehlgeschlagen: ${germanError(new Error(oauthError.replace(/\+/g, ' ')))}`;
+    history.replaceState(null, '', location.pathname);
+  }
+
+  let enabled = {};
+  try { enabled = await state.api.authProviders(); } catch { /* Buttons bleiben aus */ }
+  state.providers = enabled;
+  let visible = 0;
+  box.querySelectorAll('[data-provider]').forEach((btn) => {
+    const on = !!enabled[btn.dataset.provider];
+    btn.hidden = !on;
+    if (on) visible++;
+    btn.addEventListener('click', async () => {
+      msg.textContent = '';
+      box.querySelectorAll('[data-provider]').forEach((b) => { b.disabled = true; });
+      // Der lila Kreis geht vom geklickten Knopf auf, dann geht es zum Anbieter
+      const auth = $('#auth');
+      setWarpOrigin(btn);
+      if (!reducedMotion) {
+        auth.classList.add('is-going');
+        await sleep(480);
+      }
+      try {
+        await state.api.signInWithProvider(btn.dataset.provider); // leitet weiter
+      } catch (err) {
+        auth.classList.remove('is-going');
+        msg.textContent = germanError(err);
+        shakeAuth();
+        box.querySelectorAll('[data-provider]').forEach((b) => { b.disabled = false; });
+      }
+    });
+  });
+  $('#spotify-note').hidden = !enabled.spotify;
+  // Zurück vom Anbieter (Seite aus dem Browser-Cache): Kreis wieder weg
+  addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    $('#auth').classList.remove('is-going');
+    box.querySelectorAll('[data-provider]').forEach((b) => { b.disabled = false; });
+  });
+  // Der erste sichtbare Button wird groß dargestellt (normalerweise Twitch)
+  box.querySelector('[data-provider]:not([hidden])')?.classList.add('is-primary');
+  box.hidden = visible === 0 && !oauthError;
+}
+
+async function withLoading(form, fn) {
+  const btn = form.querySelector('button[type="submit"]');
+  formMsg(form, '');
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  try {
+    await fn();
+  } catch (err) {
+    const text = germanError(err);
+    if (form.closest('#auth')) authError(form, text, guessField(form, text));
+    else formMsg(form, text);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+  }
+}
+
+// Anmeldeseite: Fehler zeigen – Karte wackelt kurz, das betroffene Feld bekommt eine Akzentlinie
+function authError(form, text, field = null) {
+  formMsg(form, tr(text));
+  form.querySelectorAll('.field.is-invalid').forEach((f) => f.classList.remove('is-invalid'));
+  const input = field && form.elements[field];
+  if (input) {
+    input.closest('.field')?.classList.add('is-invalid');
+    input.addEventListener('input', () => input.closest('.field')?.classList.remove('is-invalid'), { once: true });
+    input.focus({ preventScroll: true });
+  }
+  shakeAuth();
+}
+function shakeAuth() {
+  const card = $('#auth .auth-card');
+  if (!card || reducedMotion) return;
+  card.classList.remove('is-shake');
+  void card.offsetWidth;
+  card.classList.add('is-shake');
+}
+// Welches Feld passt zur Fehlermeldung? Falsche Zugangsdaten → Passwort
+function guessField(form, text) {
+  if (/benutzername|name/i.test(text) && form.elements.username) return 'username';
+  if (/e-?mail/i.test(text) && !/passwort/i.test(text)) return 'email';
+  return form.elements.password ? 'password' : null;
+}
+// Der lila Kreis beim Anmelden startet am geklickten Knopf
+function setWarpOrigin(el) {
+  const warp = $('#auth .auth-warp');
+  if (!warp || !el) return;
+  const r = el.getBoundingClientRect();
+  warp.style.setProperty('--wx', `${Math.round(r.left + r.width / 2)}px`);
+  warp.style.setProperty('--wy', `${Math.round(r.top + r.height / 2)}px`);
+}
+
+function formMsg(form, text, ok = false) {
+  const el = form.querySelector('.form-msg');
+  el.textContent = text;
+  el.classList.toggle('is-ok', ok);
+}
+
+// ============================================================
+// Dashboard
+// ============================================================
+async function enterApp(user, { animate = false } = {}) {
+  state.user = user;
+  // Zwei-Faktor-Anmeldung: erst der Code aus der App, dann das Dashboard (js/security.js)
+  if (!(await mfaGate())) {
+    if (state.user === user) state.user = null;
+    return;
+  }
+  if (state.user !== user) return;
+  // Anmelde-Animation: Karte fliegt weg, lila Kreis füllt den Bildschirm, dann das Dashboard
+  if (animate && !reducedMotion && !OBS_PAGE) {
+    $('#auth').classList.add('is-leaving');
+    await sleep(720);
+  }
+  state.resetAuth?.();
+  $('#auth').hidden = true;
+  $('#auth').classList.remove('is-leaving');
+  $('#landing').hidden = true;
+  const appEl = $('#app');
+  appEl.hidden = false;
+  document.body.classList.add('in-app');
+  applyLook();
+  if (location.hash === '#login') history.replaceState(null, '', `${location.pathname}${location.search}`);
+  if (animate && !reducedMotion) {
+    appEl.classList.add('is-entering');
+    setTimeout(() => appEl.classList.remove('is-entering'), 800);
+  }
+
+  const api = state.api;
+  // Welcher Kanal? Muss vor allem anderen feststehen – jede Abfrage schickt ihn mit.
+  await chooseChannel();
+  if (!state.user) return;
+  const [profile, tiles, variants, twitch, spins, ideas, prankSettings, prankLog, bingo, access] = await Promise.all([
+    api.getProfile(user),
+    api.getTiles().catch(fail('Kacheln', [])),
+    api.getVariants().catch(fail('Glücksrad', [])),
+    api.twitchStatus().then((t) => t ?? { connected: false }).catch(() => ({ connected: false })),
+    api.getSpins().catch(() => []),
+    // Die Vorschläge-Tabellen kamen später dazu: fehlen sie in der Datenbank,
+    // bleibt der Bereich einfach aus, statt einen Fehler zu zeigen.
+    api.getIdeas().catch((err) => { console.warn('Vorschläge nicht verfügbar:', err); return null; }),
+    // Genauso „Ärgere den Streamer“ (Migration …_pranks.sql)
+    api.getPrankSettings().catch((err) => { console.warn('Ärgern nicht verfügbar:', err); return null; }),
+    api.getPranks().catch(() => []),
+    api.getBingo().catch((err) => { console.warn('Bingo nicht verfügbar:', err); return null; }),
+    // Freigegebene Mods zählen als Admins (Migration …_streamer_mods.sql)
+    api.myAccess().catch((err) => { console.warn('Rechte nicht verfügbar:', err); return null; }),
+  ]);
+  if (!state.user) return; // zwischenzeitlich abgemeldet
+  if (access) profile.is_admin = !!access.is_admin;
+  Object.assign(state, { profile, tiles, variants, twitch, spins, access });
+  if (twitch.connected) applyStreamer({ connected: true, login: twitch.login, name: twitch.display_name });
+  state.ideas = ideas ?? [];
+  state.ideasOn = ideas !== null;
+  state.variantId ??= variants[0]?.id;
+  state.prank.on = prankSettings !== null;
+  if (prankSettings) state.prank.settings = prankSettings;
+  state.prank.log = prankLog;
+  state.bingo.on = bingo !== null;
+  if (bingo) Object.assign(state.bingo, bingo, { lines: bingoState(bingo.card).count });
+
+  if (state.twitchJustConnected) {
+    state.twitchJustConnected = false;
+    if (state.myChannel?.status === 'pending') {
+      state.pendingPage = null;
+      openAccountDialog('done');
+    } else {
+      toast(`Twitch ist verbunden. StreamHelp prüft jetzt Alerts, Chat${noAffiliate() ? '' : ' und Kanalpunkte'} – das Ergebnis steht unter „Twitch-Verbindung“.`, 'ok', 9000);
+    }
+  }
+  renderHeader();
+  renderChannelBar();
+  // Hinweise vom StreamHelp-Team, Wartung, „Alle neu laden“, neue Version und „Was ist neu“
+  startPlatformNotices({ api: state.api, toast, page: 'index.html', entry: 'app.js', isTeam });
+  loadUpdates();
+  loadStreamer().then(channelNameFallback);
+  maybeAskAccountType().finally(() => setTimeout(() => { if (!OBS_PAGE) maybeOpenIntro(); }, 700));
+  let view = null;
+  try { view = localStorage.getItem(VIEW_KEY); } catch { /* egal */ }
+  applyView(view);
+  setPage(state.pendingPage ?? 'ideas');
+  state.pendingPage = null;
+  renderHero();
+  renderGrid();
+  loadGames();
+  renderArchive();
+  renderIdeas();
+  renderWheelPanel();
+  if (isTeam()) startHealth();
+
+  if (!state.spinSubscribed) {
+    state.spinSubscribed = true;
+    api.onSpin(handleIncomingSpin);
+  }
+  if (state.prank.on && !state.prank.subscribed) {
+    state.prank.subscribed = true;
+    api.onPrank(handleIncomingPrank);
+  }
+  if (state.bingo.on && !state.bingo.subscribed) {
+    state.bingo.subscribed = true;
+    api.onBingo((card) => applyBingoCard(card));
+  }
+  // Fragen und Dino laden im Hintergrund – fehlen sie noch, bleiben die Kacheln einfach ruhig.
+  loadQuestions();
+  loadPet();
+  loadShop();
+  loadChallenge();
+  loadExtras().then(() => { if ($('#obs-dialog')?.open && state.profile?.is_admin) renderObsContent(); });
+  if (OBS_PAGE) startObsPage();
+}
+
+function leaveApp() {
+  state.user = null;
+  state.profile = null;
+  state.access = null;
+  state.health.data = null;
+  Object.assign(state.shop, { run: null, chests: null, lobby: null, lobbyRuns: [], mode: 'solo' });
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  $('#app').dataset.view = 'viewer';
+  $('#app').removeAttribute('data-siteadmin');
+  // Twitch-Status gehört nur dem Team – nach dem Abmelden alles weg
+  clearInterval(state.health.timer);
+  state.health.told = '';
+  $('#health-banner').hidden = true;
+  $('#health-btn').hidden = true;
+  $('#sb-alert-badge').hidden = true;
+  showLanding();
+}
+
+function fail(what, fallback) {
+  return (err) => {
+    console.error(err);
+    toast(`${what} konnten nicht geladen werden: ${germanError(err)}`, 'error');
+    return fallback;
+  };
+}
+
+function renderHeader() {
+  const { profile, twitch } = state;
+  $('#user-name').textContent = profile.username;
+  $('#user-avatar').textContent = profile.username.slice(0, 1).toUpperCase();
+  $('#user-role').hidden = !profile.is_admin;
+  $('#user-role').textContent = state.access?.is_owner ? 'Streamer' : state.access?.is_mod ? 'Mod' : 'Admin';
+  // Der Admin-Bereich ist nur für echte Admins, nicht für Mods
+  $('#admin-btn').hidden = !(state.access ? state.access.is_site_admin || state.access.is_platform_admin : profile.is_admin);
+  // Entwürfe (Console) sehen nur Plattform-Admins
+  $('#app').toggleAttribute('data-siteadmin', !!(state.access?.is_site_admin || state.access?.is_platform_admin));
+
+  const hour = new Date().getHours();
+  const hello = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
+  $('#greeting').textContent = `${hello}, ${profile.username}`;
+  $('#hello-title').textContent = `${hello}, ${profile.username}!`;
+
+  // Die Plakette zeigt, ob Zuschauer das Rad gerade per Kanalpunkten drehen können.
+  $('#live-pill').hidden = !(twitch.connected && twitch.reward_active);
+  renderAcctHead();
+  renderTwitchPanel();
+}
+
+// Kopf des Kontomenüs und Punkt am Avatar: Twitch-Stand fürs Team, sonst wer angemeldet ist
+function renderAcctHead(level = state.health?.level) {
+  const team = isTeam() && !OBS_PAGE;
+  const connected = !!state.twitch?.connected;
+  const lvl = !team ? '' : !connected ? 'error' : level || 'ok';
+  $('#acct-tw').textContent = !team ? `Angemeldet als ${state.profile?.username ?? ''}`
+    : !connected ? 'Twitch nicht verbunden' : lvl === 'error' ? 'Twitch: Problem' : lvl === 'warn' ? 'Twitch: Hinweise' : 'Twitch verbunden';
+  $('#acct-tw-sub').textContent = !team ? (state.channel ? `Kanal: ${channelLabel(state.channel)}` : '')
+    : !connected ? 'Ohne Verbindung keine Alerts und Kanalpunkte' : lvl === 'error' ? 'Details unter Twitch-Verbindung' : 'Alerts und Kanalpunkte laufen';
+  $('#acct-tw-dot').dataset.state = lvl;
+  $('#acct-dot').hidden = !team;
+  $('#acct-dot').dataset.state = lvl;
+  if (team) loadProStatus();
+}
+
+// StreamHelp Pro (Migration …_tips_sponsors_pro.sql): Plakette im Kontomenü, einmal je Kanal gefragt
+let proFor = null;
+function loadProStatus() {
+  const id = state.channel?.id ?? 'default';
+  if (proFor === id || !state.api?.proStatus) return;
+  proFor = id;
+  state.api.proStatus().then((p) => {
+    $('#acct-pro').hidden = !p?.pro;
+    if (p?.until) $('#acct-pro').title = `StreamHelp Pro bis ${new Date(p.until).toLocaleDateString('de-DE')}`;
+    // Bezahltes Abo (Migration …_billing.sql): „Abo verwalten“ führt den Inhaber ins Kundenportal von Stripe
+    const billing = $('#acct-billing');
+    if (billing) {
+      billing.hidden = !(p?.status && p?.is_owner);
+      const end = p?.period_end ? new Date(p.period_end).toLocaleDateString('de-DE') : '';
+      $('#acct-billing-sub').textContent = p?.cancel_at_period_end ? `gekündigt zum ${end}` : p?.paid && end ? `nächste Zahlung ${end}` : p?.status ? 'Zahlung prüfen' : '';
+    }
+  }).catch((err) => {
+    $('#acct-pro').hidden = true;
+    if (!/pro_status/.test(err?.message ?? '')) console.warn('Pro-Status:', err?.message ?? err); // Migration fehlt: still
+  });
+}
+
+// ---------- Als Nächstes & Glücksrad ----------
+// Eine Kachel wandert erst ins Archiv, wenn der Termin ein paar Stunden
+// zurückliegt – solange bleibt sie mit "jetzt live" bei den Content-Ideen stehen.
+const LIVE_WINDOW = 6 * 60 * 60 * 1000;
+const isArchived = (t) => t.kind === 'countdown' && t.target_at && Date.now() - Date.parse(t.target_at) > LIVE_WINDOW;
+// "Ärgere den Streamer", Bingo, Fragen, Dino, Kisten-Shop und Win-Challenge haben ein Startdatum für Zuschauer (target_at).
+// Admins können vorher schon alles benutzen und testen.
+const isLocked = (t) => ['prank', 'bingo', 'questions', 'pet', 'shop', 'challenge', ...EXTRA_KINDS].includes(t.kind)
+  && !state.profile?.is_admin && !!t.target_at && Date.parse(t.target_at) > Date.now();
+const tileByKind = (kind) => state.tiles.find((t) => t.kind === kind);
+const streamerName = () => state.streamer.name || 'Streamer';
+const streamerLogin = () => state.streamer.login || CONFIG.CHANNEL;
+
+// Name des Streamers überall eintragen (Kopfzeile, Anmeldeseite, Titel)
+const PAGE_TITLE = document.title; // aus index.html (für Suchmaschinen und Lesezeichen)
+function applyStreamer(info) {
+  if (info?.name) state.streamer.name = info.name;
+  if (info?.login) state.streamer.login = info.login;
+  if (info) state.streamer.connected = !!info.connected;
+  document.querySelectorAll('[data-streamer]').forEach((el) => { el.textContent = streamerName(); });
+  if (!OBS_PAGE) document.title = state.streamer.connected ? `StreamHelp · ${streamerName()}` : tr(PAGE_TITLE);
+}
+async function loadStreamer() {
+  try {
+    applyStreamer(await state.api.streamerInfo());
+  } catch (err) {
+    console.warn('Streamer-Name nicht verfügbar (Migration …_streamer_mods.sql?):', err);
+    applyStreamer(null);
+  }
+}
+// Kanal ohne Twitch-Verbindung: sein Name aus der Anmeldung
+function channelNameFallback() {
+  if (!state.streamer.connected && state.channel) {
+    applyStreamer({ connected: false, name: state.channel.display_name || state.channel.login, login: state.channel.login });
+  }
+}
+
+// ============================================================
+// Kanäle (Plattform, js/channel.js): welcher Streamer, wechseln, Streamer werden
+// ============================================================
+const LINK_ONCE = 'sh_channel_link';      // ausdrücklich gewählter Kanal (Link, Klick) – hat Vorrang
+const WANTS_STREAMER = 'sh_wants_streamer'; // nach dem Twitch-Login gleich „Kanal anmelden“ zeigen
+const onceStore = {
+  get(key) { try { return sessionStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { if (value == null) sessionStorage.removeItem(key); else sessionStorage.setItem(key, value); } catch { /* egal */ } },
+};
+const channelLabel = (c) => c?.display_name || c?.login || 'Streamer';
+
+// Freunde werben (Migration …_raid_network.sql): ?ref=<login> merken (30 Tage, nur in diesem Browser) und nach
+// „Kanal anmelden“ dem neuen Kanal zuordnen. Fehlt die Migration oder passt der Link nicht, passiert nichts.
+const REF_KEY = 'sh_ref';
+function rememberReferral(ref) {
+  if (!/^[a-z0-9_]{1,25}$/i.test(ref ?? '')) return;
+  try { localStorage.setItem(REF_KEY, JSON.stringify({ login: ref.toLowerCase(), at: Date.now() })); } catch { /* privater Modus */ }
+}
+async function claimReferral(api) {
+  let ref = null;
+  try { ref = JSON.parse(localStorage.getItem(REF_KEY) ?? 'null'); } catch { return; }
+  if (!ref?.login || Date.now() - (ref.at ?? 0) > 30 * 864e5 || !api.referralClaim) return;
+  try {
+    await api.referralClaim(ref.login);
+    localStorage.removeItem(REF_KEY);
+  } catch (err) {
+    console.warn('Freunde werben:', err?.message ?? err);
+  }
+}
+
+function channelAvatar(el, c) {
+  el.replaceChildren();
+  const src = avatarSrc(c?.avatar_url); // über den eigenen Server, nicht direkt bei Twitch (js/avatar.js)
+  if (src) {
+    const img = new Image();
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.src = src;
+    el.append(img);
+  } else {
+    el.textContent = channelLabel(c).slice(0, 1).toUpperCase();
+  }
+}
+
+// Ohne Anmeldung (Startseite): den verlinkten Kanal schon zeigen
+async function previewChannel(key) {
+  if (!key) return;
+  const res = await state.api.resolveChannel(key).catch(() => ({ platform: false, channel: null }));
+  if (res.platform && res.channel) {
+    setChannel(res.channel);
+    Object.assign(state, { platform: true, channel: res.channel });
+  }
+}
+
+// Reihenfolge: Link → eigener (freigeschalteter) Kanal → zuletzt besuchter → Standard-Kanal
+async function chooseChannel() {
+  const api = state.api;
+  const linked = channelFromUrl() ?? cleanChannel(onceStore.get(LINK_ONCE));
+  onceStore.set(LINK_ONCE, null);
+  const mine = await api.channelMine().catch(() => null);
+  state.myChannel = mine;
+  const key = linked ?? (mine?.status === 'active' ? mine.id : null) ?? rememberedChannel();
+  const none = { platform: false, channel: null };
+  let res = await api.resolveChannel(key).catch((err) => { console.warn('Kanal nicht lesbar:', err); return none; });
+  if (res.platform && !res.channel && key) {
+    if (linked) toast(`Den Kanal „${linked}“ gibt es nicht oder er ist noch nicht freigeschaltet – du siehst die Startseite von StreamHelp.`, 'error', 9000);
+    rememberChannel(null);
+    res = await api.resolveChannel(null).catch(() => none);
+  }
+  Object.assign(state, { platform: res.platform, channel: res.channel });
+  setChannel(res.channel, res.platform);
+  setAffiliate(res.channel?.affiliate ?? null); // Kanal ohne Twitch-Affiliate: Hinweise statt Kanalpunkte (js/affiliate.js)
+  if (!res.platform) return;
+  rememberChannel(res.channel && !res.channel.is_default ? res.channel.login || res.channel.id : null);
+  // Link zum Teilen in der Adresszeile
+  if (!OBS_PAGE) {
+    const p = channelParam();
+    const hash = p ? `#/c/${p}` : '';
+    if (location.hash !== hash && (!location.hash || /^#\/c\//.test(location.hash))) {
+      history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+    }
+  }
+}
+
+function switchChannel(c) {
+  closeDialog($('#channel-dialog'));
+  if (c.id === state.channel?.id) return;
+  onceStore.set(LINK_ONCE, c.login || c.id);
+  rememberChannel(c.is_default ? null : c.login || c.id);
+  history.replaceState(null, '', `${location.pathname}${c.is_default ? '' : `#/c/${c.login || c.id}`}`);
+  location.reload();
+}
+
+function channelLink(c) {
+  const url = new URL(location.pathname, location.href);
+  url.hash = c.is_default ? '' : `/c/${c.login || c.id}`;
+  return url.href;
+}
+
+function renderChannelBar() {
+  setMyChannel(state.platform ? state.myChannel : null); // Timeout, Overlay-Pause, Verwarnung (js/platform-notices.js)
+  const btn = $('#channel-btn');
+  btn.hidden = !state.platform || !state.channel || OBS_PAGE;
+  if (!btn.hidden) {
+    channelAvatar($('#channel-avatar'), state.channel);
+    $('#channel-name').textContent = channelLabel(state.channel);
+  }
+  const mine = state.myChannel;
+  const banner = $('#channel-banner');
+  banner.hidden = !state.platform || !mine || mine.status === 'active' || OBS_PAGE;
+  if (banner.hidden) return;
+  const blocked = mine.status === 'blocked';
+  banner.querySelector('.channel-banner-ico').textContent = blocked ? '🚫' : '⏳';
+  $('#channel-banner-title').textContent = blocked ? `Dein Kanal „${channelLabel(mine)}“ ist gesperrt` : `Dein Kanal „${channelLabel(mine)}“ wartet auf Freischaltung`;
+  $('#channel-banner-detail').textContent = blocked
+    ? mine.admin_note || 'Bei Fragen melde dich beim StreamHelp-Team.'
+    : 'Wir schalten neue Kanäle von Hand frei. Bis dahin kannst du dich bei anderen Streamern umsehen.';
+}
+
+async function openChannelDialog() {
+  const dlg = $('#channel-dialog');
+  const [mine, list] = await Promise.all([
+    state.api.channelMine().catch(() => state.myChannel),
+    state.api.channelsList().catch(() => []),
+  ]);
+  state.myChannel = mine;
+  renderChannelBar();
+  const box = $('#channels-mine');
+  box.replaceChildren();
+  if (mine) {
+    const status = { active: '✅ Freigeschaltet', pending: '⏳ Wartet auf Freischaltung', blocked: '🚫 Gesperrt' }[mine.status] ?? mine.status;
+    box.append(h('p', {}, h('b', {}, 'Dein Kanal: '), channelLabel(mine), ' · ', h('small', {}, status)));
+    if (mine.status === 'active') {
+      const input = h('input', { type: 'text', readonly: true, value: channelLink(mine), 'aria-label': 'Link zu deinem Kanal' });
+      box.append(
+        h('p', { class: 'form-hint' }, 'Diesen Link kannst du deinen Zuschauern geben (z. B. im Twitch-Panel oder als Chat-Befehl):'),
+        h('div', { class: 'channels-link' }, input,
+          h('button', {
+            type: 'button', class: 'btn btn--ghost btn--sm',
+            onclick: async () => {
+              try { await navigator.clipboard.writeText(input.value); toast('Link kopiert.', 'ok', 2000); } catch { input.select(); }
+            },
+          }, '📋 Kopieren')),
+      );
+      if (mine.id !== state.channel?.id) {
+        box.append(h('div', {}, h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: () => switchChannel(mine) }, '🎥 Zu meinem Kanal')));
+      }
+    }
+  } else {
+    box.append(
+      h('p', {}, h('b', {}, 'Du streamst selbst?'), ' Melde deinen Kanal an – wir schalten ihn kurz von Hand frei.'),
+      h('div', {}, h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: () => { closeDialog(dlg); becomeStreamer(); } }, '🎥 Kanal anmelden')),
+    );
+  }
+  const ul = $('#channels-list');
+  ul.replaceChildren(...list.map((c) => {
+    const ava = h('span', { class: 'channels-ava', 'aria-hidden': 'true' });
+    channelAvatar(ava, c);
+    const here = c.id === state.channel?.id;
+    return h('li', {}, h('button', { type: 'button', 'aria-current': here ? 'true' : 'false', onclick: () => switchChannel(c) },
+      ava, h('b', {}, channelLabel(c)), h('small', {}, here ? 'hier bist du' : c.is_owner ? 'dein Kanal' : '')));
+  }));
+  if (!list.length) ul.append(h('li', { class: 'form-hint' }, 'Noch keine freigeschalteten Kanäle.'));
+  if (!dlg.open) dlg.showModal();
+}
+
+// ---------- Nach der ersten Anmeldung: Zuschauer oder Streamer? ----------
+// „Ja, ich streame“ ist ein einziger Schritt: mit Twitch anmelden (falls nötig), Kanal anmelden und gleich
+// danach auf Twitch freigeben (Chat-Bot, Alerts, ggf. Kanalpunkte) – auch solange der Kanal noch wartet.
+const CONNECT_ASKED = 'sh_connect_asked'; // pro Sitzung höchstens einmal an das Verbinden erinnern
+async function maybeAskAccountType() {
+  if (!state.platform || OBS_PAGE) return;
+  if (onceStore.get(WANTS_STREAMER) === '1') {
+    onceStore.set(WANTS_STREAMER, null);
+    if (state.myChannel?.status !== 'active') becomeStreamer();
+    return;
+  }
+  if (state.myChannel) {
+    // Auf Twitch abgebrochen? Dann den Knopf noch einmal anbieten
+    const mine = state.myChannel;
+    let asked = false;
+    try { asked = sessionStorage.getItem(CONNECT_ASKED) === '1'; sessionStorage.setItem(CONNECT_ASKED, '1'); } catch { asked = true; }
+    if (mine.status === 'pending' && mine.twitch_connected === false && !asked && !$('#account-dialog').open) openAccountDialog('done');
+    return;
+  }
+  const type = await state.api.accountType().catch(() => 'unknown');
+  if (type === null && state.user) openAccountDialog('ask');
+}
+
+function openAccountDialog(step = 'ask', text = '') {
+  const dlg = $('#account-dialog');
+  dlg.querySelectorAll('[data-step]').forEach((el) => { el.hidden = el.dataset.step !== step; });
+  if (step === 'connecting' && text) dlg.querySelector('[data-connecting-text]').textContent = text;
+  if (step === 'done') {
+    const mine = state.myChannel;
+    const needsTwitch = !state.api.demo && mine?.status === 'pending' && mine.twitch_connected === false;
+    dlg.querySelector('[data-done-text]').innerHTML = mine?.twitch_connected
+      ? '<b>Twitch ist verbunden ✓</b> Dein Kanal wartet jetzt nur noch auf die Freischaltung. Sobald er frei ist, siehst du hier dein eigenes Dashboard.'
+      : '<b>Danke!</b> Dein Kanal wartet jetzt auf die Freischaltung. Sobald er frei ist, siehst du hier dein eigenes Dashboard.';
+    dlg.querySelector('[data-done-connect-hint]').hidden = !needsTwitch;
+    dlg.querySelector('[data-account-connect]').hidden = !needsTwitch;
+  }
+  if (!dlg.open) dlg.showModal();
+}
+
+async function becomeStreamer() {
+  const api = state.api;
+  // Erst mit Twitch anmelden – danach geht es hier von selbst weiter (maybeAskAccountType)
+  if (!(await api.hasTwitchLogin().catch(() => false))) {
+    openAccountDialog('connecting', 'Erst mit Twitch anmelden …');
+    onceStore.set(WANTS_STREAMER, '1');
+    try {
+      await api.signInWithProvider('twitch');
+    } catch (err) {
+      onceStore.set(WANTS_STREAMER, null);
+      toast(germanError(err), 'error');
+      openAccountDialog('ask');
+    }
+    return;
+  }
+  openAccountDialog('connecting', 'Dein Kanal wird angemeldet …');
+  try {
+    if (!state.myChannel) state.myChannel = await api.channelApply('');
+    await claimReferral(api);
+    renderChannelBar();
+    if (state.myChannel?.status === 'active' && state.myChannel.twitch_connected !== false) {
+      closeDialog($('#account-dialog'));
+      toast('Dein Kanal ist schon freigeschaltet.', 'ok');
+      switchChannel(state.myChannel);
+      return;
+    }
+    if (api.demo || state.myChannel?.twitch_connected) { openAccountDialog('done'); return; }
+    await connectMyTwitch();
+  } catch (err) {
+    toast(germanError(err), 'error', 8000);
+    openAccountDialog(state.myChannel ? 'done' : 'ask');
+  }
+}
+
+// Twitch-Freigabe für den eigenen Kanal (auch wenn gerade ein anderer Kanal offen ist)
+async function connectMyTwitch() {
+  openAccountDialog('connecting', 'Gleich geht es zu Twitch …');
+  try { sessionStorage.setItem('zd_twitch_flow', '1'); } catch { /* egal */ }
+  await state.api.twitchConnect({ channelId: state.myChannel?.id }); // leitet zu Twitch weiter
+}
+
+function setupChannelUi() {
+  $('#channel-btn').addEventListener('click', openChannelDialog);
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-open-channels]')) openChannelDialog();
+  });
+  // Startseite: Klick auf einen Kanal bzw. „Kanal anmelden“ merkt sich das für nach dem Anmelden
+  document.addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-channel]');
+    if (pick) onceStore.set(LINK_ONCE, pick.dataset.channel);
+    if (e.target.closest('[data-become-streamer]')) onceStore.set(WANTS_STREAMER, '1');
+  }, true);
+  const dlg = $('#account-dialog');
+  dlg.addEventListener('click', async (e) => {
+    const choice = e.target.closest('[data-account]');
+    if (choice?.dataset.account === 'viewer') {
+      try {
+        await state.api.setAccountType('viewer');
+        closeDialog(dlg);
+        toast('Viel Spaß beim Zuschauen! Andere Streamer findest du oben unter „Kanal“.', 'ok', 6000);
+      } catch (err) { toast(germanError(err), 'error'); }
+    }
+    if (choice?.dataset.account === 'streamer') becomeStreamer();
+    const connect = e.target.closest('[data-account-connect]');
+    if (connect) {
+      connect.disabled = true;
+      connectMyTwitch().catch((err) => { toast(germanError(err), 'error', 8000); openAccountDialog('done'); }).finally(() => { connect.disabled = false; });
+    }
+  });
+  // Anderer Kanal in der Adresszeile (Link eingefügt, Zurück-Knopf): neu laden
+  addEventListener('hashchange', () => {
+    const key = channelFromUrl();
+    const c = state.channel;
+    if (!state.user || !state.platform || !key || !c) return;
+    if (key === c.id || key === c.login) return;
+    onceStore.set(LINK_ONCE, key);
+    location.reload();
+  });
+}
+
+// Startseite: alle freigeschalteten Kanäle
+let landingChannelsDone = false;
+async function renderLandingChannels() {
+  if (landingChannelsDone || !state.api) return;
+  landingChannelsDone = true;
+  const list = await state.api.channelsList().catch(() => []);
+  const section = $('#streamer');
+  if (!list.length) return;
+  section.hidden = false;
+  document.querySelectorAll('[data-for-channels]').forEach((el) => { el.hidden = false; });
+  const here = state.channel && !state.channel.is_default ? state.channel : null;
+  if (here) {
+    $('#lp-channels-title').textContent = tr('Willkommen bei {name}!', { name: channelLabel(here) });
+    $('#lp-channels-hint').textContent = tr('Melde dich an und mach im Stream mit – oder schau dir die anderen Streamer an.');
+  }
+  $('#lp-channels').replaceChildren(...list.map((c) => {
+    const ava = h('span', { class: 'nc-channel-ava', 'aria-hidden': 'true' });
+    channelAvatar(ava, c);
+    return h('li', {}, h('button', {
+      type: 'button', class: `nc-channel${here && c.id === here.id ? ' is-current' : ''}`, 'data-go': 'login', 'data-channel': c.login || c.id,
+    }, ava, h('span', {}, h('b', {}, channelLabel(c)), h('small', {}, c.login ? `twitch.tv/${c.login}` : 'StreamHelp'))));
+  }));
+}
+
+function startLabel(iso) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })} · ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`;
+}
+
+// Für Admins auf der Kachel: ab wann Zuschauer mitmachen können
+function startNote(tile) {
+  if (!state.profile?.is_admin || !tile.target_at || Date.parse(tile.target_at) <= Date.now()) return null;
+  const note = document.createElement('span');
+  note.className = 'tile-note';
+  const d = new Date(tile.target_at);
+  note.textContent = `🔒 Zuschauer ab ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}, ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+  note.title = `Zuschauer sehen bis ${startLabel(tile.target_at)} einen Countdown`;
+  return note;
+}
+
+// Der nächste Termin, der noch bevorsteht – sonst der, der gerade läuft.
+// Begrüßung oben auf den Content-Ideen (ohne Countdown – Termine stehen unter „Profil & Zeitplan“)
+function renderHero() {
+  $('#next-desc').textContent = 'Schön, dass du da bist. Such dir eine Idee für deinen nächsten Stream aus.';
+}
+
+// ---------- Archiv ----------
+function renderArchive() {
+  const list = $('#archive-list');
+  const rows = state.tiles.filter(isArchived)
+    .sort((a, b) => Date.parse(b.target_at) - Date.parse(a.target_at));
+
+  if (!rows.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Noch keine vergangenen Streams.';
+    list.replaceChildren(li);
+    return;
+  }
+
+  list.replaceChildren(...rows.map((tile) => {
+    const date = new Date(tile.target_at);
+    const li = document.createElement('li');
+
+    const when = document.createElement('span');
+    when.className = 'ar-date';
+    when.textContent = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
+    const main = document.createElement('span');
+    main.className = 'ar-main';
+    const title = document.createElement('span');
+    title.className = 'ar-title';
+    title.textContent = tile.title;
+    const meta = document.createElement('span');
+    meta.className = 'ar-meta';
+    meta.textContent = `${date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr · ${tile.description}`;
+    main.append(title, meta);
+
+    const vod = document.createElement('a');
+    vod.className = 'ar-vod';
+    vod.hidden = !streamerLogin();
+    vod.href = `https://www.twitch.tv/${encodeURIComponent(streamerLogin())}/videos`;
+    vod.target = '_blank';
+    vod.rel = 'noopener';
+    vod.textContent = 'VOD';
+    vod.title = `Aufzeichnungen von ${streamerName()} auf Twitch`;
+
+    li.append(when, main, vod);
+    return li;
+  }));
+}
+
+// ---------- Vorschläge ----------
+function renderIdeas() {
+  $('#ideas-panel').hidden = !state.ideasOn;
+  if (!state.ideasOn) return;
+
+  const list = $('#ideas-list');
+  if (!state.ideas.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Noch keine Vorschläge – mach den Anfang.';
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...state.ideas.map(buildIdea));
+}
+
+function buildIdea(idea) {
+  const li = document.createElement('li');
+
+  const main = document.createElement('span');
+  main.className = 'idea-main';
+  const text = document.createElement('span');
+  text.className = 'idea-text';
+  text.textContent = idea.text;
+  const by = document.createElement('span');
+  by.className = 'idea-by';
+  by.textContent = `von ${idea.author || 'anonym'}`;
+  main.append(text, by);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'vote-btn';
+  paintVote(btn, idea);
+  btn.addEventListener('click', () => voteIdea(idea, btn));
+
+  li.append(main, btn);
+  return li;
+}
+
+function paintVote(btn, idea) {
+  btn.textContent = String(idea.votes);
+  btn.classList.toggle('is-voted', !!idea.voted);
+  btn.setAttribute('aria-pressed', String(!!idea.voted));
+  btn.setAttribute('aria-label', `${idea.votes} Stimmen für „${idea.text}“`);
+}
+
+async function voteIdea(idea, btn) {
+  const on = !idea.voted;
+  btn.disabled = true;
+  // Erst umschalten, damit der Klick sofort ankommt – bei Fehler zurückdrehen.
+  idea.voted = on;
+  idea.votes += on ? 1 : -1;
+  paintVote(btn, idea);
+  try {
+    await state.api.voteIdea(idea.id, on);
+  } catch (err) {
+    idea.voted = !on;
+    idea.votes += on ? -1 : 1;
+    paintVote(btn, idea);
+    toast(`Stimme konnte nicht gespeichert werden: ${germanError(err)}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function submitIdea(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const text = form.text.value.trim();
+  if (text.length < 3) return formMsg(form, 'Bitte mindestens 3 Zeichen eingeben.');
+  await withLoading(form, async () => {
+    const idea = await state.api.addIdea(text);
+    state.ideas = [idea, ...state.ideas];
+    form.reset();
+    renderIdeas();
+    toast('Danke! Dein Vorschlag ist eingereicht.', 'ok');
+  });
+}
+
+// ---------- Kacheln ----------
+// Arten für die Filter-Chips über dem Raster (Farbe = Punkt auf Chip und Kachel)
+const IDEA_CATS = [
+  { id: 'all', label: 'Alle' },
+  { id: 'join', label: 'Mitmachen', dot: 'var(--acc-3)' },
+  { id: 'chat', label: 'Chat-Spiele', dot: '#4fd6ff' },
+  { id: 'overlay', label: 'Overlay', dot: '#3ddc84' },
+];
+const CHAT_KINDS = new Set(['forbidden', 'quiz', 'queue', 'giveaway', 'hotwords', 'poll', 'counter', 'chatcontrol', 'cup', 'bet', 'scratch']);
+const OVERLAY_KINDS = new Set(['wheel', 'subathon', 'pause', 'gamewheel', 'heart', 'emoterain']);
+const ideaCat = (t) => (CHAT_KINDS.has(t.kind) ? 'chat' : OVERLAY_KINDS.has(t.kind) ? 'overlay' : 'join');
+const IDEAS_VIEW_KEY = 'sh_ideas_view';
+function ideasView() {
+  try { return localStorage.getItem(IDEAS_VIEW_KEY) === 'list' ? 'list' : 'grid'; } catch { return 'grid'; }
+}
+
+function renderGrid() {
+  const grid = $('#grid');
+  // „Ärgere den Streamer“ und das Bingo haben keinen Termin und stehen immer bei den Content-Ideen.
+  // Vor dem Start sehen Zuschauer statt der Aktion einen Countdown (isLocked).
+  const build = {
+    wheel: buildWheelTile, prank: buildPrankTile, bingo: buildBingoTile, questions: buildQuestionsTile, pet: buildPetTile, shop: buildShopTile, challenge: buildChallengeTile,
+    ...Object.fromEntries(EXTRA_KINDS.map((k) => [k, buildExtraTile])),
+  };
+  // Termin-Kacheln (countdown) stehen nicht mehr bei den Ideen – sie bleiben nur für Archiv und Overlay „Nächster Stream“
+  const all = state.tiles.filter((t) => build[t.kind]);
+  // Games: je Game erst die passenden Ideen, dann was zu jedem Game passt
+  const game = gameById(selectedGame());
+  const { mine, general } = game ? splitTiles(all, game.id) : { mine: [], general: all };
+  const pool = [...mine, ...general];
+  // Suche (Titel + Beschreibung), Art und Favoriten zuerst – Favoriten und Ansicht nur in diesem Browser
+  const query = ($('#grid-search')?.value ?? '').trim().toLowerCase();
+  const found = pool.filter((t) => !query || `${t.title} ${t.description ?? ''}`.toLowerCase().includes(query));
+  if (!IDEA_CATS.some((c) => c.id === state.ideaCat)) state.ideaCat = 'all';
+  const cat = state.ideaCat;
+  const favs = favTiles();
+  const shown = found.filter((t) => cat === 'all' || ideaCat(t) === cat)
+    .sort((a, b) => favs.has(b.id) - favs.has(a.id));
+  renderCatChips(found);
+  $('#plan-count').textContent = `${shown.length} von ${pool.length}`;
+  $('#grid-title').textContent = game ? `Ideen für ${game.name}` : 'Content-Ideen';
+  const view = ideasView();
+  grid.classList.toggle('is-list', view === 'list');
+  $('#view-toggle').querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+
+  const hasPro = channelPro();
+  const make = (tile, i) => withFav(tile, withPro(tile, withCat(tile, (build[tile.kind] && !isLocked(tile) ? build[tile.kind] : buildTile)(tile, i)), hasPro), favs);
+  if (!shown.length) {
+    grid.replaceChildren(h('div', { class: 'grid-empty' }, query ? `Keine Idee passt zu „${query}“. ` : 'Keine Idee passt zu diesem Filter. ',
+      h('button', { type: 'button', class: 'link-btn', onclick: resetIdeaFilters }, 'Filter zurücksetzen')));
+  } else if (!game || query || cat !== 'all') {
+    grid.replaceChildren(...shown.map(make));
+  } else {
+    const isFav = (t) => favs.has(t.id);
+    const { mine: mineShown, general: generalShown } = splitTiles(shown, game.id);
+    // Favoriten (die zu diesem Game passen) als eigene Gruppe ganz oben
+    const starred = shown.filter(isFav);
+    const rest = (list) => list.filter((t) => !isFav(t));
+    let i = 0;
+    grid.replaceChildren(
+      ...(starred.length ? [gridHead('★ Deine Favoriten'), ...starred.map((t) => make(t, i++))] : []),
+      gridHead(`${game.icon} Passt zu ${game.name}`),
+      ...(mineShown.length ? rest(mineShown).map((t) => make(t, i++)) : [buildGamePlaceholder(game)]),
+      ...(rest(generalShown).length ? [gridHead('🎮 Passt zu jedem Game'), ...rest(generalShown).map((t) => make(t, i++))] : []),
+    );
+  }
+  // Läuft ein Countdown ab, wird die Kachel von selbst zur Aktion.
+  state.unlockAt = Math.min(...shown.filter(isLocked).map((t) => Date.parse(t.target_at)), Infinity);
+  updateCountdowns();  // Streameransicht offen? Dann die Content-Liste mitziehen
+  if ($('#obs-dialog')?.open && state.profile?.is_admin) renderObsContent();
+}
+
+function renderCatChips(found) {
+  const cur = state.ideaCat ?? 'all';
+  $('#cat-chips').replaceChildren(...IDEA_CATS.map((c) => {
+    const n = c.id === 'all' ? found.length : found.filter((t) => ideaCat(t) === c.id).length;
+    return h('button', {
+      type: 'button', class: 'cat-chip', 'aria-pressed': String(c.id === cur), hidden: c.id !== 'all' && c.id !== cur && !n,
+      style: c.dot ? `--dot:${c.dot}` : null, onclick: () => { state.ideaCat = c.id; renderGrid(); },
+    }, c.dot && h('span', { class: 'cat-dot', 'aria-hidden': 'true' }), c.label, h('span', { class: 'cat-n' }, String(n)));
+  }));
+}
+
+function resetIdeaFilters() {
+  state.ideaCat = 'all';
+  $('#grid-search').value = '';
+  renderGrid();
+}
+
+// Art der Idee als Plakette oben links auf der Kachel
+function withCat(tile, el) {
+  if (!el.classList.contains('tile')) return el;
+  const c = IDEA_CATS.find((x) => x.id === ideaCat(tile));
+  el.dataset.cat = c.id;
+  el.style.setProperty('--dot', c.dot);
+  el.prepend(h('span', { class: 'tile-cat' }, h('span', { class: 'cat-dot', 'aria-hidden': 'true' }), c.label));
+  return el;
+}
+
+// Glücksrad: eigene Kachel im Raster, die Scheibe dreht sich im Hintergrund
+function buildWheelTile(tile, i) {
+  const el = buildActionTile(tile, i, { cls: 'tile--wheel', cta: 'Rad drehen →', onClick: openWheel });
+  const [c1, c2, c3] = state.variants.map((v) => v.color);
+  el.style.setProperty('--c1', c1 ?? '#ffb81c');
+  el.style.setProperty('--c2', c2 ?? '#3ddc84');
+  el.style.setProperty('--c3', c3 ?? '#9146ff');
+  el.querySelector('.tile-bg').after(h('span', { class: 'wheel-card-disc', 'aria-hidden': 'true' }));
+  el.querySelector('.tile-live-status').textContent = state.twitch.reward_active
+    ? `${Number(state.twitch.reward_cost ?? 10000).toLocaleString('de-DE')} Punkte`
+    : `${state.variants.length} Varianten`;
+  return el;
+}
+
+// ============================================================
+// Einführung (js/intro.js, js/tour.js): beim ersten Besuch von selbst, danach links unter „Einführung“
+// ============================================================
+const INTRO = {
+  userId: () => state.user?.id,
+  userName: () => state.profile?.username ?? '',
+  role: () => (START.isStreamer() ? 'streamer' : isTeam() ? 'team' : 'viewer'),
+  // Tour läuft auf den Content-Ideen: Handy-Leiste zu, Filter zurück, „Dein Start“ wieder da
+  prepare: () => {
+    if (!$('#sb-scrim').hidden) $('#sb-scrim').click();
+    setPage('ideas');
+    resetIdeaFilters();
+    showStartAgain(START);
+  },
+  goStart: () => {
+    setPage('ideas');
+    showStartAgain(START);
+    setTimeout(() => $('#start-slot')?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' }), 350);
+  },
+};
+
+function setupTour() {
+  setupIntro(INTRO);
+  $('#tour-btn').addEventListener('click', () => {
+    if (!$('#sb-scrim').hidden) $('#sb-scrim').click();
+    openIntro();
+  });
+}
+
+// ============================================================
+// Games (js/games.js, Migration …_games.sql)
+// ============================================================
+const gameKey = () => `sh_game_${state.channel?.id ?? 'default'}`;
+
+async function loadGames() {
+  const g = state.games ??= { data: null, on: false, selected: null, subscribed: false };
+  const data = await state.api.getStreamGames().catch(() => null);
+  g.on = data !== null;
+  g.data = { ...DEFAULT_GAMES, ...(data ?? {}) };
+  if (g.on && !g.subscribed) {
+    g.subscribed = true;
+    state.api.onStreamGames((row) => {
+      g.data = { ...DEFAULT_GAMES, ...row };
+      renderGames();
+      renderGrid();
+    });
+  }
+  renderGames();
+  renderGrid();
+}
+
+// Angezeigtes Game: hier gewählt → gerade live → zuletzt gewählt → Standard-Game → erstes Game
+function selectedGame() {
+  const g = state.games;
+  if (!g?.on) return 'all';
+  const ids = activeGames(g.data).map((x) => x.id);
+  const ok = (id) => id === 'all' || ids.includes(id);
+  if (g.selected && ok(g.selected)) return g.selected;
+  const live = liveGameId(g.data);
+  if (live && ids.includes(live)) return live;
+  let stored = null;
+  try { stored = localStorage.getItem(gameKey()); } catch { /* egal */ }
+  if (stored && ok(stored)) return stored;
+  if (g.data.current && ids.includes(g.data.current)) return g.data.current;
+  return ids[0] ?? 'all';
+}
+
+function selectGame(id) {
+  state.games.selected = id;
+  try { localStorage.setItem(gameKey(), id); } catch { /* egal */ }
+  renderGames();
+  renderGrid();
+}
+
+function renderGames() {
+  const g = state.games;
+  const section = $('#games-section');
+  section.hidden = !g?.on;
+  if (section.hidden) return;
+  $('#games-edit').hidden = !state.profile?.is_admin;
+  const sel = selectedGame();
+  const live = liveGameId(g.data);
+  const items = [{ id: 'all', name: 'Alle Games', icon: '✨' }, ...activeGames(g.data)];
+  $('#games-strip').replaceChildren(...items.map((game) => h('button', {
+    type: 'button', role: 'tab', class: 'game-chip', 'aria-selected': String(game.id === sel), onclick: () => selectGame(game.id),
+  }, h('span', { class: 'game-chip-ico', 'aria-hidden': 'true' }, game.icon), h('span', { class: 'game-chip-name' }, game.name),
+  game.id === live && h('span', { class: 'game-chip-live' }, 'Live'))));
+  const liveText = $('#games-live');
+  const recent = g.data.live_at && Date.now() - Date.parse(g.data.live_at) < 15 * 60_000;
+  liveText.hidden = !recent || !g.data.live_category;
+  if (!liveText.hidden) {
+    liveText.textContent = live
+      ? `🔴 ${streamerName()} ist gerade live in „${g.data.live_category}“.`
+      : `🔴 ${streamerName()} ist gerade live in „${g.data.live_category}“ – für dieses Game gibt es noch keine eigene Auswahl.`;
+  }
+}
+
+// Favoriten-Stern: liegt neben der Kachel (Kacheln sind selbst Knöpfe – Knopf im Knopf geht nicht)
+const favKey = () => `sh_favs_${state.user?.id ?? ''}_${state.channel?.id ?? 'default'}`;
+function favTiles() {
+  try { return new Set(JSON.parse(localStorage.getItem(favKey())) ?? []); } catch { return new Set(); }
+}
+// StreamHelp Pro (js/pro.js): hat der Kanal Pro? (channel_has_pro, …_pro_features.sql – fehlt die Migration: nein)
+function channelPro() {
+  const id = state.channel?.id ?? 'default';
+  if (state.pro.for !== id && state.api?.channelHasPro) {
+    state.pro.for = id;
+    state.api.channelHasPro().then((v) => {
+      if (!!v === state.pro.has) return;
+      state.pro.has = !!v;
+      if (state.page === 'ideas') renderGrid();
+    }).catch((err) => {
+      state.pro.has = false;
+      if (!/channel_has_pro/.test(err?.message ?? '')) console.warn('Pro-Abfrage:', err?.message ?? err);
+    });
+  }
+  return state.pro.has;
+}
+
+// Pro-Ideen: Abzeichen „Pro“; gilt Pro schon (PRO_ENFORCED) und hat der Kanal keins, führt der Klick zum Vergleich
+function withPro(tile, el, hasPro) {
+  if (!el.classList.contains('tile') || !isProKind(tile.kind)) return el;
+  el.dataset.pro = '';
+  el.querySelector('.tile-cat')?.append(h('span', { class: 'tile-pro', title: `Gehört zu StreamHelp Pro (${PRO_PRICE.label})` }, 'Pro'));
+  if (!proLocked(tile.kind, hasPro)) return el;
+  el.classList.add('is-pro-locked');
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('.tile-fav')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const who = canStreamerView() ? 'dein Kanal' : 'dieser Kanal';
+    if (confirm(`„${tile.title}“ gehört zu StreamHelp Pro (${PRO_PRICE.label}) – ${who} hat noch kein Pro.\n\nVergleich Free und Pro ansehen?`)) window.open('pro.html', '_blank', 'noopener');
+  }, true);
+  return el;
+}
+
+function withFav(tile, el, favs) {
+  if (!el.classList.contains('tile') || el.classList.contains('tile--placeholder')) return el;
+  const on = favs.has(tile.id);
+  const star = h('button', {
+    type: 'button', class: `tile-fav${on ? ' is-on' : ''}`, 'aria-pressed': String(on),
+    'aria-label': on ? `„${tile.title}“ aus den Favoriten nehmen` : `„${tile.title}“ als Favorit markieren`,
+    title: on ? 'Favorit – steht immer vorne' : 'Als Favorit nach vorne holen',
+  }, on ? '★' : '☆');
+  star.addEventListener('click', () => {
+    const next = favTiles();
+    if (next.has(tile.id)) next.delete(tile.id); else next.add(tile.id);
+    try { localStorage.setItem(favKey(), JSON.stringify([...next])); } catch { /* privater Modus */ }
+    renderGrid();
+  });
+  return h('div', { class: `tile-wrap${on ? ' is-fav' : ''}` }, el, star);
+}
+
+function gridHead(text) {
+  return h('div', { class: 'grid-head' }, h('h3', {}, text));
+}
+
+function buildGamePlaceholder(game) {
+  return h('div', { class: 'tile tile--placeholder' },
+    h('div', { class: 'tile-body' },
+      h('span', { class: 'tile-placeholder-ico', 'aria-hidden': 'true' }, game.icon),
+      h('h3', { class: 'tile-title' }, 'Wir arbeiten an einer Content-Idee für dieses Game'),
+      h('p', { class: 'tile-desc' }, `Für ${game.name} gibt es noch keine eigene Idee. Bis dahin passen die Ideen unten zu jedem Game – und wer eine Idee hat, schlägt sie unter „Vorschläge“ vor.`),
+      h('button', { type: 'button', class: 'btn btn--ghost btn--sm', 'data-goto': 'community' }, '💡 Idee vorschlagen')));
+}
+
+function openGamesDialog() {
+  const dlg = $('#games-dialog');
+  const data = state.games.data;
+  const on = new Set(data.active);
+  $('#games-list').replaceChildren(...GAME_GROUPS.map(([group, label]) => h('section', { class: 'games-group' },
+    h('h3', { class: 'prank-h3' }, label),
+    h('div', { class: 'games-checks' }, ...GAMES.filter((g) => g.group === group).map((g) => h('label', { class: 'games-check' },
+      h('input', { type: 'checkbox', name: 'game', value: g.id, checked: on.has(g.id) }),
+      h('span', { class: 'game-chip-ico', 'aria-hidden': 'true' }, g.icon),
+      h('span', {}, h('b', {}, g.name), h('small', {}, g.ideas.length ? `${g.ideas.length} passende Ideen` : 'Content-Idee in Arbeit'))))))));
+  const form = $('#games-form');
+  form.auto.checked = data.auto !== false;
+  form.current.replaceChildren(h('option', { value: '' }, 'Erstes Game der Liste'),
+    ...GAMES.map((g) => h('option', { value: g.id, selected: g.id === data.current }, `${g.icon} ${g.name}`)));
+  dlg.showModal();
+}
+
+async function saveGames(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const active = [...form.querySelectorAll('input[name="game"]:checked')].map((i) => i.value);
+  if (!active.length) { toast('Mindestens ein Game anhaken.', 'error'); return; }
+  const btn = e.submitter;
+  btn.disabled = true;
+  try {
+    const row = await state.api.saveStreamGames({ active, current: form.current.value, auto: form.auto.checked });
+    state.games.data = { ...DEFAULT_GAMES, ...state.games.data, ...row };
+    closeDialog($('#games-dialog'));
+    renderGames();
+    renderGrid();
+    toast('Games gespeichert.', 'ok', 2500);
+  } catch (err) {
+    toast(germanError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// „Ärgere den Streamer“: kein Termin, geht jederzeit – statt Countdown die Wurfgeschosse.
+function buildPrankTile(tile, i) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'tile tile--prank theme-prank';
+  el.style.setProperty('--i', i);
+  el.dataset.id = tile.id;
+
+  const bg = document.createElement('div');
+  bg.className = 'tile-bg';
+  const img = safeUrl(tile.background);
+  if (img) bg.style.backgroundImage = `url(${JSON.stringify(img)})`;
+  el.append(bg, div('tile-shade'), div('tile-shine'));
+
+  const body = div('tile-body');
+  const tag = document.createElement('span');
+  tag.className = 'tile-tag';
+  tag.textContent = 'Jederzeit';
+  const title = document.createElement('h3');
+  title.className = 'tile-title';
+  title.textContent = tile.title;
+  const desc = document.createElement('p');
+  desc.className = 'tile-desc';
+  desc.textContent = tile.description;
+  const row = div('prank-tile-row');
+  const ammo = document.createElement('span');
+  ammo.className = 'prank-ammo';
+  ammo.setAttribute('aria-hidden', 'true');
+  ammo.textContent = '🍌🍅🥧🔊';
+  const cta = document.createElement('span');
+  cta.className = 'prank-cta';
+  cta.textContent = 'Streamer ärgern →';
+  row.append(ammo, cta);
+  body.append(tag, title, desc, ...[startNote(tile)].filter(Boolean), row);
+  el.append(body);
+  el.addEventListener('click', openPrank);
+  if (finePointer && !reducedMotion) addTilt(el);
+  return el;
+}
+
+function buildBingoTile(tile, i) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'tile tile--bingo theme-bingo';
+  el.style.setProperty('--i', i);
+  el.dataset.id = tile.id;
+
+  const bg = document.createElement('div');
+  bg.className = 'tile-bg';
+  const img = safeUrl(tile.background);
+  if (img) bg.style.backgroundImage = `url(${JSON.stringify(img)})`;
+  el.append(bg, div('tile-shade'), div('tile-shine'));
+
+  const body = div('tile-body');
+  const tag = document.createElement('span');
+  tag.className = 'tile-tag';
+  tag.textContent = 'Jederzeit';
+  const title = document.createElement('h3');
+  title.className = 'tile-title';
+  title.textContent = tile.title;
+  const desc = document.createElement('p');
+  desc.className = 'tile-desc';
+  desc.textContent = tile.description;
+  const row = div('prank-tile-row');
+  const progress = document.createElement('span');
+  progress.className = 'bingo-tile-progress';
+  const cta = document.createElement('span');
+  cta.className = 'prank-cta bingo-cta';
+  cta.textContent = 'Karte ansehen →';
+  row.append(progress, cta);
+  body.append(tag, title, desc, ...[startNote(tile)].filter(Boolean), row);
+  el.append(body);
+  el.addEventListener('click', openBingo);
+  if (finePointer && !reducedMotion) addTilt(el);
+  paintBingoTile(el);
+  return el;
+}
+
+// Fortschritt auf der Kachel, ohne das ganze Raster neu zu bauen
+function paintBingoTile(el = $('.tile--bingo')) {
+  const label = el?.querySelector('.bingo-tile-progress');
+  if (!label) return;
+  const { card } = state.bingo;
+  const st = bingoState(card);
+  label.textContent = !card
+    ? 'Noch keine Karte'
+    : `${st.done}/${st.total} gefunden${st.count ? ` · ${st.count}× Bingo` : ''}`;
+}
+
+function buildTile(tile, i) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = `tile tile--${tile.kind} theme-${tile.theme}`;
+  el.style.setProperty('--i', i);
+  el.dataset.id = tile.id;
+
+  const bg = document.createElement('div');
+  bg.className = 'tile-bg';
+  const img = safeUrl(tile.background);
+  if (img) bg.style.backgroundImage = `url(${JSON.stringify(img)})`;
+  el.append(bg, div('tile-shade'), div('tile-shine'));
+
+  const body = div('tile-body');
+  // Datum und kurzer Countdown („in 6 T“) in einer Zeile
+  const tag = document.createElement('span');
+  tag.className = 'tile-tag tile-tag--date';
+  const at = tile.target_at ? new Date(tile.target_at) : null;
+  tag.textContent = at && !Number.isNaN(at.getTime())
+    ? `${at.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}, ${at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+    : 'Termin folgt';
+  const cd = document.createElement('span');
+  cd.className = 'countdown countdown--mini';
+  if (at) cd.dataset.target = tile.target_at;
+  tag.append(cd);
+  const title = document.createElement('h3');
+  title.className = 'tile-title';
+  title.textContent = tile.title;
+  const desc = document.createElement('p');
+  desc.className = 'tile-desc';
+  desc.textContent = tile.description;
+
+  body.append(tag, title, desc);
+  el.append(body);
+  el.addEventListener('click', () => openTile(tile.id));
+  if (finePointer && !reducedMotion) addTilt(el);
+  return el;
+}
+
+function addTilt(el) {
+  el.addEventListener('pointermove', (e) => {
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width;
+    const py = (e.clientY - r.top) / r.height;
+    el.classList.add('is-tilting');
+    el.style.setProperty('--ry', `${(px - 0.5) * 6}deg`);
+    el.style.setProperty('--rx', `${(0.5 - py) * 6}deg`);
+    el.style.setProperty('--mx', `${px * 100}%`);
+    el.style.setProperty('--my', `${py * 100}%`);
+  });
+  el.addEventListener('pointerleave', () => {
+    el.classList.remove('is-tilting');
+    el.style.setProperty('--rx', '0deg');
+    el.style.setProperty('--ry', '0deg');
+  });
+}
+
+function div(cls) {
+  const d = document.createElement('div');
+  d.className = cls;
+  return d;
+}
+
+function safeUrl(value) {
+  if (!value) return null;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------- Countdowns ----------
+const UNITS = [['Tage', 86400], ['Std', 3600], ['Min', 60], ['Sek', 1]];
+
+function renderCountdown(el, targetIso) {
+  const target = Date.parse(targetIso);
+  if (!targetIso || Number.isNaN(target)) {
+    el.className = el.className.replace(/\bcountdown--done\b/, '');
+    el.textContent = 'Termin folgt';
+    return;
+  }
+  let secs = Math.max(0, Math.floor((target - Date.now()) / 1000));
+  const tag = el.closest('.tile')?.querySelector('.tile-tag');
+  // Kachel: nur „· in 6 T“ hinter dem Datum
+  if (el.classList.contains('countdown--mini')) {
+    if (secs === 0) {
+      if (tag) { tag.textContent = 'Live · jetzt'; tag.classList.add('is-live'); }
+      return;
+    }
+    const soon = secs < 86400;
+    el.closest('.tile')?.classList.toggle('is-soon', soon);
+    tag?.classList.toggle('is-soon', soon);
+    const pad = (n) => String(n).padStart(2, '0');
+    el.textContent = ` · in ${secs >= 86400 ? `${Math.floor(secs / 86400)} T`
+      : secs >= 3600 ? `${Math.floor(secs / 3600)} Std`
+        : `${pad(Math.floor(secs / 60))}:${pad(secs % 60)}`}`;
+    return;
+  }
+  if (secs === 0) {
+    el.classList.add('countdown--done');
+    el.textContent = 'Los geht’s · jetzt live!';
+    if (tag) { tag.textContent = 'Live'; tag.classList.add('is-live'); }
+    return;
+  }
+  el.classList.remove('countdown--done');
+  // Weniger als 24 Stunden: hervorheben (die Kachel leuchtet mit)
+  const soon = secs < 86400;
+  el.classList.toggle('countdown--soon', soon);
+  el.closest('.tile')?.classList.toggle('is-soon', soon);
+  if (!el.children.length || el.children.length !== 4) {
+    el.replaceChildren(...UNITS.map(([lbl]) => {
+      const u = div('cd-unit');
+      u.innerHTML = `<span class="cd-num"></span><span class="cd-lbl">${lbl}</span>`;
+      return u;
+    }));
+  }
+  UNITS.forEach(([, size], i) => {
+    const value = Math.floor(secs / size);
+    secs -= value * size;
+    const num = el.children[i].firstElementChild;
+    const text = String(value).padStart(2, '0');
+    if (num.textContent !== text) {
+      num.textContent = text;
+      if (!reducedMotion) {
+        num.classList.remove('bump');
+        void num.offsetWidth;
+        num.classList.add('bump');
+      }
+    }
+  });
+}
+
+function updateCountdowns() {
+  document.querySelectorAll('.countdown[data-target]').forEach((el) => renderCountdown(el, el.dataset.target));
+}
+
+setInterval(() => {
+  updateCountdowns();
+  if (state.unlockAt && Date.now() >= state.unlockAt) renderGrid();
+}, 1000);
+
+// ============================================================
+// Dialoge allgemein
+// ============================================================
+function setupDialogs() {
+  // Die neueren Content-Ideen legen ihre Dialoge selbst an (js/extras.js) – vor dem Verdrahten unten
+  setupExtras({ state, toast, germanError, buildActionTile, tileByKind, isLocked, openTile });
+  setupSecurity({ state, toast, germanError, setPage });
+  document.querySelectorAll('dialog').forEach((dlg) => {
+    dlg.addEventListener('click', (e) => {
+      // Klick daneben schließt nur Pop-ups – das OBS-Fenster ist eine eigene Seite
+      if (e.target.closest('[data-close]') || (e.target === dlg && dlg.matches(':modal'))) closeDialog(dlg);
+    });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeDialog(dlg); });
+  });
+
+  $('#logout-btn').addEventListener('click', () => state.api.signOut());
+  $('#acct-billing')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const res = await state.api.raw.invoke('billing', { action: 'portal' });
+      if (res?.url) location.assign(res.url);
+    } catch (err) {
+      toast(germanError(err), 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  setupChannelUi();
+  $('#games-edit').addEventListener('click', openGamesDialog);
+  setupTour();
+  $('#games-form').addEventListener('submit', saveGames);
+  $('#view-toggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-view]');
+    if (!btn) return;
+    try { localStorage.setItem(IDEAS_VIEW_KEY, btn.dataset.view); } catch { /* egal */ }
+    renderGrid();
+  });
+  $('#grid').addEventListener('click', (e) => { if (e.target.closest('.tile') && !e.target.closest('.tile--placeholder')) markStart(START, 'idea'); });
+  let searchTimer = 0;
+  $('#grid-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderGrid, 120); });
+  $('#idea-form').addEventListener('submit', submitIdea);
+  setupObs();
+  setupAlertDesigner({ api: state.api, toast, germanError, canEdit: () => !!state.profile?.is_admin });
+  setupLibrary({
+    api: state.api, toast, germanError, canEdit: () => !!state.profile?.is_admin, setPage, openDesigner: openAlertDesigner, useAlertPreset, installAlertPreset, useAlertMedia, useAlertColor,
+    // Kartenbild eines Artists als neue Sammelkarte (Migration …_stream_extras.sql)
+    addArtistCard: (c) => createExtrasApi(state.api).cards.save({ ...c, active: true }),
+    liveUrl: () => obsLiveUrl(),
+    // Overlay-Einstellungen aus diesem Browser (für alle, die noch nicht zentral gespeichert haben)
+    localObsQuery: () => { loadObs(); return new URL(obsUrl()).search.slice(1); },
+  });
+  $('#spin-btn').addEventListener('click', spinFromWeb);
+  $('#simulate-btn').addEventListener('click', () => state.api.simulateRedemption?.());
+  setupWheelEdit();
+  $('#tile-edit-btn').addEventListener('click', () => showTileForm(true));
+  $('#tile-cancel-btn').addEventListener('click', () => showTileForm(false));
+  $('#tile-form').addEventListener('submit', saveTile);
+  setupPrank();
+  setupBingo();
+  setupQuestions();
+  setupPet();
+  setupShop();
+  setupChallenge();
+  document.querySelectorAll('[data-tile-start]').forEach((input) => {
+    input.addEventListener('change', (e) => { e.stopPropagation(); saveTileStart(input); });
+  });
+}
+
+function closeDialog(dlg) {
+  if (!dlg.open || dlg.classList.contains('is-closing')) return;
+  if (dlg.id === 'obs-dialog' && OBS_PAGE) { leaveObsPage(); return; }
+  if (reducedMotion) { dlg.close(); return; }
+  dlg.classList.add('is-closing');
+  setTimeout(() => { dlg.classList.remove('is-closing'); dlg.close(); }, 200);
+}
+
+// ============================================================
+// Glücksrad
+// ============================================================
+function openWheel() {
+  const dlg = $('#wheel-dialog');
+  dlg.showModal();
+  if (!state.wheel) {
+    state.wheel = new Wheel($('#wheel-canvas'), { onTick: tickPointer });
+    const v = currentVariant();
+    if (v) state.wheel.setVariant(v);
+  }
+  state.wheel.resize();
+  drainQueue();
+}
+
+function currentVariant() {
+  return state.variants.find((v) => v.id === state.variantId) ?? state.variants[0];
+}
+
+function selectVariant(id) {
+  state.variantId = id;
+  const input = document.getElementById(`variant-${id}`);
+  if (input) input.checked = true;
+  const v = currentVariant();
+  if (v) {
+    $('#wheel-dialog').style.setProperty('--variant', v.color);
+    state.wheel?.setVariant(v);
+  }
+}
+
+function renderWheelPanel() {
+  const list = $('#variant-list');
+  list.replaceChildren(...state.variants.map((v) => {
+    const wrap = div('variant-opt');
+    wrap.style.setProperty('--c', v.color);
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'variant';
+    input.id = `variant-${v.id}`;
+    input.value = v.id;
+    input.checked = v.id === state.variantId;
+    input.addEventListener('change', () => { if (!state.spinning) selectVariant(v.id); });
+    const label = document.createElement('label');
+    label.htmlFor = input.id;
+    label.innerHTML = '<span class="swatch"></span><strong></strong><small></small>';
+    label.querySelector('strong').textContent = v.name;
+    label.querySelector('small').textContent = v.description;
+    wrap.append(input, label);
+    return wrap;
+  }));
+
+  const { twitch, profile } = state;
+  // Gepostet wird nur über den Chat-Bot – nie im Namen des Streamers.
+  $('#announce-wrap').hidden = !(profile?.is_admin && twitch.connected && twitch.bot_connected);
+  $('#announce-text').textContent = `Ergebnis als ${twitch.bot_name ?? 'Chat-Bot'} im Chat posten`;
+  $('#simulate-btn').hidden = !state.api.demo;
+  $('#wheel-edit-btn').hidden = !profile?.is_admin;
+
+  const info = $('#reward-info');
+  if (noAffiliate()) {
+    info.innerHTML = '<span class="ri-icon">ℹ️</span><span>Kanalpunkte gibt es auf Twitch nur für Affiliates und Partner – in diesem Kanal dreht der Streamer das Rad direkt hier auf der Seite.</span>';
+  } else if (twitch.connected && twitch.reward_active) {
+    info.innerHTML = `<span class="ri-icon">✦</span><span>Zuschauer können die Kanalpunkte-Belohnung <b>„${escapeHtml(twitch.reward_title ?? 'Glücksrad')}“</b> für <b>${Number(twitch.reward_cost ?? 10000).toLocaleString('de-DE')} Punkte</b> einlösen. Das Rad dreht dann eine zufällige Variante${twitch.bot_connected ? `, und <b>${escapeHtml(twitch.bot_name ?? twitch.bot_login ?? 'der Chat-Bot')}</b> schreibt das Ergebnis in den Chat` : '. Damit das Ergebnis auch im Chat steht, fehlt noch der Chat-Bot (wird im Admin-Bereich verbunden)'}.</span>`;
+  } else if (state.api.demo) {
+    info.innerHTML = '<span class="ri-icon">✦</span><span>Demo: Mit dem Button unten kannst du testen, wie eine Kanalpunkte-Einlösung aus dem Twitch-Chat aussieht.</span>';
+  } else {
+    info.innerHTML = '<span class="ri-icon">✦</span><span>Sobald der Streamer Twitch verbindet, lässt sich das Rad auch per Kanalpunkte drehen.</span>';
+  }
+
+  renderHistory();
+  selectVariant(state.variantId);
+}
+
+// Hat ein Admin das Rad inzwischen geändert, passt die geladene Variante nicht
+// mehr zur Drehung – dann frisch laden, damit das Rad auf dem richtigen Feld hält.
+async function freshVariantFor(spin) {
+  const v = state.variants.find((x) => x.id === spin.variant_id);
+  const bonusOk = spin.bonus_index == null || v?.bonus?.segments?.[spin.bonus_index]?.label === spin.bonus_result;
+  if (v && v.segments[spin.segment_index]?.label === spin.result && bonusOk) return;
+  const variants = await state.api.getVariants().catch(() => null);
+  if (!variants?.length) return;
+  state.variants = variants;
+  if (!variants.some((x) => x.id === state.variantId)) state.variantId = variants[0].id;
+  renderWheelPanel();
+  renderHero();
+  if (state.spinning) setVariantInputsDisabled(true);
+}
+
+// ============================================================
+// Glücksrad bearbeiten (Admins): Kosten auf Twitch, Varianten, Ergebnisse
+// ============================================================
+const WE_COLORS = ['#ffb81c', '#3ddc84', '#9146ff', '#ff5a4e', '#35c7ff', '#ff7ac8', '#c6ff4d', '#ff9f43'];
+const WE_MAX_VARIANTS = 8;
+const WE_MIN_SEGS = 2;
+const WE_MAX_SEGS = 16;
+
+function setupWheelEdit() {
+  const we = state.wheelEdit = { list: [], sel: 0, part: 'main', dirty: false, preview: null };
+  $('#wheel-edit-btn').addEventListener('click', openWheelEdit);
+  $('#wheel-cost-form').addEventListener('submit', saveWheelCost);
+  $('#we-name').addEventListener('input', (e) => weChange({ name: e.target.value }));
+  $('#we-desc').addEventListener('input', (e) => weChange({ description: e.target.value }));
+  $('#we-color').addEventListener('input', (e) => weChange({ color: e.target.value }));
+  $('#we-add-seg').addEventListener('click', () => {
+    const segs = weSegs();
+    if (segs.length >= WE_MAX_SEGS) return;
+    segs.push(we.part === 'bonus' ? { label: '', detail: '', color: WE_COLORS[segs.length % WE_COLORS.length] } : { label: '', detail: '' });
+    weTouched();
+    renderWeSegments();
+    $('#we-segs').lastElementChild?.querySelector('.we-label').focus();
+  });
+  $('#we-del-variant').addEventListener('click', () => {
+    const v = we.list[we.sel];
+    if (we.list.length <= 1) return;
+    if (!confirm(`Variante „${v.name || 'ohne Namen'}“ wirklich löschen? Das passiert erst beim Speichern.`)) return;
+    we.list.splice(we.sel, 1);
+    we.sel = Math.max(0, we.sel - 1);
+    weTouched();
+    renderWheelEdit();
+  });
+  $('#we-segs').addEventListener('input', (e) => {
+    const row = e.target.closest('li');
+    const seg = weSegs()[Number(row?.dataset.i)];
+    if (!seg) return;
+    if (e.target.classList.contains('we-label')) seg.label = e.target.value;
+    if (e.target.classList.contains('we-detail')) seg.detail = e.target.value;
+    if (e.target.classList.contains('we-seg-color')) seg.color = e.target.value;
+    weTouched();
+    drawWePreview();
+  });
+  $('#we-segs').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const segs = weSegs();
+    const i = Number(btn.closest('li').dataset.i);
+    const to = btn.dataset.act === 'up' ? i - 1 : i + 1;
+    if (btn.dataset.act === 'del') {
+      if (segs.length <= WE_MIN_SEGS) return;
+      segs.splice(i, 1);
+    } else {
+      if (to < 0 || to >= segs.length) return;
+      [segs[i], segs[to]] = [segs[to], segs[i]];
+    }
+    weTouched();
+    renderWeSegments();
+    const focus = btn.dataset.act === 'del' ? null : $('#we-segs').children[to]?.querySelector(`[data-act="${btn.dataset.act}"]`);
+    (focus && !focus.disabled ? focus : null)?.focus();
+  });
+  $('#we-reset').addEventListener('click', () => {
+    if (we.dirty && !confirm('Alle ungespeicherten Änderungen verwerfen?')) return;
+    startWheelEdit();
+  });
+  $('#we-save').addEventListener('click', saveWheelVariants);
+  // Zweites Rad an/aus – beim Ausschalten bleibt es bis zum Speichern zum Zurückholen
+  $('#we-bonus-on').addEventListener('change', (e) => {
+    const v = we.list[we.sel];
+    if (e.target.checked) {
+      v.bonus = v.bonusOff ?? structuredClone(RARITY_WHEEL);
+      we.part = 'bonus';
+    } else {
+      v.bonusOff = v.bonus;
+      v.bonus = null;
+      we.part = 'main';
+    }
+    weTouched();
+    renderWheelEdit();
+  });
+  $('#we-parts').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-part]');
+    if (!btn) return;
+    we.part = btn.dataset.part;
+    renderWheelEdit();
+  });
+  $('#we-bonus-name').addEventListener('input', (e) => {
+    const v = we.list[we.sel];
+    if (!v.bonus) return;
+    v.bonus.name = e.target.value;
+    $('#we-bonus-label').textContent = e.target.value.trim() || 'ohne Namen';
+    weTouched();
+  });
+}
+
+// Die Ergebnisse, die gerade bearbeitet werden: erstes oder zweites Rad
+function weSegs() {
+  const we = state.wheelEdit;
+  const v = we.list[we.sel];
+  return we.part === 'bonus' && v.bonus ? v.bonus.segments : v.segments;
+}
+
+function openWheelEdit() {
+  // Ungespeicherte Änderungen bleiben beim Schließen erhalten
+  if (!state.wheelEdit.dirty) startWheelEdit();
+  else renderWheelEdit();
+  renderWheelCost();
+  $('#wheel-edit-dialog').showModal();
+  const we = state.wheelEdit;
+  if (!we.preview) we.preview = new Wheel($('#we-canvas'));
+  we.preview.resize();
+  drawWePreview();
+}
+
+function startWheelEdit() {
+  const we = state.wheelEdit;
+  we.list = structuredClone(state.variants);
+  we.sel = Math.max(0, we.list.findIndex((v) => v.id === state.variantId));
+  we.part = 'main';
+  we.dirty = false;
+  $('#we-msg').textContent = '';
+  renderWheelEdit();
+}
+
+function weTouched() {
+  state.wheelEdit.dirty = true;
+  $('#we-msg').textContent = '';
+}
+
+function weChange(patch) {
+  const we = state.wheelEdit;
+  Object.assign(we.list[we.sel], patch);
+  weTouched();
+  renderWeTabs();
+  drawWePreview();
+}
+
+function renderWheelEdit() {
+  const we = state.wheelEdit;
+  const v = we.list[we.sel];
+  renderWeTabs();
+  $('#we-name').value = v.name;
+  $('#we-desc').value = v.description ?? '';
+  $('#we-color').value = v.color;
+  $('#we-del-variant').disabled = we.list.length <= 1;
+  if (!v.bonus) we.part = 'main';
+  $('#we-bonus-on').checked = !!v.bonus;
+  $('#we-parts').hidden = !v.bonus;
+  $('#we-bonus-name-wrap').hidden = we.part !== 'bonus';
+  $('#we-bonus-name').value = v.bonus?.name ?? '';
+  $('#we-bonus-label').textContent = v.bonus?.name.trim() || 'ohne Namen';
+  $('#we-parts').querySelectorAll('[data-part]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.part === we.part)));
+  $('#we-segs-title').textContent = we.part === 'bonus' ? 'Ergebnisse des zweiten Rads' : 'Ergebnisse';
+  renderWeSegments();
+}
+
+function renderWeTabs() {
+  const we = state.wheelEdit;
+  const tabs = we.list.map((v, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `we-tab${i === we.sel ? ' is-active' : ''}`;
+    b.style.setProperty('--c', v.color);
+    b.setAttribute('aria-pressed', String(i === we.sel));
+    b.innerHTML = '<span class="swatch"></span><span class="we-tab-name"></span>';
+    b.querySelector('.we-tab-name').textContent = v.name.trim() || 'Ohne Namen';
+    b.addEventListener('click', () => { we.sel = i; we.part = 'main'; renderWheelEdit(); drawWePreview(); });
+    return b;
+  });
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'we-tab we-tab--add';
+  add.textContent = '+ Variante';
+  add.disabled = we.list.length >= WE_MAX_VARIANTS;
+  add.title = add.disabled ? `Höchstens ${WE_MAX_VARIANTS} Varianten` : 'Neue Variante anlegen';
+  add.addEventListener('click', () => {
+    const used = new Set(we.list.map((x) => x.color));
+    we.list.push({
+      id: '', name: 'Neue Variante', description: '',
+      color: WE_COLORS.find((c) => !used.has(c)) ?? WE_COLORS[we.list.length % WE_COLORS.length],
+      segments: [{ label: '', detail: '' }, { label: '', detail: '' }],
+    });
+    we.sel = we.list.length - 1;
+    we.part = 'main';
+    weTouched();
+    renderWheelEdit();
+    drawWePreview();
+    $('#we-name').select();
+  });
+  $('#we-tabs').replaceChildren(...tabs, add);
+}
+
+function renderWeSegments() {
+  const we = state.wheelEdit;
+  const segs = weSegs();
+  const bonus = we.part === 'bonus';
+  $('#we-segs').classList.toggle('is-bonus', bonus);
+  $('#we-segs').replaceChildren(...segs.map((seg, i) => {
+    const li = document.createElement('li');
+    li.dataset.i = i;
+    li.innerHTML = `${bonus ? `<input type="color" class="we-seg-color" aria-label="Farbe von Ergebnis ${i + 1}">` : `<span class="we-num">${i + 1}</span>`}
+      <div class="we-seg-fields">
+        <input class="we-label" maxlength="32" placeholder="Titel auf dem Rad" aria-label="Titel von Ergebnis ${i + 1}">
+        <input class="we-detail" maxlength="200" placeholder="Was gilt dann? (Erklärung)" aria-label="Erklärung von Ergebnis ${i + 1}">
+      </div>
+      <div class="we-seg-btns">
+        <button type="button" class="icon-btn icon-btn--sm" data-act="up" aria-label="Nach oben">↑</button>
+        <button type="button" class="icon-btn icon-btn--sm" data-act="down" aria-label="Nach unten">↓</button>
+        <button type="button" class="icon-btn icon-btn--sm" data-act="del" aria-label="Ergebnis ${i + 1} löschen">✕</button>
+      </div>`;
+    li.querySelector('.we-label').value = seg.label;
+    li.querySelector('.we-detail').value = seg.detail ?? '';
+    if (bonus) li.querySelector('.we-seg-color').value = seg.color ?? we.list[we.sel].color;
+    li.querySelector('[data-act="up"]').disabled = i === 0;
+    li.querySelector('[data-act="down"]').disabled = i === segs.length - 1;
+    li.querySelector('[data-act="del"]').disabled = segs.length <= WE_MIN_SEGS;
+    return li;
+  }));
+  $('#we-count').textContent = `${segs.length} von höchstens ${WE_MAX_SEGS}`;
+  $('#we-add-seg').disabled = segs.length >= WE_MAX_SEGS;
+  drawWePreview();
+}
+
+function drawWePreview() {
+  const we = state.wheelEdit;
+  const v = we.list[we.sel];
+  if (!we.preview || !v) return;
+  we.preview.setVariant({ color: v.color, segments: weSegs().map((s, i) => ({ ...s, label: s.label.trim() || `Ergebnis ${i + 1}` })) });
+}
+
+// Dieselben Regeln wie in der Datenbank – hier nur mit genauer Stelle
+function weProblem(list) {
+  for (const [vi, v] of list.entries()) {
+    const where = `„${v.name.trim() || `Variante ${vi + 1}`}“`;
+    if (!v.name.trim()) return [vi, `Variante ${vi + 1} braucht einen Namen.`];
+    const empty = v.segments.findIndex((s) => !s.label.trim());
+    if (empty >= 0) return [vi, `${where}: Ergebnis ${empty + 1} braucht einen Titel.`, 'main'];
+    if (v.bonus) {
+      if (!v.bonus.name.trim()) return [vi, `${where}: Das zweite Rad braucht einen Namen.`, 'bonus'];
+      const bEmpty = v.bonus.segments.findIndex((s) => !s.label.trim());
+      if (bEmpty >= 0) return [vi, `${where}: Ergebnis ${bEmpty + 1} im zweiten Rad braucht einen Titel.`, 'bonus'];
+    }
+  }
+  return null;
+}
+
+async function saveWheelVariants() {
+  const we = state.wheelEdit;
+  const msg = $('#we-msg');
+  msg.classList.remove('is-ok');
+  if (state.spinning) { msg.textContent = 'Das Rad dreht sich gerade – kurz warten, dann speichern.'; return; }
+  const problem = weProblem(we.list);
+  if (problem) {
+    we.sel = problem[0];
+    we.part = problem[2] ?? 'main';
+    renderWheelEdit();
+    msg.textContent = problem[1];
+    return;
+  }
+  const btn = $('#we-save');
+  btn.disabled = true;
+  try {
+    const saved = await state.api.saveVariants(we.list.map((v) => ({
+      id: v.id || null, name: v.name.trim(), description: (v.description ?? '').trim(), color: v.color,
+      segments: v.segments.map((s) => ({ label: s.label.trim(), detail: (s.detail ?? '').trim() })),
+      bonus: v.bonus
+        ? {
+          name: v.bonus.name.trim(),
+          segments: v.bonus.segments.map((s) => ({ label: s.label.trim(), detail: (s.detail ?? '').trim(), ...(s.color ? { color: s.color } : {}) })),
+        }
+        : null,
+    })));
+    const selId = saved[we.sel]?.id;
+    state.variants = saved;
+    if (!saved.some((x) => x.id === state.variantId)) state.variantId = saved[0].id;
+    we.list = structuredClone(saved);
+    we.sel = Math.max(0, saved.findIndex((x) => x.id === selId));
+    we.dirty = false;
+    renderWheelEdit();
+    renderWheelPanel();
+    renderHero();
+    msg.textContent = '✓ Gespeichert – das Rad dreht ab jetzt mit den neuen Ergebnissen.';
+    msg.classList.add('is-ok');
+  } catch (err) {
+    console.error(err);
+    msg.textContent = germanError(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderWheelCost() {
+  const { twitch, api } = state;
+  const form = $('#wheel-cost-form');
+  const canSave = api.demo || twitch.connected;
+  form.cost.value = Number(twitch.reward_cost ?? 10000);
+  form.cost.disabled = !canSave;
+  form.querySelector('button').disabled = !canSave;
+  formMsg(form, '');
+  $('#wheel-cost-hint').textContent = api.demo
+    ? 'Demo: Die Kosten werden nur hier im Browser gespeichert.'
+    : twitch.connected
+      ? `So viele Kanalpunkte kostet „${twitch.reward_title ?? 'Glücksrad'}“ auf Twitch. Die Änderung gilt sofort.`
+      : 'Sobald der Streamer Twitch verbindet, lassen sich hier die Kosten der Kanalpunkte-Belohnung ändern.';
+}
+
+async function saveWheelCost(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const cost = Math.round(Number(form.cost.value));
+  if (!Number.isFinite(cost) || cost < 1 || cost > 1000000) {
+    formMsg(form, 'Bitte eine Zahl von 1 bis 1.000.000.');
+    return;
+  }
+  const btn = form.querySelector('button');
+  btn.disabled = true;
+  try {
+    const res = await state.api.setWheelCost(cost);
+    state.twitch = { ...state.twitch, reward_cost: res.cost, reward_title: res.title ?? state.twitch.reward_title };
+    renderWheelPanel();
+    renderHero();
+    formMsg(form, `✓ Drehen kostet jetzt ${Number(res.cost).toLocaleString('de-DE')} Kanalpunkte.`, true);
+  } catch (err) {
+    console.error(err);
+    const codes = {
+      not_affiliate: 'Kanalpunkte gibt es nur für Twitch-Affiliates und Partner.',
+      reward_exists: 'Auf Twitch gibt es schon eine manuell erstellte Belohnung „Glücksrad“. Bitte im Twitch-Dashboard löschen und erneut versuchen.',
+    };
+    formMsg(form, codes[err.message] ?? germanError(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function tickPointer() {
+  const p = $('#wheel-pointer');
+  p.classList.remove('tick');
+  void p.offsetWidth;
+  p.classList.add('tick');
+}
+
+async function spinFromWeb() {
+  if (state.spinning || !state.variants.length) return;
+  const btn = $('#spin-btn');
+  state.spinning = true;
+  btn.disabled = true;
+  btn.textContent = 'Das Rad dreht sich …';
+  setVariantInputsDisabled(true);
+  showResultPending();
+  // Nach einem zweiten Rad steht noch dieses da – zurück auf die Variante
+  const v = currentVariant();
+  if (v) state.wheel.setVariant(v);
+  state.wheel.start();
+  try {
+    const announce = !$('#announce-wrap').hidden && $('#announce').checked;
+    const { spin, announced } = await state.api.spin(state.variantId, announce);
+    await freshVariantFor(spin);
+    await state.wheel.spinTo(spin.segment_index);
+    await spinBonus(spin);
+    showResult(spin, announced ? 'Steht jetzt auch im Twitch-Chat.' : '');
+    addSpin(spin);
+  } catch (err) {
+    console.error(err);
+    await state.wheel.spinTo(0).catch(() => {});
+    resetResult();
+    toast(`Drehen fehlgeschlagen: ${germanError(err)}`, 'error');
+  } finally {
+    state.spinning = false;
+    btn.disabled = false;
+    btn.textContent = 'Rad drehen';
+    setVariantInputsDisabled(false);
+    state.held.splice(0).forEach(addSpin);
+    drainQueue();
+  }
+}
+
+function setVariantInputsDisabled(disabled) {
+  document.querySelectorAll('#variant-list input').forEach((i) => { i.disabled = disabled; });
+}
+
+// Neue Drehung über Realtime (z. B. Kanalpunkte-Einlösung auf Twitch)
+function handleIncomingSpin(spin) {
+  if (state.spins.some((s) => s.id === spin.id)) return;
+  if (spin.source !== 'twitch') {
+    // Bei der eigenen Drehung liefert Realtime die neue Zeile, während das
+    // Rad noch läuft. Erst nach dem Stopp eintragen, sonst steht das
+    // Ergebnis vorab unter „Letzte Drehungen“.
+    if (state.spinning) state.held.push(spin);
+    else addSpin(spin);
+    return;
+  }
+  if ($('#wheel-dialog').open) {
+    state.queue.push(spin);
+    drainQueue();
+  } else {
+    addSpin(spin);
+    toast(`@${spin.requested_by} hat das Glücksrad gedreht: ${spin.variant_name} → ${spinTitle(spin)}`, 'twitch', 7000);
+  }
+}
+
+async function drainQueue() {
+  if (state.spinning || !state.queue.length || !$('#wheel-dialog').open || !state.wheel) return;
+  const spin = state.queue.shift();
+  state.spinning = true;
+  $('#spin-btn').disabled = true;
+  setVariantInputsDisabled(true);
+  await freshVariantFor(spin);
+  selectVariant(spin.variant_id);
+  showResultPending(`@${spin.requested_by} hat Kanalpunkte eingelöst …`);
+  await state.wheel.spinTo(spin.segment_index);
+  await spinBonus(spin);
+  showResult(spin, `Eingelöst von @${spin.requested_by} über Kanalpunkte`);
+  addSpin(spin);
+  state.spinning = false;
+  $('#spin-btn').disabled = false;
+  setVariantInputsDisabled(false);
+  state.held.splice(0).forEach(addSpin);
+  drainQueue();
+}
+
+// Zweites Rad (z. B. Seltenheit beim Waffen-Lotto): dreht direkt nach dem ersten Ergebnis
+async function spinBonus(spin) {
+  if (spin.bonus_index == null) return;
+  const wheel = bonusWheel(state.variants.find((x) => x.id === spin.variant_id));
+  const el = $('#result');
+  el.querySelector('.result-label').textContent = `${spin.variant_name} · 1. Rad`;
+  el.querySelector('.result-title').textContent = spin.result;
+  el.querySelector('.result-detail').textContent = `Jetzt kommt das zweite Rad: ${wheel?.name ?? spin.bonus_name ?? 'Bonus'} …`;
+  el.classList.remove('is-new');
+  void el.offsetWidth;
+  el.classList.add('is-new');
+  if (!wheel) return;
+  const canvas = $('#wheel-canvas');
+  await sleep(1200);
+  canvas.classList.add('is-swap');
+  await sleep(reducedMotion ? 0 : 260);
+  state.wheel.setVariant(wheel);
+  canvas.classList.remove('is-swap');
+  state.wheel.start();
+  await sleep(700);
+  await state.wheel.spinTo(spin.bonus_index);
+}
+
+function showResultPending(text = 'Das Rad dreht sich …') {
+  const el = $('#result');
+  el.classList.remove('is-new');
+  el.querySelector('.result-bonus').hidden = true;
+  el.querySelector('.result-label').textContent = 'Ergebnis';
+  el.querySelector('.result-title').textContent = '···';
+  el.querySelector('.result-detail').textContent = text;
+}
+
+function resetResult() {
+  const el = $('#result');
+  el.classList.remove('is-new');
+  el.querySelector('.result-bonus').hidden = true;
+  el.querySelector('.result-title').textContent = 'Noch nicht gedreht';
+  el.querySelector('.result-detail').textContent = 'Wähle eine Variante und dreh das Rad.';
+}
+
+function showResult(spin, note) {
+  const el = $('#result');
+  const v = state.variants.find((x) => x.id === spin.variant_id);
+  el.style.setProperty('--c', v?.color ?? 'var(--amber)');
+  el.querySelector('.result-label').textContent = `${spin.variant_name}${note ? ` · ${note}` : ''}`;
+  el.querySelector('.result-title').textContent = spin.result;
+  const badge = el.querySelector('.result-bonus');
+  badge.hidden = !spin.bonus_result;
+  if (spin.bonus_result) {
+    badge.textContent = `${spin.bonus_name ?? 'Bonus'}: ${spin.bonus_result}`;
+    badge.style.setProperty('--b', v?.bonus?.segments?.[spin.bonus_index]?.color ?? v?.color ?? 'var(--amber)');
+  }
+  el.querySelector('.result-detail').textContent = `${[spin.detail, spin.bonus_detail].filter(Boolean).join(' ')} Gilt für die nächste Runde.`;
+  el.classList.remove('is-new');
+  void el.offsetWidth;
+  el.classList.add('is-new');
+}
+
+function addSpin(spin) {
+  if (state.spins.some((s) => s.id === spin.id)) return;
+  state.spins = [spin, ...state.spins].slice(0, 15);
+  renderHistory(spin.id);
+}
+
+function renderHistory(newId) {
+  const list = $('#history-list');
+  if (!state.spins.length) {
+    list.innerHTML = '<li class="empty">Noch keine Drehungen.</li>';
+    return;
+  }
+  list.replaceChildren(...state.spins.map((s) => {
+    const li = document.createElement('li');
+    if (s.id === newId) li.className = 'is-new';
+    const src = document.createElement('span');
+    src.className = `src src--${s.source}`;
+    src.textContent = s.source === 'twitch' ? 'Twitch' : 'Web';
+    const main = document.createElement('span');
+    main.className = 'h-main';
+    main.innerHTML = '<strong></strong> <small></small>';
+    main.querySelector('strong').textContent = spinTitle(s);
+    main.querySelector('small').textContent = `· ${s.variant_name} · ${s.requested_by}`;
+    const time = document.createElement('time');
+    time.dateTime = s.created_at;
+    time.textContent = new Date(s.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    li.append(src, main, time);
+    return li;
+  }));
+}
+
+// ============================================================
+// Ärgere den Streamer
+// ============================================================
+const LISTEN_KEY = 'zd_prank_listen';
+
+function setupPrank() {
+  // Wurfgeschosse
+  $('#prank-items').replaceChildren(...ITEMS.map((it) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `prank-item${it.nice ? ' is-nice' : ''}`;
+    b.dataset.prankAction = '';
+    b.innerHTML = '<span class="prank-item-emoji" aria-hidden="true"></span><span class="prank-item-name"></span>';
+    setItemIcon(b.querySelector('.prank-item-emoji'), it);
+    b.querySelector('.prank-item-name').textContent = it.name;
+    b.setAttribute('aria-label', `${it.name} werfen`);
+    b.addEventListener('click', () => prankClick('throw', it));
+    return b;
+  }));
+
+  // Eingebaute Sounds: großer Knopf = im Stream abspielen, 🎧 = nur hier probehören
+  // Die Nummer tippen Zuschauer auf Twitch ein (1–9, eigene Sounds ab 10)
+  $('#prank-board').replaceChildren(...BOARD.map((sound, i) => {
+    const wrap = div('prank-sfx');
+    wrap.dataset.board = sound.id;
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'prank-sfx-main';
+    main.dataset.prankAction = '';
+    main.innerHTML = '<i class="prank-no"></i><span aria-hidden="true"></span><b></b>';
+    main.querySelector('.prank-no').textContent = String(i + 1);
+    main.querySelector('span').textContent = sound.emoji;
+    main.querySelector('b').textContent = sound.name;
+    main.setAttribute('aria-label', `„${sound.name}“ im Stream abspielen`);
+    main.addEventListener('click', () => prankClick('sound', sound));
+    const tryBtn = document.createElement('button');
+    tryBtn.type = 'button';
+    tryBtn.className = 'prank-try';
+    tryBtn.textContent = '🎧';
+    tryBtn.title = 'Nur hier probehören';
+    tryBtn.setAttribute('aria-label', `„${sound.name}“ nur hier probehören`);
+    tryBtn.addEventListener('click', () => prankSfx(true)?.play(sound.id));
+    wrap.append(main, tryBtn);
+    return wrap;
+  }));
+
+  // Reiter
+  const tabs = $('.prank-tabs');
+  tabs.querySelectorAll('[data-tab]').forEach((btn) => btn.addEventListener('click', () => {
+    const name = btn.dataset.tab;
+    tabs.dataset.active = name;
+    tabs.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    $('#prank-pane-throw').hidden = name !== 'throw';
+    $('#prank-pane-sound').hidden = name !== 'sound';
+  }));
+
+  const listen = $('#prank-listen');
+  try { listen.checked = localStorage.getItem(LISTEN_KEY) !== 'off'; } catch { /* Standard: an */ }
+  listen.addEventListener('change', () => {
+    try { localStorage.setItem(LISTEN_KEY, listen.checked ? 'on' : 'off'); } catch { /* nur Komfort */ }
+  });
+
+  const form = $('#sound-form');
+  form.addEventListener('submit', uploadSound);
+  form.file.addEventListener('change', () => {
+    const file = form.file.files[0];
+    $('.sound-file-text', form).textContent = file ? `🎵 ${file.name}` : '🎵 Sound-Datei wählen …';
+    // Namen aus dem Dateinamen vorschlagen – aber nichts überschreiben, was jemand selbst getippt hat.
+    if (file && (!form.name.value.trim() || form.name.dataset.auto === form.name.value)) {
+      form.name.value = form.name.dataset.auto = file.name.replace(/\.[^.]+$/, '').slice(0, 30);
+    }
+  });
+
+  // Die Liste „Sounds mit eigener Belohnung“ speichert selbst (soundRewardChange)
+  $('#prank-admin').addEventListener('change', (e) => { if (!e.target.closest('#prank-direct')) savePrankSettings(); });
+  $('#prank-hack-start').addEventListener('click', () => sendPrank('hack', 'start'));
+  $('#prank-hack-stop').addEventListener('click', () => sendPrank('hack', 'firewall'));
+  $('#prank-anniv-start').addEventListener('click', startAnniversaryShow);
+  $('#prank-anniv-stop').addEventListener('click', () => sendPrank('show', 'stop'));
+  $('#prank-sync').addEventListener('click', () => syncPrankRewards({ loud: true }));
+  $('#prank-dialog').addEventListener('close', () => {
+    $('#prank-stage').querySelectorAll('.pf-item, .pf-splat, .prank-bubble').forEach((el) => el.remove());
+  });
+}
+
+// Ton nur, wenn gewollt – oder immer beim Probehören (force)
+function prankSfx(force = false) {
+  if (!force && !$('#prank-listen').checked) return null;
+  state.prank.sfx ??= new Sfx({ volume: 0.8 });
+  return state.prank.sfx;
+}
+
+function openPrank() {
+  const tile = tileByKind('prank');
+  if (tile && isLocked(tile)) { openTile(tile.id); return; }
+  renderPrankDialog();
+  $('#prank-dialog').showModal();
+  if (state.prank.on) loadSounds();
+  // Startdatum erreicht oder an/aus geändert? Dann die Belohnungen auf Twitch nachziehen.
+  const { twitch, prank } = state;
+  if (state.profile?.is_admin && twitch.connected && twitch.prank_rewards) {
+    const shouldBeActive = prank.settings.enabled && !(tile?.target_at && Date.parse(tile.target_at) > Date.now());
+    if (shouldBeActive !== !!twitch.prank_rewards_active) syncPrankRewards();
+  }
+}
+
+function renderPrankDialog() {
+  const { on, settings } = state.prank;
+  const admin = !!state.profile?.is_admin;
+  const note = $('#prank-note');
+  let text = '';
+  if (!on) {
+    text = admin
+      ? 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20260924000000_pranks.sql ausführen. Bis dahin geht hier nichts raus.'
+      : '„Ärgere den Streamer“ ist noch nicht eingerichtet. Schau später noch mal vorbei.';
+  } else if (!settings.enabled && !admin) {
+    text = 'Der Streamer hat das Ärgern gerade pausiert. Schau später noch mal vorbei.';
+  }
+  note.textContent = text;
+  note.hidden = !text;
+  $('#prank-dialog').classList.toggle('is-off', !on);
+  $('#prank-dialog').classList.toggle('is-viewer', !admin);
+  renderPrankHowTo();
+
+  $('#prank-hack').hidden = !(admin && on);
+  const form = $('#prank-admin');
+  form.hidden = !(admin && on);
+  paintTileStart('prank');
+  if (admin && on) paintPrankSync();
+  form.enabled.checked = settings.enabled;
+  form.allow_uploads.checked = settings.allow_uploads;
+  form.throw_cost.value = settings.throw_cost ?? 500;
+  form.sound_cost.value = settings.sound_cost ?? 300;
+  // Sounds übers Panel (…_panel_sounds.sql) – fehlt die Migration, ist der Bereich gesperrt
+  const panelReady = 'panel_sounds' in settings;
+  form.panel_sounds.checked = !!settings.panel_sounds;
+  selectValue(form.panel_sound_cooldown, settings.panel_sound_cooldown ?? 120);
+  selectValue(form.panel_sound_gap, settings.panel_sound_gap ?? 15);
+  $('#prank-panel').disabled = !panelReady;
+  $('#prank-panel-missing').hidden = panelReady;
+  // Bits und Abo-Sounds (…_panel_bits_subs.sql)
+  const extraReady = 'panel_bits' in settings;
+  form.panel_bits.checked = !!settings.panel_bits;
+  form.panel_bits_sku.value = settings.panel_bits_sku ?? 'sound_100';
+  selectValue(form.panel_sub_cooldown, settings.panel_sub_cooldown ?? 30);
+  $('#prank-panel-extra').querySelectorAll('input, select').forEach((el) => { el.disabled = !extraReady; });
+  $('#prank-extra-missing').hidden = !panelReady || extraReady;
+  // Bits-Extras: Wurf und sofort füttern (…_ext_plus.sql)
+  const plusReady = 'panel_bits_throw' in settings;
+  form.panel_bits_throw.checked = !!settings.panel_bits_throw;
+  form.panel_bits_throw_sku.value = settings.panel_bits_throw_sku ?? 'action_100';
+  form.panel_bits_feed.checked = !!settings.panel_bits_feed;
+  form.panel_bits_feed_sku.value = settings.panel_bits_feed_sku ?? 'action_50';
+  $('#prank-bits-extras').querySelectorAll('input, select').forEach((el) => { el.disabled = !plusReady; });
+  $('#prank-bits-extras-missing').hidden = plusReady;
+  renderSubSounds(extraReady);
+  form.cooldown_seconds.value = String(settings.cooldown_seconds);
+  if (form.cooldown_seconds.value !== String(settings.cooldown_seconds)) {
+    // Wert außerhalb der Liste (z. B. direkt in der Datenbank gesetzt)
+    const opt = new Option(`${settings.cooldown_seconds} Sekunden`, String(settings.cooldown_seconds));
+    form.cooldown_seconds.add(opt);
+    form.cooldown_seconds.value = opt.value;
+  }
+
+  const uploads = settings.allow_uploads || admin;
+  $('#sound-form').hidden = !uploads;
+  $('#prank-uploads-off').hidden = uploads;
+
+  renderPrankLog();
+  renderSounds();
+  paintPrankButtons();
+}
+
+async function loadSounds() {
+  const [sounds, rewards] = await Promise.all([
+    state.api.getSounds().catch((err) => { console.warn('Sounds nicht geladen:', err); return null; }),
+    state.api.getSoundRewards().catch(() => null),
+  ]);
+  if (sounds) state.prank.sounds = sounds;
+  state.prank.rewards = rewards;
+  renderSounds();
+  renderPrankHowTo();
+}
+
+// Nummer eines Sounds (wie in der Edge Function): eingebaut 1–9, eigene ab 10
+const soundNo = (kind, entry) => (kind === 'custom' ? entry.no : BOARD.findIndex((b) => b.id === entry.id) + 1);
+// Hat der Sound eine eigene Belohnung auf Twitch (angelegt und an)?
+function directReward(kind, entry) {
+  const key = kind === 'custom' ? 'sound_id' : 'board';
+  return (state.prank.rewards ?? []).find((r) => r.enabled && r.reward_id && r[key] === entry.id) ?? null;
+}
+
+function renderSounds() {
+  const list = $('#prank-sounds');
+  const { sounds } = state.prank;
+  // Eingebaute Sounds mit eigener Belohnung markieren
+  document.querySelectorAll('#prank-board .prank-sfx').forEach((el) => {
+    const on = !!directReward('sound', { id: el.dataset.board });
+    el.classList.toggle('is-direct', on);
+    el.title = on ? 'Hat auf Twitch eine eigene Belohnung – einlösen, ohne zu tippen' : '';
+  });
+  renderSoundRewards();
+  if (state.prank.settings) renderSubSounds('panel_bits' in state.prank.settings);
+  if (!sounds.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Noch keine eigenen Sounds – lad den ersten hoch.';
+    list.replaceChildren(li);
+    return;
+  }
+  const admin = !!state.profile?.is_admin;
+  list.replaceChildren(...sounds.map((sound) => {
+    const li = document.createElement('li');
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'prank-sound-main';
+    main.dataset.prankAction = '';
+    main.innerHTML = '<b><i class="prank-no"></i> <span></span></b><small></small>';
+    main.querySelector('.prank-no').textContent = String(sound.no ?? '');
+    main.querySelector('b span').textContent = sound.name;
+    if (directReward('custom', sound)) {
+      li.classList.add('is-direct');
+      main.title = 'Hat auf Twitch eine eigene Belohnung – einlösen, ohne zu tippen';
+    }
+    main.querySelector('small').textContent = `von ${sound.author || 'anonym'} · ${Number(sound.duration).toLocaleString('de-DE', { maximumFractionDigits: 1 })} s`;
+    main.setAttribute('aria-label', `„${sound.name}“ im Stream abspielen`);
+    main.addEventListener('click', () => prankClick('custom', sound));
+
+    const tryBtn = document.createElement('button');
+    tryBtn.type = 'button';
+    tryBtn.className = 'prank-try';
+    tryBtn.textContent = '🎧';
+    tryBtn.title = 'Nur hier probehören';
+    tryBtn.setAttribute('aria-label', `„${sound.name}“ nur hier probehören`);
+    tryBtn.addEventListener('click', () => prankSfx(true).playUrl(sound.url));
+    li.append(main, tryBtn);
+
+    if (sound.mine || admin) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'prank-try prank-del';
+      del.textContent = '🗑';
+      del.title = 'Löschen';
+      del.setAttribute('aria-label', `„${sound.name}“ löschen`);
+      del.addEventListener('click', () => deleteSound(sound, del));
+      li.append(del);
+    }
+    return li;
+  }));
+  paintPrankButtons();
+}
+
+const directCount = () => (state.prank.rewards ?? []).filter((r) => r.enabled && r.reward_id).length;
+
+// ---------- Sounds mit eigener Belohnung (Admins) ----------
+// Haken = auf Twitch gibt es „🔊 Name“ als eigene Belohnung; Zuschauer lösen ein, ohne zu tippen.
+const SOUND_REWARD_MAX = 20;
+function renderSoundRewards() {
+  const box = $('#prank-direct');
+  if (!box) return;
+  const { rewards, sounds, settings } = state.prank;
+  box.hidden = !state.profile?.is_admin || !state.prank.on;
+  if (box.hidden) return;
+  const list = $('#prank-direct-list');
+  const note = $('#prank-direct-note');
+  if (rewards === null) {
+    note.textContent = 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20261024000000_sound_rewards.sql ausführen.';
+    list.replaceChildren();
+    return;
+  }
+  const on = rewards.filter((r) => r.enabled).length;
+  note.textContent = `${on} von höchstens ${SOUND_REWARD_MAX} an. Twitch erlaubt insgesamt 50 Belohnungen pro Kanal.`;
+  const entries = [
+    ...BOARD.map((b, i) => ({ key: { board: b.id }, no: i + 1, name: b.name, emoji: b.emoji, row: rewards.find((r) => r.board === b.id) })),
+    ...[...sounds].sort((a, b) => a.no - b.no).map((x) => ({ key: { sound_id: x.id }, no: x.no, name: x.name, emoji: '🔊', row: rewards.find((r) => r.sound_id === x.id) })),
+  ];
+  list.replaceChildren(...entries.map((e) => {
+    const li = document.createElement('li');
+    li.className = 'prank-direct-row';
+    const label = document.createElement('label');
+    label.className = 'prank-direct-name';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = !!e.row?.enabled;
+    check.disabled = !check.checked && on >= SOUND_REWARD_MAX;
+    check.setAttribute('aria-label', `„${e.name}“ bekommt eine eigene Belohnung`);
+    const text = document.createElement('span');
+    text.innerHTML = '<i class="prank-no"></i> <span aria-hidden="true"></span> <b></b>';
+    text.querySelector('.prank-no').textContent = String(e.no);
+    text.querySelector('span').textContent = e.emoji;
+    text.querySelector('b').textContent = e.name;
+    label.append(check, text);
+    const cost = document.createElement('input');
+    cost.type = 'number';
+    cost.min = '1';
+    cost.max = '1000000';
+    cost.inputMode = 'numeric';
+    cost.value = String(e.row?.cost ?? settings.sound_cost ?? 300);
+    cost.disabled = !check.checked;
+    cost.setAttribute('aria-label', `Kanalpunkte für „${e.name}“`);
+    check.addEventListener('change', () => soundRewardChange(e.key, { enabled: check.checked, cost: clampPoints(cost.value) }, li));
+    cost.addEventListener('change', () => soundRewardChange(e.key, { cost: clampPoints(cost.value) }, li));
+    li.append(label, cost);
+    if (e.row?.enabled) {
+      const st = document.createElement('small');
+      st.className = e.row.error ? 'prank-direct-err' : 'prank-direct-ok';
+      st.textContent = e.row.error ? `✕ ${e.row.error}` : e.row.reward_id ? '✓ auf Twitch' : 'noch nicht auf Twitch';
+      li.append(st);
+    }
+    return li;
+  }));
+}
+
+const clampPoints = (v) => Math.min(1000000, Math.max(1, Math.round(Number(v)) || 300));
+
+async function soundRewardChange(key, patch, li) {
+  li.querySelectorAll('input').forEach((el) => { el.disabled = true; });
+  try {
+    await state.api.setSoundReward(key, patch);
+    state.prank.rewards = await state.api.getSoundRewards();
+    if (state.twitch.connected) await syncPrankRewards();
+  } catch (err) {
+    toast(germanError(err), 'error', 6000);
+  }
+  renderSounds();
+}
+
+// Admins lösen direkt im Stream aus. Zuschauer bezahlen mit Kanalpunkten auf
+// Twitch – hier kopiert ein Klick den Namen zum Eintippen und zeigt eine Vorschau.
+function prankClick(kind, entry) {
+  if (state.profile?.is_admin) {
+    if (kind === 'custom') sendPrank('sound', 'custom', entry);
+    else sendPrank(kind, entry.id);
+    return;
+  }
+  if (kind === 'throw') {
+    navigator.clipboard?.writeText(entry.name).catch(() => {});
+    toast(`„${entry.name}“ kopiert – auf Twitch bei „🍅 Wirf was auf ${streamerName()}“ einfügen.`, 'ok', 4500);
+  } else if (directReward(kind, entry)) {
+    toast(`Auf Twitch einfach „🔊 ${entry.name}“ bei den Kanalpunkten einlösen – ohne Tippen.`, 'ok', 5000);
+  } else {
+    // Die Nummer ist kürzer und eindeutig – der Name geht auf Twitch genauso
+    const no = soundNo(kind, entry);
+    navigator.clipboard?.writeText(String(no)).catch(() => {});
+    toast(`Nr. ${no} („${entry.name}“) kopiert – auf Twitch bei „🔊 Sound für ${streamerName()}“ einfügen.`, 'ok', 5000);
+  }
+  const preview = { id: `preview-${Date.now()}`, created_at: new Date().toISOString(), requested_by: 'Du' };
+  if (kind === 'throw') showPrank({ ...preview, kind: 'throw', item: entry.id }, true);
+  else if (kind === 'custom') showPrank({ ...preview, kind: 'sound', item: 'custom', sound_path: entry.path, label: entry.name }, true);
+  else showPrank({ ...preview, kind: 'sound', item: entry.id }, true);
+}
+
+async function sendPrank(kind, item, sound = null) {
+  if (!state.prank.on) return;
+  const dlg = $('#prank-dialog');
+  dlg.classList.add('is-sending');
+  try {
+    const row = await state.api.sendPrank(kind, item, sound?.id ?? null);
+    state.prank.seen.add(row.id);
+    addPrankLog(row);
+    showPrank(row, true);
+  } catch (err) {
+    console.error(err);
+    toast(germanError(err), 'error', 6000);
+  } finally {
+    dlg.classList.remove('is-sending');
+  }
+}
+
+// Kanal-Jubiläum: die Edge Function sammelt die Daten des verbundenen Kanals und startet den Film
+async function startAnniversaryShow() {
+  if (!state.prank.on) return;
+  const btn = $('#prank-anniv-start');
+  const dlg = $('#prank-dialog');
+  btn.disabled = true;
+  dlg.classList.add('is-sending');
+  try {
+    const row = await state.api.startAnniversary($('#prank-anniv-date').value);
+    state.prank.seen.add(row.id);
+    addPrankLog(row);
+    showPrank(row, true);
+    toast(`🎂 Der Jubiläums-Film läuft jetzt in OBS – mit den Daten von ${row.data?.name ?? streamerName()}.`, 'ok', 6000);
+  } catch (err) {
+    console.error(err);
+    toast(germanError(err), 'error', 7000);
+  } finally {
+    btn.disabled = false;
+    dlg.classList.remove('is-sending');
+  }
+}
+
+// Anleitung: Zuschauer über Kanalpunkte, Admins direkt
+function renderPrankHowTo() {
+  const box = $('#prank-howto');
+  const { settings } = state.prank;
+  const { twitch } = state;
+  const cost = (n) => `${Number(n ?? 0).toLocaleString('de-DE')} Punkte`;
+  const status = !twitch.connected
+    ? 'Die Belohnungen gibt es, sobald der Streamer Twitch verbunden hat.'
+    : twitch.prank_rewards === false || twitch.prank_rewards === undefined
+      ? 'Die Belohnungen sind auf Twitch noch nicht angelegt.'
+      : twitch.prank_rewards_active ? '' : 'Die Belohnungen sind auf Twitch gerade ausgeschaltet.';
+  if (noAffiliate()) {
+    box.innerHTML = state.profile?.is_admin
+      ? '<b>Du bist Admin:</b> Ein Klick löst direkt im Stream aus. Kanalpunkte gibt es auf Twitch nur für Affiliates und Partner – deshalb können Zuschauer in diesem Kanal (noch) nicht selbst werfen.'
+      : `<b>Kanalpunkte gibt es hier (noch) nicht:</b> Twitch hat sie nur für Affiliates und Partner. Würfe und Sounds löst in diesem Kanal deshalb nur das Team von ${escapeHtml(streamerName())} aus – du kannst dir die Sounds hier trotzdem anhören.`;
+    return;
+  }
+  box.innerHTML = state.profile?.is_admin
+    ? `<b>Du bist Admin:</b> Ein Klick löst direkt im Stream aus – ohne Kanalpunkte, z. B. zum Testen.
+       Zuschauer bezahlen mit Kanalpunkten über „🍅 Wirf was auf ${escapeHtml(streamerName())}“ (${cost(settings.throw_cost)}) und „🔊 Sound für ${escapeHtml(streamerName())}“ (${cost(settings.sound_cost)}) –
+       beim Sound reicht die Nummer, Tippfehler sind egal, „zufall“ nimmt irgendeinen, <b>!sounds</b> im Chat zeigt die Liste.
+       Einzelnen Sounds kannst du unten eine eigene Belohnung geben (⚡, ohne Tippen).`
+    : `<b>So ärgerst du den Streamer:</b> Im Twitch-Chat von ${escapeHtml(streamerName())} auf das Kanalpunkte-Symbol klicken und
+       <b>„🍅 Wirf was auf ${escapeHtml(streamerName())}“</b> (${cost(settings.throw_cost)}) oder <b>„🔊 Sound für ${escapeHtml(streamerName())}“</b> (${cost(settings.sound_cost)}) einlösen –
+       dann eintippen, was fliegen bzw. welcher Sound laufen soll. Beim Sound reicht die <b>Nummer</b> (z. B. <b>3</b>), Tippfehler sind egal,
+       <b>zufall</b> nimmt irgendeinen und <b>!sounds</b> im Chat zeigt die Liste.${directCount() ? ` Sounds mit ⚡ haben eine eigene Belohnung „🔊 Name“ – einlösen, ohne zu tippen.` : ''}
+       Ein Klick hier kopiert die Nummer bzw. den Namen und zeigt eine Vorschau.
+       <a class="prank-twitch-link" target="_blank" rel="noopener" href="https://www.twitch.tv/${encodeURIComponent(streamerLogin())}">Zum Twitch-Kanal ↗</a>`;
+  if (status) {
+    const p = document.createElement('small');
+    p.textContent = status;
+    box.append(p);
+  }
+}
+
+// Andere Zuschauer ärgern den Streamer: steht im Verlauf und fliegt über die Bühne (ohne Ton).
+function handleIncomingPrank(row) {
+  if (state.prank.seen.has(row.id)) return;
+  state.prank.seen.add(row.id);
+  addPrankLog(row);
+  if ($('#prank-dialog').open) showPrank(row, false);
+}
+
+function showPrank(row, own) {
+  if (!$('#prank-dialog').open) return;
+  const stage = $('#prank-stage');
+  const dave = $('#prank-dave');
+  const sfx = own ? prankSfx() : null;
+  if (row.kind === 'hack') {
+    const bubble = document.createElement('span');
+    bubble.className = 'prank-bubble';
+    bubble.textContent = row.item === 'firewall' ? '🛡️ Firewall aktiviert' : '💻 0xNULL hackt das Overlay …';
+    stage.append(bubble);
+    setTimeout(() => bubble.remove(), 2600);
+  } else if (row.kind === 'show') {
+    const bubble = document.createElement('span');
+    bubble.className = 'prank-bubble';
+    bubble.textContent = row.item === 'stop' ? '⏹️ Film beendet' : '🎂 Happy Birthday, Kanal!';
+    stage.append(bubble);
+    setTimeout(() => bubble.remove(), 2600);
+  } else if (row.kind === 'throw') {
+    // Ziel: das Gesicht in der Zeichnung
+    const s = stage.getBoundingClientRect();
+    const d = dave.getBoundingClientRect();
+    throwItem(stage, {
+      item: row.item,
+      x: d.left - s.left + d.width * 0.5,
+      y: d.top - s.top + d.height * 0.5,
+      size: Math.max(44, Math.min(80, s.width * 0.14)),
+      sfx,
+      reducedMotion,
+      onHit: () => {
+        dave.classList.remove('is-hit');
+        void dave.getBoundingClientRect();
+        dave.classList.add('is-hit');
+        clearTimeout(dave.hitTimer);
+        dave.hitTimer = setTimeout(() => dave.classList.remove('is-hit'), 1100);
+      },
+    });
+  } else {
+    if (sfx) {
+      if (row.item === 'custom') sfx.playUrl(state.api.soundUrl(row.sound_path));
+      else sfx.play(row.item);
+    }
+    const bubble = document.createElement('span');
+    bubble.className = 'prank-bubble';
+    bubble.textContent = `${prankEmoji(row)} ${row.item === 'custom' ? row.label : prankText(row).replace(/^.* spielt /, '')}`;
+    stage.append(bubble);
+    setTimeout(() => bubble.remove(), 2600);
+  }
+}
+
+function addPrankLog(row) {
+  const log = state.prank.log;
+  if (log.some((p) => p.id === row.id)) return;
+  log.unshift(row);
+  log.length = Math.min(log.length, 12);
+  renderPrankLog(row.id);
+}
+
+function renderPrankLog(newId = null) {
+  const list = $('#prank-log');
+  if (!state.prank.log.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Noch ist der Streamer unbehelligt …';
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...state.prank.log.map((p) => {
+    const li = document.createElement('li');
+    if (p.id === newId) li.className = 'is-new';
+    const icon = document.createElement('span');
+    icon.className = 'prank-log-icon';
+    setPrankIcon(icon, p);
+    const main = document.createElement('span');
+    main.className = 'h-main';
+    main.textContent = prankText(p);
+    const time = document.createElement('time');
+    time.dateTime = p.created_at;
+    time.textContent = new Date(p.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    li.append(icon, main, time);
+    return li;
+  }));
+}
+
+function paintPrankButtons() {
+  const off = !state.prank.on;
+  document.querySelectorAll('#prank-dialog [data-prank-action]').forEach((btn) => { btn.disabled = off; });
+  const admin = !!state.profile?.is_admin;
+  $('#prank-lead-throw').textContent = admin
+    ? 'Klick wirft sofort – es fliegt dem Streamer im Stream vor die Kamera.'
+    : 'Das kannst du auf den Streamer werfen. Klick = Name kopieren und Vorschau.';
+  $('#prank-lead-sound').textContent = admin
+    ? 'Klick spielt den Sound im Stream. 🎧 hört nur hier probe.'
+    : 'Diese Sounds gibt es. Klick = Nummer kopieren, 🎧 = probehören. ⚡ = eigene Belohnung auf Twitch, ohne Tippen.';
+}
+
+// ---------- Eigene Sounds ----------
+async function uploadSound(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const file = form.file.files[0];
+  if (!file) return formMsg(form, 'Bitte zuerst eine Sound-Datei wählen.');
+  if (!/^audio\//.test(file.type) && !/\.(mp3|ogg|oga|wav|m4a|aac|webm|flac)$/i.test(file.name)) {
+    return formMsg(form, 'Das ist keine Audio-Datei. Bitte MP3, OGG, WAV oder M4A nehmen.');
+  }
+  if (file.size > 1024 * 1024) return formMsg(form, 'Die Datei ist zu groß (höchstens 1 MB).');
+  const name = (form.name.value.trim() || file.name.replace(/\.[^.]+$/, '')).slice(0, 30);
+  await withLoading(form, async () => {
+    const duration = await audioDuration(file);
+    if (duration > MAX_SOUND_SECONDS + 0.4) {
+      throw new Error(`Der Sound ist ${duration.toLocaleString('de-DE', { maximumFractionDigits: 1 })} Sekunden lang – erlaubt sind höchstens ${MAX_SOUND_SECONDS}.`);
+    }
+    const sound = await state.api.uploadSound(file, name, Math.round(Math.min(duration, MAX_SOUND_SECONDS) * 10) / 10);
+    // Nummer: nach dem bisher neuesten eigenen Sound (genauer Stand kommt mit loadSounds)
+    const top = Math.max(BOARD.length, ...state.prank.sounds.map((x) => x.no ?? 0));
+    state.prank.sounds = [{ ...sound, no: sound.no ?? top + 1 }, ...state.prank.sounds];
+    renderSounds();
+    form.reset();
+    $('.sound-file-text', form).textContent = '🎵 Sound-Datei wählen …';
+    toast(`„${sound.name}“ ist hochgeladen und kann jetzt abgespielt werden.`, 'ok');
+  });
+}
+
+// Länge ermitteln – gleichzeitig der Test, ob der Browser die Datei abspielen kann.
+async function audioDuration(file) {
+  try {
+    const ctx = new OfflineAudioContext(1, 1, 44100);
+    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    return buf.duration;
+  } catch {
+    throw new Error('Die Datei lässt sich nicht abspielen. Bitte MP3, OGG, WAV oder M4A nehmen.');
+  }
+}
+
+async function deleteSound(sound, btn) {
+  if (!confirm(`„${sound.name}“ wirklich löschen?`)) return;
+  btn.disabled = true;
+  try {
+    const hadReward = !!directReward('custom', sound);
+    await state.api.deleteSound(sound);
+    state.prank.sounds = state.prank.sounds.filter((x) => x.id !== sound.id);
+    renderSounds();
+    // Eigene Belohnung des Sounds auf Twitch gleich mit wegräumen (sonst beim nächsten Abgleich)
+    if (hadReward && state.profile?.is_admin && state.twitch.connected) syncPrankRewards();
+  } catch (err) {
+    btn.disabled = false;
+    toast(`Löschen fehlgeschlagen: ${germanError(err)}`, 'error');
+  }
+}
+
+// ---------- Einstellungen (Admins) ----------
+// Belohnungen auf Twitch an die Einstellungen angleichen (Kosten, Abklingzeit,
+// an/aus, Startdatum). Läuft nach jedem Speichern und auf Knopfdruck.
+async function syncPrankRewards({ loud = false } = {}) {
+  const status = $('#prank-sync-status');
+  const btn = $('#prank-sync');
+  btn.disabled = true;
+  status.textContent = 'Übertrage zu Twitch …';
+  try {
+    const r = await state.api.syncPrankRewards();
+    state.twitch = { ...state.twitch, prank_rewards: true, prank_rewards_active: r.active };
+    status.textContent = r.active
+      ? '✓ Auf Twitch aktiv – Zuschauer können einlösen.'
+      : r.started === false && r.starts_at
+        ? `✓ Auf Twitch angelegt, aber aus bis ${startLabel(r.starts_at)}. Danach hier einmal „Auf Twitch übernehmen“.`
+        : '✓ Auf Twitch angelegt, aber ausgeschaltet.';
+    const failed = r.sound_rewards?.errors ?? [];
+    if (failed.length) status.textContent += ` Sound-Belohnungen: ${failed.join(' · ')}`;
+    if (loud) toast(failed.length ? `Twitch: ${failed[0]}` : 'Belohnungen auf Twitch aktualisiert.', failed.length ? 'error' : 'ok', failed.length ? 7000 : 3000);
+    if (r.sound_rewards) {
+      state.prank.rewards = await state.api.getSoundRewards().catch(() => state.prank.rewards);
+      renderSounds();
+    }
+    renderPrankHowTo();
+  } catch (err) {
+    status.textContent = `✕ ${germanError(err)}`;
+    if (loud) toast(`Twitch: ${germanError(err)}`, 'error', 7000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function paintPrankSync() {
+  const { twitch } = state;
+  $('#prank-sync-status').textContent = !twitch.connected
+    ? 'Twitch ist nicht verbunden – erst wenn der Streamer verbunden hat, gibt es die Belohnungen.'
+    : twitch.prank_rewards === undefined
+      ? 'Für die Belohnungen fehlt noch die Migration …_channel_points.sql.'
+      : !twitch.prank_rewards
+        ? 'Noch nicht auf Twitch angelegt.'
+        : twitch.prank_rewards_active ? '✓ Auf Twitch aktiv.' : 'Auf Twitch angelegt, aber ausgeschaltet.';
+  $('#prank-sync').disabled = !twitch.connected;
+}
+
+// Wert in eine Auswahl setzen – steht er nicht in der Liste (z. B. direkt in der Datenbank gesetzt), kommt er dazu
+// Sounds „nur für Abonnenten“: die ersten 20 der Liste – genau die, die das Panel zeigt (twitch-ext, panelSounds).
+// IDs wie im Panel: eingebauter Sound „whistle“, hochgeladener „c:<uuid>“.
+function renderSubSounds(ready) {
+  const list = $('#prank-sub-list');
+  // Schon angezeigt (z. B. neue Sounds geladen): ungespeicherte Haken behalten
+  const shown = list.querySelectorAll('input');
+  const chosen = new Set(shown.length ? [...shown].filter((el) => el.checked).map((el) => el.value) : state.prank.settings.panel_sub_sounds ?? []);
+  const entries = [
+    ...BOARD.map((b, i) => ({ id: b.id, no: i + 1, name: b.name, emoji: b.emoji })),
+    ...[...state.prank.sounds].sort((a, b) => a.no - b.no).map((x) => ({ id: `c:${x.id}`, no: x.no, name: x.name, emoji: '🔊' })),
+  ].slice(0, 20);
+  list.replaceChildren(...entries.map((e) => {
+    const li = document.createElement('li');
+    const label = document.createElement('label');
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.value = e.id;
+    check.checked = chosen.has(e.id);
+    check.disabled = !ready;
+    const text = document.createElement('span');
+    text.innerHTML = '<i class="prank-no"></i> <span aria-hidden="true"></span> <b></b>';
+    text.querySelector('.prank-no').textContent = String(e.no);
+    text.querySelector('span').textContent = e.emoji;
+    text.querySelector('b').textContent = e.name;
+    label.append(check, text);
+    li.append(label);
+    return li;
+  }));
+}
+
+function selectValue(select, value) {
+  select.value = String(value);
+  if (select.value === String(value)) return;
+  const opt = new Option(`${value} Sekunden`, String(value));
+  select.add(opt);
+  select.value = opt.value;
+}
+
+async function savePrankSettings() {
+  const form = $('#prank-admin');
+  const clampCost = (v, d) => Math.min(1000000, Math.max(1, Math.round(Number(v)) || d));
+  const patch = {
+    enabled: form.enabled.checked,
+    allow_uploads: form.allow_uploads.checked,
+    cooldown_seconds: Number(form.cooldown_seconds.value),
+    throw_cost: clampCost(form.throw_cost.value, 500),
+    sound_cost: clampCost(form.sound_cost.value, 300),
+  };
+  if ('panel_sounds' in state.prank.settings) {
+    patch.panel_sounds = form.panel_sounds.checked;
+    patch.panel_sound_cooldown = Number(form.panel_sound_cooldown.value);
+    patch.panel_sound_gap = Number(form.panel_sound_gap.value);
+  }
+  if ('panel_bits' in state.prank.settings) {
+    patch.panel_bits = form.panel_bits.checked;
+    patch.panel_bits_sku = form.panel_bits_sku.value;
+    patch.panel_sub_cooldown = Number(form.panel_sub_cooldown.value);
+    patch.panel_sub_sounds = [...$('#prank-sub-list').querySelectorAll('input:checked')].map((el) => el.value);
+  }
+  if ('panel_bits_throw' in state.prank.settings) {
+    patch.panel_bits_throw = form.panel_bits_throw.checked;
+    patch.panel_bits_throw_sku = form.panel_bits_throw_sku.value;
+    patch.panel_bits_feed = form.panel_bits_feed.checked;
+    patch.panel_bits_feed_sku = form.panel_bits_feed_sku.value;
+  }
+  form.querySelectorAll('input, select').forEach((el) => { el.disabled = true; });
+  try {
+    state.prank.settings = await state.api.updatePrankSettings(patch);
+    toast('Gespeichert.', 'ok', 2500);
+    if (state.twitch.connected) syncPrankRewards();
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen: ${germanError(err)}`, 'error');
+  } finally {
+    form.querySelectorAll('input, select').forEach((el) => { el.disabled = false; });
+    renderPrankDialog();
+  }
+}
+
+// ============================================================
+// Fortnite-Bingo
+// ============================================================
+function setupBingo() {
+  $('#bingo-new-btn').addEventListener('click', newBingoCard);
+  $('#bingo-clear-btn').addEventListener('click', clearBingo);
+  $('#bingo-visible').addEventListener('change', (e) => updateBingoCard({ visible: e.target.checked }));
+  $('#bingo-size').addEventListener('change', () => renderBingoDialog());
+  $('#my-bingo-new').addEventListener('click', newMyBingo);
+  document.querySelectorAll('.bingo-tabs [data-tab]').forEach((btn) => btn.addEventListener('click', () => {
+    state.bingo.tab = btn.dataset.tab;
+    renderBingoDialog();
+  }));
+  $('#bingo-free').addEventListener('change', () => renderBingoDialog());
+  $('#bingo-bet-btn').addEventListener('click', startBingoBet);
+  $('#bingo-bet-cancel').addEventListener('click', () => cancelBingoBet());
+  const form = $('#bingo-upload');
+  form.addEventListener('submit', uploadBingoImages);
+  // Lootpool nach Kategorie filtern, ältere Items automatisch einsortieren
+  $('#bingo-cat-chips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    state.bingo.cat = b.dataset.cat;
+    renderBingoItems();
+  });
+  $('#bingo-cat-auto').addEventListener('click', (e) => autoBingoCategories(e.currentTarget));
+  // Schnellwahl: Grün bis Gold, Grau bis Gold, keine
+  form.querySelectorAll('[data-rar-preset]').forEach((btn) => btn.addEventListener('click', () => {
+    const [from, to] = btn.dataset.rarPreset.split('-');
+    const ids = RARITIES.map((r) => r.id);
+    form.querySelectorAll('input[name=rar]').forEach((box) => {
+      const i = ids.indexOf(box.value);
+      box.checked = !!from && i >= ids.indexOf(from) && i <= ids.indexOf(to);
+    });
+  }));
+  form.files.addEventListener('change', () => {
+    const n = form.files.files.length;
+    $('.sound-file-text', form).textContent = n ? `🖼️ ${n === 1 ? form.files.files[0].name : `${n} Bilder gewählt`}` : '🖼️ Bilder wählen … (mehrere gehen)';
+  });
+}
+
+async function openBingo() {
+  const tile = tileByKind('bingo');
+  if (tile && isLocked(tile)) { openTile(tile.id); return; }
+  renderBingoDialog();
+  $('#bingo-dialog').showModal();
+  if (!state.bingo.on) return;
+  // Frisch laden: Bilder und Haken können sich geändert haben.
+  try {
+    const [{ items, card }, mine] = await Promise.all([
+      state.api.getBingo(),
+      state.api.getMyBingo().catch((err) => { console.warn('Eigene Karte:', err); return undefined; }),
+    ]);
+    state.bingo.items = items;
+    state.bingo.card = card;
+    state.bingo.lines = bingoState(card).count;
+    state.bingo.mine = mine ?? null;
+    state.bingo.mineOn = mine !== undefined;
+    // Admins landen bei der Stream-Karte (dort richten sie alles ein), Zuschauer ohne
+    // laufende Stream-Karte gleich bei ihrer eigenen.
+    state.bingo.tab ??= card || state.profile?.is_admin ? 'dave' : 'mine';
+    renderBingoDialog();
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
+function renderBingoDialog({ stamped = null, myStamped = null } = {}) {
+  const { on, card, items } = state.bingo;
+  const admin = !!state.profile?.is_admin;
+  const dlg = $('#bingo-dialog');
+  const tab = state.bingo.tab ?? 'dave';
+  const tabs = $('.bingo-tabs');
+  tabs.dataset.active = tab;
+  tabs.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $('#bingo-pane-dave').hidden = tab !== 'dave';
+  $('#bingo-pane-mine').hidden = tab !== 'mine';
+  // Die Admin-Spalte gehört zur Stream-Karte
+  dlg.classList.toggle('is-admin', admin && on && tab === 'dave');
+  renderMyBingo(myStamped);
+
+  const note = $('#bingo-note');
+  note.textContent = on ? '' : admin
+    ? 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20260924120000_bingo.sql ausführen.'
+    : 'Das Bingo ist noch nicht eingerichtet. Schau später noch mal vorbei.';
+  note.hidden = on;
+
+  const grid = $('#bingo-grid');
+  const st = bingoState(card);
+  $('#bingo-empty').hidden = !!card || !on;
+  $('#bingo-empty').textContent = admin
+    ? 'Noch keine Karte. Rechts Bilder hochladen und „Neue Karte ziehen“.'
+    : 'Noch keine Karte gezogen – gleich geht’s los.';
+  grid.hidden = !card;
+  const bet = card?.bet ?? null;
+  if (card) {
+    renderBingoGrid(grid, card, {
+      urlFor: (path) => state.api.bingoUrl(path),
+      onCell: admin ? toggleBingoCell : null,
+      stamped,
+      itemOf: bingoItemOf,
+      labels: bet?.status === 'active' || bet?.status === 'resolved',
+    });
+  }
+  paintBingoBet(bet, admin && on);
+  $('#bingo-status').textContent = card
+    ? `${st.done} von ${st.total} gefunden${st.count ? ` · ${st.count}× Bingo!` : ''}${card.visible ? '' : ' · im Stream ausgeblendet'}`
+    : '';
+  $('#bingo-help').hidden = !card;
+
+  $('#bingo-admin').hidden = !(admin && on && tab === 'dave');
+  paintTileStart('bingo');
+  if (admin && on) {
+    $('#bingo-visible').checked = card?.visible ?? true;
+    $('#bingo-visible').disabled = !card;
+    $('#bingo-clear-btn').disabled = !card || !st.done;
+    const size = Number($('#bingo-size').value);
+    const need = size * size - ($('#bingo-free').checked && size % 2 ? 1 : 0);
+    // Verschiedene Items: gleiche Waffe in anderer Seltenheit zählt einmal, der Tresor gar nicht
+    const usable = distinctCount(items);
+    const vault = items.filter((i) => i.vault).length;
+    $('#bingo-count').textContent = `· ${usable} verschiedene${vault ? `, ${vault} im Tresor` : ''}${usable < need ? ` – für ${size}×${size} braucht es ${need}` : ''}`;
+    renderBingoItems();
+  }
+  paintBingoTile();
+}
+
+// Lootpool sortiert (Migration …_bingo_categories.sql): Kategorie in der Lootpool-Reihenfolge, darin
+// Seltenheit (Gewöhnlich → Exotisch) und Name. Ohne Kategorie zählt als „Sonstiges“.
+const BINGO_RARITY_ORDER = Object.fromEntries(RARITIES.map((r, i) => [r.id, i]));
+const BINGO_CAT_ORDER = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
+const bingoCat = (item) => categoryOf(item.category).id;
+const bingoSort = (a, b) => (BINGO_CAT_ORDER[bingoCat(a)] - BINGO_CAT_ORDER[bingoCat(b)])
+  || ((BINGO_RARITY_ORDER[a.rarity] ?? -1) - (BINGO_RARITY_ORDER[b.rarity] ?? -1))
+  || a.name.localeCompare(b.name, 'de');
+
+// Filter-Chips „Alle · Sturmgewehre · Heilung …“ mit Anzahl (nur Kategorien, die es gibt)
+function renderBingoCatChips(items) {
+  const counts = {};
+  for (const item of items) counts[bingoCat(item)] = (counts[bingoCat(item)] ?? 0) + 1;
+  if (state.bingo.cat !== 'all' && !counts[state.bingo.cat]) state.bingo.cat = 'all';
+  const chip = (id, label, n) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'bingo-cat-chip';
+    b.dataset.cat = id;
+    b.setAttribute('aria-pressed', String(state.bingo.cat === id));
+    b.textContent = label;
+    const count = document.createElement('span');
+    count.textContent = n;
+    b.append(' ', count);
+    return b;
+  };
+  $('#bingo-cat-chips').replaceChildren(...(items.length ? [chip('all', 'Alle', items.length),
+    ...CATEGORIES.filter((c) => counts[c.id]).map((c) => chip(c.id, `${c.icon} ${c.name}`, counts[c.id]))] : []));
+  // Ältere Items (vor den Kategorien) einmal automatisch einsortieren
+  const missing = items.filter((i) => !i.category).length;
+  const auto = $('#bingo-cat-auto');
+  auto.hidden = !missing;
+  auto.textContent = `✨ ${missing} ${missing === 1 ? 'Item' : 'Items'} ohne Kategorie automatisch einsortieren`;
+}
+
+async function autoBingoCategories(btn) {
+  const todo = state.bingo.items.filter((i) => !i.category);
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (const item of todo) {
+      const category = categoryFromName(item.name);
+      await state.api.updateBingoItem(item.id, { category });
+      item.category = category;
+      done++;
+    }
+    toast(`✓ ${done} ${done === 1 ? 'Item' : 'Items'} einsortiert – falsch erkannte änderst du in der Liste.`, 'ok');
+  } catch (err) {
+    toast(`Einsortieren nach ${done} von ${todo.length} abgebrochen: ${germanError(err)}`, 'error', 8000);
+  } finally {
+    btn.disabled = false;
+    renderBingoDialog();
+  }
+}
+
+function renderBingoItems() {
+  const list = $('#bingo-items');
+  const { items } = state.bingo;
+  renderBingoCatChips(items);
+  if (!items.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Noch keine Bilder.';
+    list.replaceChildren(li);
+    return;
+  }
+  // Erst alles, was auf Karten kommen kann (nach Kategorie gruppiert), dann der Tresor
+  const shown = items.filter((i) => state.bingo.cat === 'all' || bingoCat(i) === state.bingo.cat);
+  const active = shown.filter((i) => !i.vault).sort(bingoSort);
+  const vaulted = shown.filter((i) => i.vault).sort(bingoSort);
+  const head = (cls, text) => {
+    const li = document.createElement('li');
+    li.className = cls;
+    li.textContent = text;
+    return li;
+  };
+  const rows = [];
+  let last = null;
+  for (const item of active) {
+    const c = bingoCat(item);
+    if (c !== last) {
+      const cat = categoryOf(c);
+      rows.push(head('bingo-cat-head', `${cat.icon} ${cat.name} · ${active.filter((i) => bingoCat(i) === c).length}`));
+      last = c;
+    }
+    rows.push(bingoItemRow(item));
+  }
+  if (vaulted.length) {
+    rows.push(head('bingo-vault-head', `🔒 Tresor · ${vaulted.length} – kommt auf keine neue Karte`));
+    rows.push(...vaulted.map(bingoItemRow));
+  }
+  list.replaceChildren(...rows);
+}
+
+function bingoItemRow(item) {
+  const li = document.createElement('li');
+  li.classList.toggle('is-vault', !!item.vault);
+  const img = document.createElement('img');
+  img.src = item.url;
+  img.alt = '';
+  img.loading = 'lazy';
+  const thumb = img;
+  const name = document.createElement('input');
+  name.value = item.name;
+  name.maxLength = 40;
+  name.setAttribute('aria-label', 'Name des Items');
+  name.addEventListener('change', async () => {
+    const value = name.value.trim();
+    if (!value) { name.value = item.name; return; }
+    try {
+      await state.api.updateBingoItem(item.id, { name: value });
+      item.name = value;
+    } catch (err) {
+      name.value = item.name;
+      toast(`Umbenennen fehlgeschlagen: ${germanError(err)}`, 'error');
+    }
+  });
+  const rarity = document.createElement('select');
+  rarity.className = `bingo-rarity-pick${item.rarity ? ` r-${item.rarity}` : ''}`;
+  rarity.setAttribute('aria-label', `Seltenheit von „${item.name}“`);
+  rarity.append(new Option('– keine –', ''), ...RARITIES.map((r) => new Option(r.name, r.id)));
+  rarity.value = item.rarity ?? '';
+  rarity.addEventListener('change', async () => {
+    const value = rarity.value || null;
+    try {
+      await state.api.updateBingoItem(item.id, { rarity: value });
+      item.rarity = value;
+      renderBingoDialog();
+    } catch (err) {
+      rarity.value = item.rarity ?? '';
+      toast(`Seltenheit nicht gespeichert: ${germanError(err)}`, 'error');
+    }
+  });
+  // Zahl im Icon, z. B. 5 auf dem Kill-Symbol = 5 Kills
+  const amount = document.createElement('input');
+  amount.type = 'number';
+  amount.className = 'bingo-amount-pick';
+  amount.min = '1';
+  amount.max = String(MAX_AMOUNT);
+  amount.step = '1';
+  amount.inputMode = 'numeric';
+  amount.placeholder = 'Zahl';
+  amount.value = item.amount ?? '';
+  amount.title = 'Zahl im Icon, z. B. 5 für 5 Kills – leer lassen für keine';
+  amount.setAttribute('aria-label', `Zahl im Icon von „${item.name}“`);
+  amount.addEventListener('change', async () => {
+    const raw = amount.value.trim();
+    const value = raw === '' ? null : Math.round(Number(raw));
+    if (value !== null && !(value >= 1 && value <= MAX_AMOUNT)) {
+      amount.value = item.amount ?? '';
+      toast(`Die Zahl muss zwischen 1 und ${MAX_AMOUNT} liegen.`, 'error');
+      return;
+    }
+    try {
+      await state.api.updateBingoItem(item.id, { amount: value });
+      item.amount = value;
+      renderBingoDialog();
+    } catch (err) {
+      amount.value = item.amount ?? '';
+      toast(`Zahl nicht gespeichert: ${germanError(err)}`, 'error');
+    }
+  });
+  // Kopie mit anderer Zahl: ein Kill-Symbol für 3, 5 und 10 Kills
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'prank-try';
+  copy.textContent = '⧉';
+  copy.title = 'Kopie mit anderer Zahl';
+  copy.setAttribute('aria-label', `„${item.name}“ mit anderer Zahl kopieren`);
+  copy.addEventListener('click', async () => {
+    const answer = prompt(`Kopie von „${item.name}“ – welche Zahl soll im Icon stehen?`, String(Math.min(MAX_AMOUNT, (item.amount ?? 0) + 1)));
+    if (answer === null) return;
+    const value = answer.trim() === '' ? null : Math.round(Number(answer));
+    if (value !== null && !(value >= 1 && value <= MAX_AMOUNT)) {
+      toast(`Die Zahl muss zwischen 1 und ${MAX_AMOUNT} liegen.`, 'error');
+      return;
+    }
+    copy.disabled = true;
+    try {
+      const created = await state.api.copyBingoItem(item, { amount: value });
+      state.bingo.items = [...state.bingo.items, created];
+      renderBingoDialog();
+    } catch (err) {
+      copy.disabled = false;
+      toast(`Kopieren fehlgeschlagen: ${germanError(err)}`, 'error');
+    }
+  });
+  // Tresor: kommt auf keine neue Karte, bleibt aber gespeichert
+  const vault = document.createElement('button');
+  vault.type = 'button';
+  vault.className = 'prank-try bingo-vault-btn';
+  vault.textContent = item.vault ? '🔓' : '🔒';
+  vault.title = item.vault ? 'Aus dem Tresor holen – kommt wieder auf neue Karten' : 'In den Tresor – kommt auf keine neue Karte, bleibt aber gespeichert';
+  vault.setAttribute('aria-label', `„${item.name}“ ${item.vault ? 'aus dem Tresor holen' : 'in den Tresor legen'}`);
+  vault.addEventListener('click', async () => {
+    vault.disabled = true;
+    try {
+      await state.api.updateBingoItem(item.id, { vault: !item.vault });
+      item.vault = !item.vault;
+      toast(item.vault ? `🔒 „${item.name}“ liegt im Tresor.` : `🔓 „${item.name}“ ist wieder dabei.`, 'ok');
+      renderBingoDialog();
+    } catch (err) {
+      vault.disabled = false;
+      toast(`Tresor: ${germanError(err)}`, 'error', 7000);
+    }
+  });
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'prank-try prank-del';
+  del.textContent = '🗑';
+  del.title = 'Löschen';
+  del.setAttribute('aria-label', `„${item.name}“ löschen`);
+  del.addEventListener('click', async () => {
+    if (!confirm(`„${item.name}“${item.rarity ? ` (${rarityName(item.rarity)})` : ''} löschen? Auf der aktuellen Karte bleibt es stehen. Nur aussortieren? Dann lieber 🔒 in den Tresor.`)) return;
+    del.disabled = true;
+    try {
+      await state.api.deleteBingoItem(item);
+      state.bingo.items = state.bingo.items.filter((x) => x.id !== item.id);
+      renderBingoDialog();
+    } catch (err) {
+      del.disabled = false;
+      toast(`Löschen fehlgeschlagen: ${germanError(err)}`, 'error');
+    }
+  });
+  // Kategorie (beim Hochladen aus dem Namen erkannt) – sortiert die Liste und mischt neue Karten
+  const category = document.createElement('select');
+  category.className = 'bingo-cat-pick';
+  category.setAttribute('aria-label', `Kategorie von „${item.name}“`);
+  category.append(...CATEGORIES.map((c) => new Option(`${c.icon} ${c.name}`, c.id)));
+  category.value = bingoCat(item);
+  category.addEventListener('change', async () => {
+    const value = category.value;
+    try {
+      await state.api.updateBingoItem(item.id, { category: value });
+      item.category = value;
+      renderBingoDialog();
+    } catch (err) {
+      category.value = bingoCat(item);
+      toast(`Kategorie nicht gespeichert: ${germanError(err)}`, 'error');
+    }
+  });
+  li.append(thumb, name, copy, vault, del, rarity, amount, category);
+  return li;
+}
+
+// ---------- Tipprunde: Zuschauer tippen mit Kanalpunkten, welche Reihe zuerst voll wird ----------
+const clock = (iso) => new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+function paintBingoBet(bet, admin) {
+  const open = bet?.status === 'active' && Date.parse(bet.lock_at) > Date.now();
+  // Ende der Tippzeit: einmal neu zeichnen, damit der Text wechselt
+  clearTimeout(state.bingo.betTimer);
+  if (open) state.bingo.betTimer = setTimeout(() => $('#bingo-dialog').open && renderBingoDialog(), Date.parse(bet.lock_at) - Date.now() + 500);
+
+  const note = $('#bingo-bet-note');
+  let text = '';
+  if (bet?.status === 'active') {
+    text = open
+      ? `🎯 Tipprunde läuft! Tippe bis ${clock(bet.lock_at)} Uhr im Twitch-Chat mit deinen Kanalpunkten, welche Reihe zuerst voll wird – die Vorhersage steht oben im Chat. Wer richtig liegt, bekommt Punkte dazu.`
+      : '🎯 Die Tipps sind abgegeben. Jetzt zählt, welche Reihe zuerst voll wird!';
+  } else if (bet?.status === 'resolved') {
+    text = `🎯 ${bet.winner_title ?? 'Eine Reihe'} war zuerst voll – wer darauf getippt hat, hat Kanalpunkte gewonnen.`;
+  }
+  note.textContent = text;
+  note.hidden = !text;
+  note.classList.toggle('is-won', bet?.status === 'resolved');
+
+  if (!admin) return;
+  const twitch = state.twitch ?? {};
+  const running = bet?.status === 'active';
+  let hint = '';
+  if (!state.api.demo && !twitch.connected) hint = 'Der Streamer muss zuerst Twitch verbinden (Twitch-Knopf oben).';
+  else if (!state.api.demo && twitch.predictions_scope === false) hint = 'Für Tipprunden braucht die Seite eine neue Twitch-Berechtigung: Twitch-Knopf oben → „Neu verbinden“.';
+  else if (!state.bingo.card) hint = 'Erst eine Karte ziehen.';
+  $('#bingo-bet-start').hidden = running;
+  $('#bingo-bet-btn').disabled = !!hint;
+  $('#bingo-bet-cancel').hidden = !running;
+  const stateEl = $('#bingo-bet-state');
+  stateEl.textContent = running
+    ? open
+      ? `Läuft – getippt wird bis ${clock(bet.lock_at)} Uhr. Erst danach Items abhaken.`
+      : 'Tipps sind zu. Die erste volle Reihe gewinnt – beim Abhaken wird automatisch aufgelöst.'
+    : hint || (bet?.status === 'resolved' ? `Letzte Runde: ${bet.winner_title} hat gewonnen.` : bet?.status === 'canceled' ? 'Letzte Runde wurde abgebrochen.' : '');
+  stateEl.hidden = !stateEl.textContent;
+}
+
+async function startBingoBet() {
+  const btn = $('#bingo-bet-btn');
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  try {
+    const { bet } = await state.api.bingoBet('start', Number($('#bingo-bet-seconds').value));
+    if (state.bingo.card) state.bingo.card = { ...state.bingo.card, bet };
+    toast('Tipprunde gestartet – die Vorhersage steht jetzt im Twitch-Chat.', 'ok');
+  } catch (err) {
+    toast(germanError(err), 'error', 8000);
+  } finally {
+    btn.classList.remove('is-loading');
+    renderBingoDialog();
+  }
+}
+
+async function cancelBingoBet({ ask = true } = {}) {
+  if (ask && !confirm('Tipprunde abbrechen? Alle bekommen ihre Kanalpunkte zurück.')) return false;
+  try {
+    const { bet } = await state.api.bingoBet('cancel');
+    if (state.bingo.card) state.bingo.card = { ...state.bingo.card, bet };
+    renderBingoDialog();
+    return true;
+  } catch (err) {
+    toast(germanError(err), 'error', 8000);
+    return false;
+  }
+}
+
+// Nach dem Abhaken: Ist eine getippte Reihe voll, löst der Server die Vorhersage auf.
+async function checkBingoBet(card) {
+  const bet = card?.bet;
+  if (bet?.status !== 'active') return;
+  const keys = new Set(bet.outcomes.map((o) => o.key));
+  if (!fullBetLines(card).some((l) => keys.has(l.key))) return;
+  try {
+    const { bet: next } = await state.api.bingoBet('check');
+    if (state.bingo.card) state.bingo.card = { ...state.bingo.card, bet: next };
+    if (next?.status === 'resolved') toast(`🎯 ${next.winner_title} gewinnt – die Kanalpunkte sind verteilt.`, 'ok', 6000);
+    renderBingoDialog();
+  } catch (err) {
+    toast(`Tipprunde nicht aufgelöst: ${germanError(err)}`, 'error', 8000);
+  }
+}
+
+// Neue Karte vom Server (live per Realtime) oder aus der eigenen Aktion
+function applyBingoCard(card, stamped = null) {
+  const before = state.bingo.lines;
+  state.bingo.card = card;
+  state.bingo.lines = bingoState(card).count;
+  paintBingoTile();
+  if ($('#bingo-dialog').open) renderBingoDialog({ stamped });
+  if (state.bingo.lines > before && card?.marked?.length) celebrateBingo();
+}
+
+function celebrateBingo() {
+  const win = $('#bingo-win');
+  win.classList.remove('is-on');
+  void win.offsetWidth;
+  win.classList.add('is-on');
+  if (!$('#bingo-dialog').open) toast('BINGO! Eine Reihe ist voll.', 'ok', 5000);
+}
+
+// Das Bild aus der aktuellen Liste – ein Admin kann Seltenheit und Zahl nachträglich ändern
+function bingoItemOf(cell) {
+  return state.bingo.items.find((i) => i.id === cell.id);
+}
+
+// ---------- Eigene Karte: selbst ziehen, selbst abkreuzen ----------
+function renderMyBingo(stamped = null) {
+  const { mine, items, on } = state.bingo;
+  const grid = $('#my-bingo-grid');
+  const empty = $('#my-bingo-empty');
+  const st = bingoState(mine);
+  grid.hidden = !mine;
+  $('#my-bingo-status').textContent = mine
+    ? `${st.done} von ${st.total} abgekreuzt${st.count ? ` · ${st.count}× Bingo!` : ''}`
+    : '';
+  $('#my-bingo-new').textContent = mine ? 'Neue Karte ziehen' : 'Karte ziehen';
+  let text = '';
+  if (!on) text = 'Das Bingo ist noch nicht eingerichtet.';
+  else if (state.bingo.mineOn === false) text = 'Eigene Karten sind noch nicht eingerichtet (Migration …_channel_points.sql).';
+  else if (!mine) text = items.length ? 'Zieh dir deine eigene Karte aus den Item-Bildern des Streamers.' : 'Der Streamer hat noch keine Item-Bilder hochgeladen.';
+  empty.textContent = text;
+  empty.hidden = !text;
+  $('#my-bingo-new').disabled = !on || state.bingo.mineOn === false || !items.length;
+  if (mine) {
+    renderBingoGrid(grid, mine, { urlFor: (path) => state.api.bingoUrl(path), onCell: toggleMyBingo, stamped, itemOf: bingoItemOf });
+  }
+}
+
+async function newMyBingo() {
+  const { mine } = state.bingo;
+  if (mine && bingoState(mine).done && !confirm('Neue Karte ziehen? Deine Kreuze gehen verloren.')) return;
+  try {
+    const card = drawCard(state.bingo.items, Number($('#my-bingo-size').value), $('#my-bingo-free').checked);
+    state.bingo.mine = await state.api.saveMyBingo(card);
+    renderBingoDialog();
+  } catch (err) {
+    toast(germanError(err), 'error', 6000);
+  }
+}
+
+async function toggleMyBingo(index) {
+  const before = state.bingo.mine;
+  if (!before || before.cells[index]?.free) return;
+  const marked = before.marked.includes(index) ? before.marked.filter((i) => i !== index) : [...before.marked, index];
+  const next = { ...before, marked };
+  // Sofort zeigen, im Hintergrund speichern – bei Fehler zurück
+  state.bingo.mine = next;
+  renderMyBingo(marked.includes(index) ? index : null);
+  if (bingoState(next).count > bingoState(before).count) {
+    const win = $('#my-bingo-win');
+    win.classList.remove('is-on');
+    void win.offsetWidth;
+    win.classList.add('is-on');
+    prankSfx()?.play('applause');
+  }
+  try {
+    await state.api.saveMyBingo(next);
+  } catch (err) {
+    state.bingo.mine = before;
+    renderMyBingo();
+    toast(`Nicht gespeichert: ${germanError(err)}`, 'error');
+  }
+}
+
+async function toggleBingoCell(index, node) {
+  node.disabled = true;
+  try {
+    const card = await state.api.toggleBingo(index);
+    applyBingoCard(card, card.marked.includes(index) ? index : null);
+    checkBingoBet(card);
+  } catch (err) {
+    node.disabled = false;
+    toast(germanError(err), 'error');
+  }
+}
+
+async function newBingoCard() {
+  const { card } = state.bingo;
+  if (card?.bet?.status === 'active') {
+    if (!confirm('Es läuft eine Tipprunde. Abbrechen (alle bekommen ihre Kanalpunkte zurück) und neue Karte ziehen?')) return;
+    if (!(await cancelBingoBet({ ask: false }))) return;
+  } else if (card && bingoState(card).done && !confirm('Neue Karte ziehen? Die Haken der aktuellen Karte gehen verloren.')) return;
+  const btn = $('#bingo-new-btn');
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  try {
+    const next = await state.api.newBingoCard(Number($('#bingo-size').value), $('#bingo-free').checked);
+    state.bingo.lines = 0;
+    applyBingoCard(next);
+    toast('Neue Karte gezogen – sie ist jetzt auch im Stream zu sehen.', 'ok');
+  } catch (err) {
+    toast(germanError(err), 'error', 7000);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+  }
+}
+
+async function clearBingo() {
+  const { card } = state.bingo;
+  if (!card || !confirm('Alle Haken entfernen?')) return;
+  const free = card.cells.flatMap((c, i) => (c.free ? [i] : []));
+  await updateBingoCard({ marked: free });
+}
+
+async function updateBingoCard(patch) {
+  try {
+    const card = await state.api.updateBingoCard(patch);
+    state.bingo.lines = bingoState(card).count;
+    applyBingoCard(card);
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen: ${germanError(err)}`, 'error');
+    renderBingoDialog();
+  }
+}
+
+async function uploadBingoImages(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const files = [...form.files.files];
+  if (!files.length) return formMsg(form, 'Bitte zuerst Bilder wählen.');
+  // Seltenheiten angehakt: jedes Bild einmal pro Seltenheit (gleicher Name, gleiches Bild)
+  const rarities = [...form.querySelectorAll('input[name=rar]:checked')].map((b) => b.value);
+  await withLoading(form, async () => {
+    let done = 0;
+    let made = 0;
+    const failed = [];
+    for (const file of files) {
+      formMsg(form, `Lade ${done + 1} von ${files.length} hoch …`, true);
+      try {
+        const [blob, key] = await Promise.all([shrinkImage(file), imageKey(file)]);
+        const name = nameFromFile(file.name);
+        const created = await state.api.addBingoItem(blob, name, {
+          rarity: rarityFromFile(file.name), amount: amountFromFile(file.name), imageKey: key, rarities,
+          category: categoryFromName(name),
+        });
+        state.bingo.items = [...state.bingo.items, ...created];
+        made += created.length;
+        done++;
+      } catch (err) {
+        console.error(err);
+        failed.push(`${file.name}: ${germanError(err)}`);
+      }
+    }
+    form.reset();
+    $('.sound-file-text', form).textContent = '🖼️ Bilder wählen … (mehrere gehen)';
+    renderBingoDialog();
+    if (failed.length) throw new Error(`${done} hochgeladen, ${failed.length} nicht: ${failed.join(' · ')}`);
+    formMsg(form, rarities.length
+      ? `${done} ${done === 1 ? 'Bild' : 'Bilder'} hochgeladen – ${made} Items in ${rarities.length} Seltenheiten.`
+      : `${done} ${done === 1 ? 'Bild' : 'Bilder'} hochgeladen.`, true);
+  });
+}
+
+// ============================================================
+// Kacheln für Fragen und Dino
+// ============================================================
+function buildActionTile(tile, i, { cls, cta, onClick }) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = `tile tile--${tile.kind} theme-${tile.theme} ${cls ?? ''}`;
+  el.style.setProperty('--i', i);
+  el.dataset.id = tile.id;
+  const bg = document.createElement('div');
+  bg.className = 'tile-bg';
+  const img = safeUrl(tile.background);
+  if (img) bg.style.backgroundImage = `url(${JSON.stringify(img)})`;
+  el.append(bg, div('tile-shade'), div('tile-shine'));
+  const body = div('tile-body');
+  const tag = document.createElement('span');
+  tag.className = 'tile-tag';
+  tag.textContent = 'Jederzeit';
+  const title = document.createElement('h3');
+  title.className = 'tile-title';
+  title.textContent = tile.title;
+  const desc = document.createElement('p');
+  desc.className = 'tile-desc';
+  desc.textContent = tile.description;
+  const row = div('prank-tile-row');
+  const status = document.createElement('span');
+  status.className = 'tile-live-status';
+  const go = document.createElement('span');
+  go.className = 'prank-cta';
+  go.textContent = cta;
+  row.append(status, go);
+  body.append(tag, title, desc, ...[startNote(tile)].filter(Boolean), row);
+  el.append(body);
+  el.addEventListener('click', onClick);
+  if (finePointer && !reducedMotion) addTilt(el);
+  return el;
+}
+
+function buildQuestionsTile(tile, i) {
+  const el = buildActionTile(tile, i, { cls: 'tile--q', cta: 'Frage stellen →', onClick: openQuestions });
+  paintQuestionsTile(el);
+  return el;
+}
+
+function paintQuestionsTile(el = $('.tile--questions')) {
+  const label = el?.querySelector('.tile-live-status');
+  if (!label) return;
+  const { stage, list, on } = state.questions;
+  const pending = state.profile?.is_admin ? list.filter((q) => q.status === 'pending').length : 0;
+  label.textContent = !on ? '❓ Frag den Streamer was'
+    : stage?.state === 'ask' ? '🔴 Gerade im Stream'
+      : pending ? `📝 ${pending} zu prüfen`
+        : '❓ Frag den Streamer was';
+}
+
+function buildPetTile(tile, i) {
+  const el = buildActionTile(tile, i, { cls: 'tile--dino', cta: 'Zum Dino →', onClick: openPet });
+  const mini = document.createElement('span');
+  mini.className = 'pet-tile-dino';
+  mini.innerHTML = dinoSvg(state.pet.data?.costume, state.pet.data?.species);
+  el.querySelector('.tile-body').prepend(mini);
+  paintPetTile(el);
+  return el;
+}
+
+function paintPetTile(el = $('.tile--pet')) {
+  const label = el?.querySelector('.tile-live-status');
+  if (!label) return;
+  const pet = state.pet.data;
+  const hungry = state.pet.on && isHungry(pet);
+  const egg = pet?.stage === 'egg';
+  label.textContent = !state.pet.on ? '🦖 Wohnt im Stream'
+    : egg ? `🥚 ${pet.name} ist noch im Ei – ${Math.max(0, (pet.hatch_feeds ?? 50) - (pet.stage_feeds ?? 0))} × füttern`
+    : isFrenzy(pet) ? `🔥 ${pet.name} hat Heißhunger!`
+      : hungry ? `🍖 ${pet.name} hat Hunger!` : `😊 ${pet.name} ist satt`;
+  el.classList.toggle('is-hungry', hungry);
+  // Die kleine Zeichnung: Kostüm und rot bei Hunger
+  let svg = el.querySelector('.pet-tile-dino .dino-svg');
+  if (svg && pet?.species && svg.dataset.species !== pet.species) {
+    el.querySelector('.pet-tile-dino').innerHTML = dinoSvg(pet.costume, pet.species);
+    svg = el.querySelector('.pet-tile-dino .dino-svg');
+  }
+  if (svg) {
+    if (pet?.costume) svg.dataset.costume = pet.costume;
+    svg.classList.toggle('is-hungry', hungry);
+  }
+}
+
+// ============================================================
+// Win-Challenge
+// ============================================================
+function buildChallengeTile(tile, i) {
+  const el = buildActionTile(tile, i, { cls: 'tile--challenge', cta: 'Zur Challenge →', onClick: openChallenge });
+  paintChallengeTile(el);
+  return el;
+}
+
+function paintChallengeTile(el = $('.tile--challenge')) {
+  const label = el?.querySelector('.tile-live-status');
+  if (label) label.textContent = challengeSummary(state.challenge.on ? state.challenge.data : null);
+}
+
+function setupChallenge() {
+  $('#ch-win').addEventListener('click', () => challengeAction('result', true));
+  $('#ch-loss').addEventListener('click', () => challengeAction('result', false));
+  $('#ch-undo').addEventListener('click', () => challengeAction('undo'));
+  $('#ch-skip').addEventListener('click', () => {
+    const ch = state.challenge.data;
+    if (ch.current >= ch.stages.length - 1) return toast('Das ist schon die letzte Stufe.', 'info');
+    if (confirm(`Stufe ${ch.current + 1} überspringen? Sie zählt dann nicht als geschafft.`)) challengeAction('goto', ch.current + 1);
+  });
+  $('#ch-reset').addEventListener('click', () => {
+    if (confirm('Challenge neu starten? Alle Siege, Niederlagen und Leben gehen auf Anfang.')) challengeAction('reset');
+  });
+  $('#ch-form').addEventListener('submit', saveChallengeForm);
+  $('#ch-form').addEventListener('input', () => { state.challenge.editing = true; });
+  document.querySelectorAll('[data-ch-add]').forEach((b) => b.addEventListener('click', () => {
+    const kind = b.dataset.chAdd;
+    const list = readChallengeEdit();
+    if (list.length >= 30) return toast('Höchstens 30 Stufen.', 'info');
+    list.push({ id: '', kind, title: '', opponent: '', target: kind === 'round' ? 3 : kind === 'fight' ? 2 : 1 });
+    state.challenge.editing = true;
+    renderChallengeEdit(list);
+    $('#ch-edit').lastElementChild?.querySelector('input[name="title"]')?.focus();
+  }));
+  $('#ch-allow').addEventListener('change', async (e) => {
+    try {
+      state.challenge.data = await state.api.challengeAllowAdmins(e.target.checked);
+      state.challenge.access.admins_can_edit = e.target.checked;
+      toast(e.target.checked ? 'Die Admins dürfen jetzt Ergebnisse eintragen.' : 'Nur du trägst ein.', 'ok');
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      toast(germanError(err), 'error');
+    }
+  });
+  $('#ch-dialog').addEventListener('close', () => $('#ch-fx').replaceChildren());
+}
+
+async function loadChallenge() {
+  const c = state.challenge;
+  try {
+    const [data, access] = await Promise.all([
+      state.api.getChallenge(),
+      state.user ? state.api.challengeAccess().catch(() => null) : null,
+    ]);
+    Object.assign(c, { data, on: !!data, error: '' });
+    if (access) c.access = access;
+    if (c.access.can_edit && !c.mods.length) c.mods = await state.api.getModNames().catch(() => []);
+  } catch (err) {
+    console.warn('Win-Challenge nicht verfügbar:', err);
+    Object.assign(c, { on: false, error: germanError(err) });
+  }
+  if (c.on && !c.subscribed) {
+    c.subscribed = true;
+    state.api.onChallenge(applyChallenge);
+  }
+  paintChallengeTile();
+}
+
+// Neuer Stand (eigener Klick oder Realtime): bei neuem Ereignis den Effekt zeigen
+function applyChallenge(next) {
+  if (!next) return;
+  const before = state.challenge.data;
+  state.challenge.data = next;
+  const ev = next.last_event;
+  if (before && ev?.n && ev.n !== before.last_event?.n && $('#ch-dialog').open) {
+    challengeBurst($('#ch-fx'), ev, next, { sfx: prankSfx(true) });
+  }
+  paintChallengeTile();
+  if ($('#ch-dialog').open) renderChallenge({ changed: before });
+}
+
+async function openChallenge() {
+  const tile = tileByKind('challenge');
+  if (tile && isLocked(tile)) { openTile(tile.id); return; }
+  state.challenge.editing = false;
+  renderChallenge();
+  $('#ch-dialog').showModal();
+  await loadChallenge();
+  renderChallenge();
+}
+
+function renderChallenge({ changed = null } = {}) {
+  const c = state.challenge;
+  const ch = c.data;
+  const canEdit = !!c.access.can_edit && c.on;
+  const note = $('#ch-note');
+  note.hidden = c.on;
+  note.textContent = c.on ? '' : state.profile?.is_admin
+    ? (c.error || 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20261003000000_win_challenge.sql ausführen.')
+    : 'Die Win-Challenge ist noch nicht eingerichtet.';
+  $('#ch-dialog').classList.toggle('has-side', canEdit);
+  $('#ch-side').hidden = !canEdit;
+  $('#ch-controls').hidden = !canEdit;
+  $('#ch-viewer').hidden = canEdit || !c.on;
+  if (!ch) return;
+  $('#ch-title').textContent = ch.title;
+
+  // Kopf: Stand, Leben, Fortschritt
+  const done = doneCount(ch);
+  const hero = $('#ch-hero');
+  hero.classList.toggle('is-won', ch.status === 'won');
+  hero.classList.toggle('is-failed', ch.status === 'failed');
+  $('#ch-status').textContent = {
+    ready: '🎯 Bereit – der erste Sieg startet die Challenge',
+    running: `🔥 Stufe ${Math.min(ch.current + 1, ch.stages.length)} von ${ch.stages.length}`,
+    won: '🏆 Challenge geschafft!',
+    failed: '💀 Gescheitert – keine Leben mehr',
+  }[ch.status];
+  const hearts = $('#ch-hearts');
+  hearts.innerHTML = heartsHtml(ch);
+  if (changed && ch.lives && changed.lives_left > ch.lives_left) hearts.children[ch.lives_left]?.classList.add('is-breaking');
+  $('#ch-progress').style.width = `${Math.round((done / ch.stages.length) * 100)}%`;
+  const losses = ch.stages.reduce((n, s) => n + s.losses, 0);
+  const wins = ch.stages.reduce((n, s) => n + s.wins, 0);
+  $('#ch-progress-text').textContent = `${done} von ${ch.stages.length} Stufen geschafft · ${wins} Siege · ${losses} Niederlagen${ch.lives ? '' : ' · ohne Leben'}`;
+
+  // Knöpfe
+  const over = ch.status === 'won' || ch.status === 'failed';
+  const stage = currentStage(ch);
+  $('#ch-now').innerHTML = '';
+  if (over) {
+    $('#ch-now').textContent = ch.status === 'won' ? 'Geschafft! Mit „Neu starten“ geht es von vorn los.' : 'Vorbei. „Rückgängig“ holt die letzte Niederlage zurück, „Neu starten“ fängt von vorn an.';
+  } else {
+    const b = document.createElement('span');
+    b.textContent = `${KINDS[stage.kind].icon} Jetzt: ${stageLabel(stage)}`;
+    const small = document.createElement('small');
+    small.textContent = `${stage.wins} von ${stage.target} Siegen${stage.losses ? ` · ${stage.losses} Niederlage${stage.losses === 1 ? '' : 'n'}` : ''}`;
+    $('#ch-now').append(b, small);
+  }
+  $('#ch-win').disabled = over;
+  $('#ch-loss').disabled = over;
+  $('#ch-undo').disabled = !ch.history?.length;
+  $('#ch-skip').disabled = over || ch.current >= ch.stages.length - 1;
+  $('#ch-reset').disabled = false;
+
+  // Die Leiter
+  $('#ch-ladder').replaceChildren(...ch.stages.map((s, i) => {
+    const li = document.createElement('li');
+    const active = i === ch.current && !over;
+    li.className = `ch-stage${stageDone(s) ? ' is-done' : active ? ' is-active' : i > ch.current ? ' is-next' : ' is-skipped'}`;
+    li.innerHTML = `<span class="ch-stage-no">${i + 1}</span><span class="ch-stage-icon" aria-hidden="true">${KINDS[s.kind].icon}</span>
+      <span class="ch-stage-name"><b></b><small></small></span>
+      <span class="ch-stage-score"><span class="ch-pips">${pipsHtml(s)}</span><small></small></span>`;
+    li.querySelector('b').textContent = s.title;
+    const small = li.querySelector('.ch-stage-name small');
+    small.textContent = KINDS[s.kind].name;
+    if (s.kind === 'fight' && s.opponent) {
+      const vs = document.createElement('span');
+      vs.className = 'ch-vs';
+      vs.textContent = ` · vs ${s.opponent}`;
+      small.append(vs);
+    }
+    li.querySelector('.ch-stage-score small').textContent = s.losses ? `${s.losses}× verloren` : '';
+    // Neuer Sieg: Punkt springt auf
+    const prev = changed?.stages?.find((x) => x.id === s.id);
+    if (prev && s.wins > prev.wins) li.querySelectorAll('.ch-pip.is-on')[s.wins - 1]?.classList.add('is-pop');
+    if (canEdit && i !== ch.current) {
+      li.classList.add('can-jump');
+      li.title = 'Zu dieser Stufe springen';
+      li.addEventListener('click', () => {
+        if (confirm(`Zu Stufe ${i + 1} „${s.title}“ springen?`)) challengeAction('goto', i);
+      });
+    }
+    return li;
+  }));
+
+  // Einrichten (nur wenn nicht gerade bearbeitet)
+  if (canEdit) {
+    const f = $('#ch-form');
+    if (!c.editing) {
+      f.ch_title.value = ch.title;
+      f.lives.value = ch.lives;
+      renderChallengeEdit(ch.stages);
+    }
+    $('#ch-mods').replaceChildren(...c.mods.map((name) => Object.assign(document.createElement('option'), { value: name })));
+    $('#ch-allow-wrap').hidden = !c.access.is_owner;
+    if (state.profile?.is_admin) paintTileStart('challenge');
+    $('#ch-start').hidden = !state.profile?.is_admin;
+    $('#ch-allow').checked = !!ch.admins_can_edit;
+  }
+}
+
+function renderChallengeEdit(stages) {
+  $('#ch-edit').replaceChildren(...stages.map((s, i, all) => {
+    const li = document.createElement('li');
+    li.dataset.id = s.id ?? '';
+    li.innerHTML = `<select name="kind" aria-label="Art">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}">${v.icon} ${v.name}</option>`).join('')}</select>
+      <input type="text" name="title" maxlength="60" placeholder="z. B. Gewinne ein Solo-Game" aria-label="Aufgabe">
+      <input type="number" name="target" min="1" max="99" step="1" aria-label="Siege nötig" title="Siege nötig">
+      <span class="ch-edit-tools">
+        <button type="button" data-move="-1" aria-label="Nach oben" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" data-move="1" aria-label="Nach unten" ${i === all.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" data-remove aria-label="Entfernen">✕</button>
+      </span>
+      <input type="text" name="opponent" class="ch-edit-opp" maxlength="30" list="ch-mods" placeholder="Gegner (Mod)" aria-label="Gegner">`;
+    li.querySelector('[name="kind"]').value = s.kind;
+    li.querySelector('[name="title"]').value = s.title ?? '';
+    li.querySelector('[name="target"]').value = s.target ?? 1;
+    const opp = li.querySelector('[name="opponent"]');
+    opp.value = s.opponent ?? '';
+    opp.hidden = s.kind !== 'fight';
+    li.querySelector('[name="kind"]').addEventListener('change', (e) => { opp.hidden = e.target.value !== 'fight'; });
+    li.querySelectorAll('[data-move]').forEach((b) => b.addEventListener('click', () => {
+      const list = readChallengeEdit();
+      const j = i + Number(b.dataset.move);
+      [list[i], list[j]] = [list[j], list[i]];
+      state.challenge.editing = true;
+      renderChallengeEdit(list);
+    }));
+    li.querySelector('[data-remove]').addEventListener('click', () => {
+      const list = readChallengeEdit();
+      if (list.length <= 1) return toast('Mindestens eine Stufe braucht die Challenge.', 'info');
+      list.splice(i, 1);
+      state.challenge.editing = true;
+      renderChallengeEdit(list);
+    });
+    return li;
+  }));
+}
+
+function readChallengeEdit() {
+  return [...$('#ch-edit').children].map((li) => ({
+    id: li.dataset.id,
+    kind: li.querySelector('[name="kind"]').value,
+    title: li.querySelector('[name="title"]').value.trim(),
+    opponent: li.querySelector('[name="opponent"]').value.trim(),
+    target: Math.round(Number(li.querySelector('[name="target"]').value)) || 1,
+  }));
+}
+
+async function saveChallengeForm(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const stages = readChallengeEdit();
+  const lives = Math.round(Number(form.lives.value));
+  if (!stages.length) return formMsg(form, 'Mindestens eine Stufe braucht die Challenge.');
+  if (!(lives >= 0 && lives <= 10)) return formMsg(form, 'Leben: 0 bis 10.');
+  if (stages.some((s) => !s.title)) return formMsg(form, 'Jede Stufe braucht eine Aufgabe.');
+  if (stages.some((s) => s.target < 1 || s.target > 99)) return formMsg(form, 'Siege nötig: 1 bis 99.');
+  await withLoading(form, async () => {
+    const next = await state.api.saveChallenge({ title: form.ch_title.value.trim(), lives, stages });
+    state.challenge.editing = false;
+    applyChallenge(next);
+    formMsg(form, 'Gespeichert – läuft so auch im Stream.', true);
+  });
+}
+
+async function challengeAction(kind, arg) {
+  const buttons = ['#ch-win', '#ch-loss', '#ch-undo', '#ch-skip', '#ch-reset'].map((sel) => $(sel));
+  buttons.forEach((b) => { b.disabled = true; });
+  try {
+    const api = state.api;
+    const next = kind === 'result' ? await api.challengeResult(arg)
+      : kind === 'undo' ? await api.challengeUndo()
+        : kind === 'goto' ? await api.challengeGoto(arg)
+          : await api.challengeReset();
+    applyChallenge(next);
+  } catch (err) {
+    toast(germanError(err), 'error');
+    renderChallenge();
+  }
+}
+
+// ============================================================
+// Kisten-Shop
+// ============================================================
+function buildShopTile(tile, i) {
+  const el = buildActionTile(tile, i, { cls: 'tile--loot', cta: 'Kiste wählen →', onClick: openShop });
+  paintShopTile(el);
+  return el;
+}
+
+function paintShopTile(el = $('.tile--shop')) {
+  const label = el?.querySelector('.tile-live-status');
+  if (!label) return;
+  const run = state.shop.run;
+  label.textContent = !run || run.status === 'done'
+    ? '🧰 4 Kisten warten'
+    : {
+      waiting: '👥 Im Koop-Warteraum',
+      choosing: '🧰 Koop: Kiste schnappen!',
+      opened: '🧰 Koop: Kisten werden verteilt',
+      shopping: '🛒 Einkauf läuft',
+    }[run.status] ?? `🎯 ${run.items.filter((x) => x.found).length} von ${run.items.length} gefunden`;
+}
+
+function setupShop() {
+  document.querySelectorAll('[data-shop-mode]').forEach((b) => b.addEventListener('click', () => {
+    state.shop.mode = b.dataset.shopMode;
+    loadShopRun().then(renderShop);
+  }));
+  $('#shop-lobby-create').addEventListener('click', createShopLobby);
+  $('#shop-join-form').addEventListener('submit', joinShopLobby);
+  $('#shop-lobby-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(state.shop.lobby.code); toast('Code kopiert – schick ihn deinen Mitspielern.', 'ok'); } catch { /* egal */ }
+  });
+  $('#shop-lobby-close').addEventListener('click', closeShopLobby);
+  $('#shop-lobby-leave').addEventListener('click', leaveShopLobby);
+  $('#shop-lobby-start').addEventListener('click', startShopLobby);
+  $('#shop-done').addEventListener('click', () => shopDoneShopping());
+  $('#shop-finish').addEventListener('click', shopFinish);
+  $('#shop-new').addEventListener('click', () => {
+    Object.assign(state.shop, { run: null, chests: null });
+    renderShop();
+  });
+  $('#shop-settings').addEventListener('submit', saveShopSettings);
+  $('#shop-dialog').addEventListener('close', () => {
+    clearInterval(state.shop.timer);
+    clearInterval(state.shop.poll);
+    $('#shop-fx').replaceChildren();
+  });
+}
+
+async function loadShop() {
+  try {
+    state.shop.settings = (await state.api.getShopSettings()) ?? DEFAULT_SHOP;
+    state.shop.on = true;
+    await loadShopRun();
+  } catch (err) {
+    console.warn('Kisten-Shop nicht verfügbar:', err);
+    Object.assign(state.shop, { on: false, error: germanError(err) });
+  }
+  if (state.shop.on && !state.shop.subscribed) {
+    state.shop.subscribed = true;
+    state.api.onShopRuns((row) => {
+      // Koop: Jede Änderung einer Runde kann die Phase wechseln – alles neu laden
+      if (state.shop.lobby && (!row || row.lobby_id === state.shop.lobby.id)) { refreshLobby(); return; }
+      if (!row) return;
+      if (row.user_id === state.user?.id && row.id === state.shop.run?.id) state.shop.run = row;
+      paintShopTile();
+      if ($('#shop-dialog').open) renderShop({ keepItems: true });
+    });
+  }
+  paintShopTile();
+}
+
+// Die passende Runde: allein die letzte eigene, im Koop die in dieser Runde
+async function loadShopRun() {
+  const { mode } = state.shop;
+  if (mode === 'koop') {
+    if (!state.shop.lobby) {
+      let saved = null;
+      try { saved = localStorage.getItem(lobbyKey()); } catch { /* egal */ }
+      if (saved) state.shop.lobby = await state.api.getShopLobbyById(saved).catch(() => null);
+    }
+    if (!state.shop.lobby) { state.shop.run = null; state.shop.lobbyRuns = []; return; }
+    state.shop.lobbyRuns = await state.api.getLobbyRuns(state.shop.lobby.id);
+    state.shop.run = state.shop.lobbyRuns.find((r) => r.user_id === state.user?.id) ?? null;
+    // Nicht (mehr) dabei, z. B. vor dem Start rausgegangen: wieder Code eingeben
+    if (!state.shop.run) rememberLobby(null);
+  } else {
+    const run = await state.api.getMyShopRun();
+    state.shop.run = run && !run.lobby_id ? run : null;
+    state.shop.lobbyRuns = [];
+  }
+  if (state.shop.run?.id !== state.shop.chestsFor) state.shop.chests = null;
+}
+
+// Koop: Runde und Mitspieler neu laden (Änderungen kommen oft kurz hintereinander)
+async function refreshLobby() {
+  const s = state.shop;
+  if (!s.lobby) return;
+  if (s.refreshing) { s.refreshAgain = true; return; }
+  s.refreshing = true;
+  try {
+    const id = s.lobby.id;
+    const [lobby, runs] = await Promise.all([state.api.getShopLobbyById(id), state.api.getLobbyRuns(id)]);
+    if (s.lobby?.id === id) {
+      s.lobby = lobby ?? s.lobby;
+      s.lobbyRuns = runs;
+      s.run = runs.find((r) => r.user_id === state.user?.id) ?? null;
+      paintShopTile();
+      if ($('#shop-dialog').open && s.mode === 'koop') renderShop({ keepItems: true });
+    }
+  } catch (err) {
+    console.warn('Koop-Runde nicht geladen:', err);
+  } finally {
+    s.refreshing = false;
+    if (s.refreshAgain) { s.refreshAgain = false; refreshLobby(); }
+  }
+}
+
+// Läuft im Koop eine Zeit ab, stößt jeder Mitspieler die nächste Phase an
+async function tickLobby() {
+  const s = state.shop;
+  if (!s.lobby || Date.now() - (s.lastTick ?? 0) < 2500) return;
+  s.lastTick = Date.now();
+  try {
+    s.lobby = await state.api.tickShopLobby(s.lobby.code);
+  } catch (err) {
+    console.warn('Koop-Runde: nächste Phase', err);
+  }
+  refreshLobby();
+}
+
+function koopPhase(lobby) {
+  if (!lobby) return null;
+  if (!lobby.started_at) return lobby.ended_at || !lobby.open ? 'cancelled' : 'lobby';
+  if (!lobby.shop_until) return 'chests';
+  if (!lobby.vs_at) return 'shop';
+  return lobby.ended_at ? 'end' : 'vs';
+}
+
+async function openShop() {
+  const tile = tileByKind('shop');
+  if (tile && isLocked(tile)) { openTile(tile.id); return; }
+  renderShop();
+  $('#shop-dialog').showModal();
+  await loadShop();
+  renderShop();
+}
+
+function shopImage(name) {
+  const hit = state.bingo.items.find((i) => i.name.toLowerCase() === name.toLowerCase());
+  return hit ? state.api.bingoUrl(hit.path) : null;
+}
+
+const secsLeft = (until) => Math.max(0, Math.ceil((Date.parse(until) - Date.now()) / 1000));
+const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const namesOf = (runs) => runs.map((r) => r.player).join(', ');
+const seenOnce = (key, id) => {
+  key = `${key}_${state.user?.id ?? ''}`;
+  try {
+    if (localStorage.getItem(key) === String(id)) return true;
+    localStorage.setItem(key, String(id));
+  } catch { /* ohne Speicher: jedes Mal */ }
+  return false;
+};
+
+function renderShop({ keepItems = false } = {}) {
+  const s = state.shop;
+  const { on, run, mode, lobby, settings } = s;
+  const admin = !!state.profile?.is_admin;
+  const note = $('#shop-note');
+  note.textContent = on ? '' : admin
+    ? (s.error || 'Einmal nötig: In Supabase im SQL Editor die Dateien supabase/migrations/20261001000000_loot_shop.sql und 20261002000000_shop_versus.sql ausführen.')
+    : 'Der Kisten-Shop ist noch nicht eingerichtet. Schau später noch mal vorbei.';
+  note.hidden = on;
+  const tabs = $('.shop-tabs');
+  tabs.dataset.active = mode;
+  tabs.querySelectorAll('[data-shop-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.shopMode === mode)));
+
+  // Koop-Bereich
+  const koop = mode === 'koop';
+  const phase = koop ? koopPhase(lobby) : null;
+  const host = !!lobby && lobby.host_id === state.user?.id;
+  $('#shop-koop').hidden = !koop;
+  $('#shop-koop-rules').hidden = !koop;
+  $('#shop-koop-start').hidden = !!lobby;
+  $('#shop-koop-info').hidden = !lobby;
+  if (lobby) {
+    $('#shop-lobby-code').textContent = lobby.code;
+    $('#shop-lobby-host').textContent = `· eröffnet von ${lobby.host_name || 'jemandem'}${phase === 'cancelled' ? ' · abgebrochen' : phase === 'end' ? ' · vorbei' : ''}`;
+    const close = $('#shop-lobby-close');
+    close.hidden = !['lobby', 'chests', 'shop', 'vs'].includes(phase) || !(admin || host);
+    close.textContent = phase === 'lobby' ? 'Abbrechen' : 'Duell beenden';
+    $('#shop-lobby-leave').textContent = phase === 'lobby' && run ? 'Verlassen' : 'Andere Runde';
+    // Der Ersteller bricht im Warteraum ab – „Verlassen“ wäre dasselbe
+    $('#shop-lobby-leave').hidden = phase === 'lobby' && host;
+    $('#shop-lobby-copy').hidden = phase !== 'lobby';
+  }
+
+  // Phasenwechsel im Koop: Kisten kurz aufgedeckt lassen, VS-Bildschirm, Sieger
+  if (koop && lobby) {
+    const before = s.koopPhase?.id === lobby.id ? s.koopPhase.phase : null;
+    if (before === 'chests' && phase !== 'chests') {
+      s.revealUntil = Date.now() + 2600;
+      setTimeout(() => { if ($('#shop-dialog').open) renderShop(); }, 2700);
+      prankSfx(true)?.hit('bling');
+    }
+    s.koopPhase = { id: lobby.id, phase };
+    const open = $('#shop-dialog').open;
+    if (open && run && phase === 'vs' && !seenOnce('zd_shop_vs_seen', lobby.id)) {
+      versusIntro($('#shop-fx'), s.lobbyRuns, { sfx: prankSfx(true) });
+    }
+    if (open && run && phase === 'end' && !seenOnce('zd_shop_win_seen', lobby.id)) {
+      $('#shop-fx').replaceChildren();
+      versusWinner($('#shop-fx'), s.lobbyRuns, { sfx: prankSfx(true), me: state.user?.id });
+    }
+  }
+
+  const needsLobby = koop && !lobby;
+  let step = null;
+  if (on && !needsLobby) {
+    if (!koop) step = !run ? 'chests' : run.status === 'shopping' ? 'shop' : 'play';
+    else if (!run || phase === 'lobby' || phase === 'cancelled') step = 'lobby';
+    else if (phase === 'chests' || Date.now() < (s.revealUntil ?? 0)) step = 'chests';
+    else step = run.status === 'shopping' ? 'shop' : 'play';
+  }
+  $('#shop-step-lobby').hidden = step !== 'lobby';
+  $('#shop-step-chests').hidden = step !== 'chests';
+  $('#shop-step-shop').hidden = step !== 'shop';
+  $('#shop-step-play').hidden = step !== 'play';
+  $('#shop-stream-wrap').hidden = !admin || (koop && run?.status !== 'choosing');
+
+  clearInterval(s.timer);
+  if (step === 'lobby') renderShopLobby(phase, host);
+  if (step === 'chests') renderChests();
+  if (step === 'shop') {
+    if (!keepItems || !$('#shop-items').children.length) renderShopItems();
+    else paintShopItems();
+    startShopTimer();
+  }
+  if (step === 'play') renderShopPlay(koop, phase);
+
+  // Mitspieler im Koop
+  $('#shop-board-box').hidden = !lobby || !koop;
+  if (lobby && koop) renderShopBoard(phase);
+
+  // Sicherheitsnetz, falls Realtime mal hängt
+  clearInterval(s.poll);
+  if (koop && lobby && $('#shop-dialog').open && !['cancelled', 'end'].includes(phase)) s.poll = setInterval(refreshLobby, 5000);
+
+  // Admin-Einstellungen
+  $('#shop-admin').hidden = !(admin && on);
+  $('#shop-dialog').classList.toggle('has-side', (admin && on) || (koop && !!lobby));
+  paintTileStart('shop');
+  if (admin && on) fillShopSettings(settings ?? DEFAULT_SHOP);
+  paintShopTile();
+}
+
+// Warteraum: Wer ist drin, der Ersteller startet
+function renderShopLobby(phase, host) {
+  const { lobby, lobbyRuns, run } = state.shop;
+  const list = versusOrder(lobbyRuns);
+  $('#shop-players').replaceChildren(...list.map((r, i) => {
+    const li = document.createElement('li');
+    li.style.setProperty('--pc', PLAYER_COLORS[i % PLAYER_COLORS.length]);
+    li.className = r.user_id === state.user?.id ? 'is-me' : '';
+    const name = document.createElement('span');
+    name.textContent = r.player;
+    const tag = document.createElement('small');
+    tag.textContent = [r.user_id === lobby.host_id ? '👑 eröffnet' : '', r.user_id === state.user?.id ? 'du' : ''].filter(Boolean).join(' · ');
+    li.append(name, tag);
+    return li;
+  }), ...Array.from({ length: Math.max(0, 4 - list.length) }, () => {
+    const li = document.createElement('li');
+    li.className = 'is-free';
+    li.textContent = phase === 'lobby' ? 'frei' : '–';
+    return li;
+  }));
+  const status = $('#shop-lobby-status');
+  const btn = $('#shop-lobby-start');
+  btn.hidden = !(host && phase === 'lobby');
+  btn.disabled = list.length < 2;
+  btn.textContent = list.length < 2 ? 'Runde starten (ab 2 Spielern)' : `Runde starten (${list.length} Spieler)`;
+  if (phase === 'cancelled') status.textContent = 'Diese Koop-Runde wurde abgebrochen.';
+  else if (!run) status.textContent = 'Die Runde läuft schon – du bist nicht dabei.';
+  else if (host) status.textContent = `${list.length} von 4 Spielern. Gib den Code weiter und starte, sobald alle da sind.`;
+  else status.textContent = `Du bist drin! Warte, bis ${lobby.host_name || 'der Ersteller'} die Runde startet …`;
+}
+
+function renderShopPlay(koop, phase) {
+  const { run, lobbyRuns, lobby } = state.shop;
+  const vs = koop && ['vs', 'end'].includes(phase);
+  const waiting = koop && phase === 'shop';
+  renderLoadout($('#shop-loadout'), run, {
+    onMark: run.status === 'playing' && (!koop || vs) ? shopMark : null,
+    imageFor: shopImage,
+  });
+  const found = run.items.filter((x) => x.found).length;
+  $('#shop-score').textContent = pointsText(scoreOf(run.items));
+  $('#shop-play-title').textContent = run.status === 'done' && !vs
+    ? `Runde vorbei: ${found} von ${run.items.length} gefunden${run.items.length && found === run.items.length ? ' – alle! +10' : ''}`
+    : vs ? '3. Duell: Finde deine Items' : waiting ? 'Eingekauft!' : '3. Finde sie im Spiel';
+  $('#shop-finish').hidden = run.status === 'done' || waiting;
+  $('#shop-finish').textContent = koop ? 'Ich bin fertig' : 'Runde beenden';
+  $('#shop-new').hidden = run.status !== 'done' || koop;
+
+  const wait = $('#shop-play-wait');
+  wait.hidden = !waiting;
+  if (waiting) {
+    const shopping = lobbyRuns.filter((r) => r.status === 'shopping');
+    const paint = () => {
+      const left = secsLeft(lobby.shop_until);
+      wait.textContent = `⏳ Warte auf ${namesOf(shopping) || 'die anderen'} – ${shopping.length === 1 ? 'kauft' : 'kaufen'} noch ein (${mmss(left)}). Dann geht das Duell los!`;
+      if (left <= 0) tickLobby();
+    };
+    paint();
+    state.shop.timer = setInterval(paint, 500);
+  }
+
+  const box = $('#shop-vs');
+  box.hidden = !vs;
+  if (vs) {
+    const winners = phase === 'end' ? winnersOf(lobbyRuns) : null;
+    renderTug($('#shop-tug'), lobbyRuns, { me: state.user?.id, winners });
+    const open = lobbyRuns.filter((r) => r.status !== 'done');
+    $('#shop-vs-status').textContent = phase === 'end'
+      ? (winners.length === 1 ? `🏆 ${winners[0].player} gewinnt!` : `🤝 Unentschieden: ${namesOf(winners)}`)
+      : run.status === 'done'
+        ? `Du bist fertig – warte auf ${namesOf(open)}.`
+        : 'Jedes gefundene Item schiebt deine Seite rüber. Alle gefunden = +10!';
+    box.classList.toggle('is-end', phase === 'end');
+  }
+}
+
+function koopStatus(r, phase) {
+  const found = `${r.items.filter((x) => x.found).length}/${r.items.length} gefunden`;
+  return {
+    waiting: 'wartet',
+    choosing: 'wählt eine Kiste …',
+    opened: `Kiste ${r.chest + 1}: ${r.coins} Barren`,
+    shopping: 'kauft ein …',
+    playing: phase === 'shop' ? 'fertig mit Einkaufen' : found,
+    done: `${found} · fertig`,
+  }[r.status] ?? '';
+}
+
+function renderShopBoard(phase) {
+  const { lobbyRuns } = state.shop;
+  const scored = ['vs', 'end'].includes(phase);
+  $('#shop-board-title').textContent = scored ? 'Rangliste' : 'Spieler';
+  const order = versusOrder(lobbyRuns);
+  const runs = scored ? [...order].sort((a, b) => scoreOf(b.items) - scoreOf(a.items)) : order;
+  const board = $('#shop-board');
+  board.classList.toggle('is-ranked', scored);
+  if (!runs.length) {
+    const li = document.createElement('li');
+    li.textContent = 'Noch niemand dabei.';
+    board.replaceChildren(li);
+    return;
+  }
+  board.replaceChildren(...runs.map((r) => {
+    const li = document.createElement('li');
+    li.style.setProperty('--pc', colorOf(lobbyRuns, r));
+    if (r.user_id === state.user?.id) li.className = 'is-me';
+    const who = document.createElement('span');
+    who.textContent = r.player;
+    const small = document.createElement('small');
+    small.textContent = ` · ${koopStatus(r, phase)}`;
+    who.append(small);
+    const pts = document.createElement('b');
+    pts.textContent = scored ? scoreOf(r.items) : '';
+    li.append(who, pts);
+    return li;
+  }));
+}
+
+function renderChests() {
+  const s = state.shop;
+  const koop = s.mode === 'koop';
+  const wrap = $('#shop-chests');
+  const key = koop ? `koop-${s.lobby?.id}` : `solo-${s.run?.id ?? 'neu'}-${s.chests ? 1 : 0}`;
+  if (wrap.dataset.key !== key || wrap.children.length !== 4) {
+    wrap.dataset.key = key;
+    wrap.replaceChildren(...[0, 1, 2, 3].map((i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chest';
+      b.innerHTML = `${chestSvg()}<span class="chest-label">Kiste ${i + 1}</span><span class="chest-value"></span>`;
+      b.addEventListener('click', () => openChest(i, b));
+      return b;
+    }));
+  }
+  const buttons = [...wrap.children];
+  const timer = $('#shop-chest-timer');
+  const status = $('#shop-chest-status');
+  if (!koop) {
+    timer.hidden = true;
+    status.hidden = true;
+    buttons.forEach((b, i) => {
+      b.disabled = !!s.chests;
+      if (s.chests) {
+        b.classList.add('is-open', i === s.run?.chest ? 'is-picked' : 'is-other');
+        b.querySelector('.chest-value').innerHTML = `${s.chests[i]} ${GOLD}`;
+      }
+    });
+    return;
+  }
+  // Koop: Jede Kiste gehört dem, der sie zuerst öffnet – alle sehen wer und wie viel
+  const { lobby, lobbyRuns, run } = s;
+  const mine = run?.chest != null;
+  buttons.forEach((b, i) => {
+    const owner = lobbyRuns.find((r) => r.chest === i);
+    const revealed = !owner && lobby.chests;
+    b.disabled = !!owner || mine || !!revealed || run?.status !== 'choosing';
+    b.classList.toggle('is-open', !!owner || !!revealed);
+    b.classList.toggle('is-picked', !!owner && owner.id === run?.id);
+    b.classList.toggle('is-taken', !!owner && owner.id !== run?.id);
+    b.classList.toggle('is-other', !!revealed);
+    b.style.setProperty('--pc', owner ? colorOf(lobbyRuns, owner) : '');
+    b.querySelector('.chest-label').textContent = owner ? `${owner.id === run?.id ? 'Deine' : owner.player}` : `Kiste ${i + 1}`;
+    const value = owner ? owner.coins : revealed ? lobby.chests[i] : null;
+    b.querySelector('.chest-value').innerHTML = value != null ? `${value} ${GOLD}` : '';
+    if (owner && b.dataset.owner !== String(owner.id)) {
+      b.dataset.owner = owner.id;
+      if (owner.id !== run?.id) prankSfx(true)?.hit('tink');
+    }
+  });
+  const choosing = lobbyRuns.filter((r) => r.status === 'choosing');
+  status.hidden = false;
+  status.textContent = lobby.chests
+    ? 'Alle haben ihre Kiste – ab in den Shop!'
+    : mine
+      ? `Du hast ${run.coins} Goldbarren! Warte auf ${namesOf(choosing) || 'die anderen'} …`
+      : 'Schnapp dir eine Kiste, bevor es ein anderer tut! Wer nicht wählt, bekommt am Ende eine übrige.';
+  timer.hidden = !!lobby.chests;
+  const paint = () => {
+    const left = secsLeft(lobby.chests_until);
+    timer.textContent = `⏱ ${mmss(left)}`;
+    timer.classList.toggle('is-low', left <= 10);
+    if (left <= 0 && !lobby.chests) tickLobby();
+  };
+  if (!lobby.chests) {
+    paint();
+    s.timer = setInterval(paint, 500);
+  }
+}
+
+async function openChest(i, btn) {
+  const koop = state.shop.mode === 'koop';
+  const buttons = [...$('#shop-chests').children];
+  buttons.forEach((b) => { b.disabled = true; });
+  btn.classList.add('is-shaking');
+  try {
+    const stream = !!state.profile?.is_admin && $('#shop-stream').checked;
+    const code = koop ? state.shop.lobby?.code : null;
+    const [res] = await Promise.all([state.api.openChest(i, code, stream), new Promise((r) => setTimeout(r, 500))]);
+    btn.classList.remove('is-shaking');
+    prankSfx(true)?.hit('bling');
+    if (koop) {
+      state.shop.run = res.run;
+      state.shop.lobbyRuns = [...state.shop.lobbyRuns.filter((r) => r.id !== res.run.id), res.run];
+      toast(`${res.run.coins} Goldbarren gehören dir!`, 'ok');
+      renderShop();
+      refreshLobby();
+      return;
+    }
+    Object.assign(state.shop, { run: res.run, chests: res.chests, chestsFor: res.run.id });
+    // Aufdecken: gewählte Kiste zuerst, dann die anderen
+    buttons.forEach((b, n) => {
+      setTimeout(() => {
+        b.classList.add('is-open', n === i ? 'is-picked' : 'is-other');
+        b.querySelector('.chest-value').innerHTML = `${res.chests[n]} ${GOLD}`;
+      }, n === i ? 0 : 500 + n * 120);
+    });
+    toast(`${res.run.coins} Goldbarren! Ab in den Shop – die Zeit läuft.`, 'ok');
+    setTimeout(() => { if ($('#shop-dialog').open) renderShop(); }, 1900);
+    paintShopTile();
+  } catch (err) {
+    btn.classList.remove('is-shaking');
+    toast(germanError(err), 'error', 6000);
+    if (koop) refreshLobby();
+    else buttons.forEach((b) => { b.disabled = false; });
+  }
+}
+
+function renderShopItems() {
+  const list = $('#shop-items');
+  const settings = state.shop.settings ?? DEFAULT_SHOP;
+  list.replaceChildren(...sortByRarity(settings.items).map((item) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `shop-item rar-${item.rarity}`;
+    b.dataset.name = item.name;
+    b.dataset.price = priceOf(item, settings.prices);
+    const icon = document.createElement('span');
+    icon.className = 'shop-item-icon';
+    const img = shopImage(item.name);
+    if (img) {
+      const pic = document.createElement('img');
+      pic.src = img;
+      pic.alt = '';
+      icon.append(pic);
+    } else {
+      icon.textContent = itemIcon(item.name);
+    }
+    const name = document.createElement('span');
+    name.className = 'shop-item-name';
+    name.textContent = item.name;
+    const price = document.createElement('span');
+    price.className = 'shop-item-price';
+    price.innerHTML = `${b.dataset.price} ${GOLD}`;
+    b.append(icon, name, price);
+    b.addEventListener('click', () => shopBuy(item.name, b));
+    li.append(b);
+    return li;
+  }));
+  paintShopItems();
+}
+
+function paintShopItems() {
+  const { run } = state.shop;
+  if (!run) return;
+  const left = coinsLeft(run);
+  $('#shop-coins').innerHTML = `${left} ${GOLD} <small>von ${run.coins}</small>`;
+  const bought = new Set(run.items.map((i) => i.name.toLowerCase()));
+  $('#shop-items').querySelectorAll('.shop-item').forEach((b) => {
+    const has = bought.has(b.dataset.name.toLowerCase());
+    b.classList.toggle('is-bought', has);
+    b.disabled = has || Number(b.dataset.price) > left;
+  });
+}
+
+function startShopTimer() {
+  clearInterval(state.shop.timer);
+  const tick = () => {
+    const run = state.shop.run;
+    if (!run || run.status !== 'shopping') { clearInterval(state.shop.timer); return; }
+    const ms = Date.parse(run.shop_until) - Date.now();
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const el = $('#shop-timer');
+    el.textContent = `⏱ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    el.classList.toggle('is-low', s <= 10);
+    if (ms <= 0) {
+      clearInterval(state.shop.timer);
+      shopDoneShopping(true);
+      if (state.shop.mode === 'koop') tickLobby();
+    }
+  };
+  tick();
+  state.shop.timer = setInterval(tick, 250);
+}
+
+async function shopBuy(name, btn) {
+  btn.disabled = true;
+  try {
+    state.shop.run = await state.api.shopBuy(state.shop.run.id, name);
+    prankSfx(true)?.hit('bling');
+    paintShopItems();
+  } catch (err) {
+    toast(germanError(err), 'error');
+    paintShopItems();
+  }
+}
+
+async function shopDoneShopping(timeUp = false) {
+  if (!state.shop.run || state.shop.run.status !== 'shopping') return;
+  const koop = !!state.shop.run.lobby_id;
+  try {
+    state.shop.run = await state.api.shopDoneShopping(state.shop.run.id);
+    if (timeUp) toast(koop ? 'Die Zeit im Shop ist um!' : 'Die Zeit im Shop ist um! Jetzt die Items im Spiel finden.', 'ok');
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  if (koop) syncMyLobbyRun();
+  renderShop();
+  if (koop) refreshLobby();
+}
+
+// Eigene Koop-Runde sofort in der Liste der Mitspieler aktualisieren (Tauziehen)
+function syncMyLobbyRun() {
+  const { run } = state.shop;
+  if (run?.lobby_id) state.shop.lobbyRuns = state.shop.lobbyRuns.map((r) => (r.id === run.id ? run : r));
+}
+
+async function shopMark(index, found, btn) {
+  btn.disabled = true;
+  try {
+    state.shop.run = await state.api.shopMark(state.shop.run.id, index, found);
+    const r = state.shop.run;
+    if (found && r.items.length && r.items.every((x) => x.found)) toast('Alle Items gefunden – 10 Punkte extra!', 'ok', 6000);
+    if (found && r.lobby_id) prankSfx(true)?.hit('slap');
+    syncMyLobbyRun();
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  renderShop();
+}
+
+async function shopFinish() {
+  const koop = !!state.shop.run.lobby_id;
+  if (!confirm(koop
+    ? 'Bist du fertig? Danach lässt sich nichts mehr abhaken. Sind alle fertig, steht der Sieger fest.'
+    : 'Runde beenden? Danach lässt sich nichts mehr abhaken.')) return;
+  try {
+    state.shop.run = await state.api.shopFinish(state.shop.run.id);
+    if (!koop) toast(`Runde vorbei: ${pointsText(state.shop.run.score)}.`, 'ok', 6000);
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  syncMyLobbyRun();
+  renderShop();
+  if (koop) refreshLobby();
+}
+
+// Die Koop-Runde merkt sich der Browser je Nutzer
+const lobbyKey = () => `zd_shop_lobby_${state.user?.id ?? ''}`;
+function rememberLobby(lobby) {
+  Object.assign(state.shop, { lobby, run: null, chests: null, lobbyRuns: [], revealUntil: 0 });
+  try {
+    if (lobby) localStorage.setItem(lobbyKey(), lobby.id);
+    else localStorage.removeItem(lobbyKey());
+  } catch { /* egal */ }
+}
+
+async function createShopLobby() {
+  const btn = $('#shop-lobby-create');
+  btn.disabled = true;
+  try {
+    rememberLobby(await state.api.createShopLobby());
+    await loadShopRun();
+    toast(`Koop-Runde ${state.shop.lobby.code} eröffnet – gib den Code deinen Mitspielern.`, 'ok', 6000);
+  } catch (err) {
+    toast(germanError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+  renderShop();
+}
+
+async function joinShopLobby(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const code = form.code.value.trim().toUpperCase();
+  if (!/^[A-Z2-9]{5}$/.test(code)) return formMsg(form, 'Der Code hat 5 Zeichen.');
+  await withLoading(form, async () => {
+    await state.api.joinShopLobby(code);
+    const lobby = await state.api.getShopLobby(code);
+    if (!lobby) throw new Error('Diese Koop-Runde gibt es nicht. Code prüfen.');
+    rememberLobby(lobby);
+    form.reset();
+    await loadShopRun();
+    renderShop();
+  });
+}
+
+async function startShopLobby() {
+  const btn = $('#shop-lobby-start');
+  btn.disabled = true;
+  try {
+    state.shop.lobby = await state.api.startShopLobby(state.shop.lobby.code);
+    toast('Los geht’s – schnappt euch die Kisten!', 'ok');
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  await refreshLobby();
+  renderShop();
+}
+
+async function closeShopLobby() {
+  const phase = koopPhase(state.shop.lobby);
+  if (!confirm(phase === 'lobby'
+    ? 'Koop-Runde abbrechen? Alle im Warteraum fliegen raus.'
+    : 'Duell jetzt beenden? Dann zählt der aktuelle Stand und der Sieger steht fest.')) return;
+  try {
+    state.shop.lobby = await state.api.closeShopLobby(state.shop.lobby.code);
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  await refreshLobby();
+  renderShop();
+}
+
+async function leaveShopLobby() {
+  const { lobby, run } = state.shop;
+  const phase = koopPhase(lobby);
+  if (phase === 'lobby' && run) {
+    const host = lobby.host_id === state.user?.id;
+    if (host && !confirm('Du hast die Runde eröffnet – gehst du, ist sie für alle vorbei. Trotzdem gehen?')) return;
+    try {
+      await state.api.leaveShopLobby(lobby.code);
+    } catch (err) {
+      toast(germanError(err), 'error');
+      return;
+    }
+  }
+  rememberLobby(null);
+  clearInterval(state.shop.poll);
+  renderShop();
+}
+
+const SHOP_RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'exotic'];
+
+function fillShopSettings(settings) {
+  const f = $('#shop-settings');
+  if (f.contains(document.activeElement)) return;
+  f.shop_seconds.value = settings.shop_seconds;
+  f.items.value = catalogToText(settings.items);
+  const grid = $('#shop-price-grid');
+  if (!grid.children.length) {
+    grid.replaceChildren(...SHOP_RARITIES.map((r) => {
+      const label = document.createElement('label');
+      label.className = `shop-price rar-${r}`;
+      label.innerHTML = '<span></span><input type="number" min="1" max="999" step="1" required>';
+      label.firstChild.textContent = RARITIES.find((x) => x.id === r)?.name ?? r;
+      label.lastChild.name = `price_${r}`;
+      return label;
+    }));
+  }
+  for (const r of SHOP_RARITIES) f.elements[`price_${r}`].value = settings.prices?.[r] ?? DEFAULT_SHOP.prices[r];
+}
+
+async function saveShopSettings(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const items = catalogFromText(form.items.value);
+  const secs = Math.round(Number(form.shop_seconds.value));
+  if (!items.length) return formMsg(form, 'Der Shop braucht mindestens ein Item.');
+  if (!(secs >= 20 && secs <= 600)) return formMsg(form, 'Zeit im Shop: 20 bis 600 Sekunden.');
+  const prices = {};
+  for (const r of SHOP_RARITIES) {
+    const v = Math.round(Number(form.elements[`price_${r}`].value));
+    if (!(v >= 1 && v <= 999)) return formMsg(form, 'Preise zwischen 1 und 999 Goldbarren.');
+    prices[r] = v;
+  }
+  await withLoading(form, async () => {
+    state.shop.settings = await state.api.saveShopSettings({ items, prices, shop_seconds: secs });
+    formMsg(form, 'Gespeichert.', true);
+    form.items.value = catalogToText(state.shop.settings.items);
+  });
+}
+
+// ============================================================
+// Unangenehme Fragen
+// ============================================================
+function setupQuestions() {
+  const form = $('#q-form');
+  form.addEventListener('submit', submitQuestion);
+  form.text.addEventListener('input', () => { $('#q-count').textContent = `${form.text.value.length} / 200`; });
+  document.querySelectorAll('[data-q-resolve]').forEach((b) => b.addEventListener('click', () => resolveQuestion(b.dataset.qResolve, b)));
+  $('#q-hide').addEventListener('click', hideQuestion);
+  $('#q-punish-form').addEventListener('submit', savePunishments);
+}
+
+async function loadQuestions() {
+  try {
+    const [list, stage] = await Promise.all([state.api.getQuestions(), state.api.getQuestionStage()]);
+    Object.assign(state.questions, { list, stage: stage ?? DEFAULT_STAGE, on: true, error: '' });
+  } catch (err) {
+    console.warn('Unangenehme Fragen nicht verfügbar:', err);
+    Object.assign(state.questions, { on: false, error: germanError(err) });
+  }
+  if (state.questions.on && !state.questions.subscribed) {
+    state.questions.subscribed = true;
+    state.api.onQuestions(applyQuestionChange);
+    state.api.onQuestionStage((stage) => {
+      if (!stage) return;
+      state.questions.stage = stage;
+      paintQuestionsTile();
+      if ($('#questions-dialog').open) renderQuestionsDialog();
+    });
+  }
+  paintQuestionsTile();
+  if ($('#questions-dialog').open) renderQuestionsDialog();
+}
+
+function applyQuestionChange(p) {
+  const { list } = state.questions;
+  if (p.eventType === 'DELETE') {
+    state.questions.list = list.filter((q) => q.id !== p.old?.id);
+  } else if (p.new) {
+    const known = list.some((q) => q.id === p.new.id);
+    state.questions.list = known ? list.map((q) => (q.id === p.new.id ? p.new : q)) : [p.new, ...list];
+    if (!known && p.new.status === 'pending' && state.profile?.is_admin && p.new.user_id !== state.user?.id) {
+      toast(`Neue Frage von ${p.new.author || 'jemandem'} – bitte prüfen.`, 'ok');
+    }
+  }
+  paintQuestionsTile();
+  if ($('#questions-dialog').open) renderQuestionsDialog();
+}
+
+async function openQuestions() {
+  const tile = tileByKind('questions');
+  if (tile && isLocked(tile)) { openTile(tile.id); return; }
+  renderQuestionsDialog();
+  $('#questions-dialog').showModal();
+  await loadQuestions();
+}
+
+function renderQuestionsDialog() {
+  const admin = !!state.profile?.is_admin;
+  const { list, stage, on } = state.questions;
+  const dlg = $('#questions-dialog');
+  dlg.classList.toggle('is-admin', admin && on);
+  const note = $('#questions-note');
+  note.textContent = on ? '' : admin
+    ? (state.questions.error || 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20260928000000_questions_pet.sql ausführen.')
+    : 'Die Fragen sind noch nicht eingerichtet. Schau später noch mal vorbei.';
+  note.hidden = on;
+  paintQuestionCard($('#q-stage-card'), stage);
+  $('#q-form').querySelectorAll('textarea, input, button').forEach((el) => { el.disabled = !on; });
+
+  const mine = list.filter((q) => q.user_id === state.user?.id);
+  fillQuestionList($('#q-mine'), mine, 'Du hast noch keine Frage gestellt.', (q) => {
+    const actions = [];
+    if (q.status === 'pending') actions.push(qButton('Zurückziehen', 'btn--ghost', () => withdrawQuestion(q)));
+    return actions;
+  }, { showStatus: true });
+
+  $('#q-admin').hidden = !(admin && on);
+  paintTileStart('questions');
+  if (!(admin && on)) return;
+
+  const pending = list.filter((q) => q.status === 'pending').reverse();
+  const approved = list.filter((q) => q.status === 'approved').reverse();
+  const done = list.filter((q) => q.status === 'done').slice(0, 20);
+  $('#q-pending-count').textContent = pending.length ? `· ${pending.length}` : '';
+  $('#q-approved-count').textContent = approved.length ? `· ${approved.length}` : '';
+  fillQuestionList($('#q-pending'), pending, 'Nichts zu prüfen.', (q) => [
+    qButton('✓ Freigeben', 'btn--primary', () => reviewQuestion(q, 'approved')),
+    qButton('✕ Ablehnen', 'btn--ghost', () => reviewQuestion(q, 'rejected')),
+  ], { showAuthor: true });
+  fillQuestionList($('#q-approved'), approved, 'Keine freigegebene Frage übrig.', (q) => [
+    qButton('▶ Im Stream zeigen', 'btn--primary', () => showQuestion(q)),
+  ], { showAuthor: true });
+  fillQuestionList($('#q-done'), done, 'Noch keine Frage beantwortet.', (q) => [
+    qButton('Nochmal zeigen', 'btn--ghost', () => showQuestion(q)),
+  ], { showAuthor: true, showStatus: true });
+
+  const live = stage?.state === 'ask';
+  document.querySelectorAll('[data-q-resolve]').forEach((b) => { b.disabled = !live; });
+  $('#q-hide').disabled = !stage || stage.state === 'hidden';
+  $('#q-controls-hint').textContent = live
+    ? 'Die Frage steht im Stream. Antwortet der Streamer nicht, zieht „Bestrafung“ eine zufällige Strafe aus der Liste.'
+    : stage?.state && stage.state !== 'hidden' ? 'Das Ergebnis steht im Stream. „Ausblenden“ nimmt die Karte raus.' : 'Eine freigegebene Frage mit „Im Stream zeigen“ starten.';
+  const punish = $('#q-punish-form');
+  if (document.activeElement !== punish.list) punish.list.value = (stage?.punishments ?? DEFAULT_STAGE.punishments).join('\n');
+}
+
+function qButton(label, cls, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `btn ${cls} btn--sm`;
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function fillQuestionList(list, items, empty, actions, { showAuthor = false, showStatus = false } = {}) {
+  if (!items.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = empty;
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...items.map((q) => {
+    const li = document.createElement('li');
+    li.className = `q-item q-item--${q.status}`;
+    const text = document.createElement('p');
+    text.className = 'q-text';
+    text.textContent = q.text;
+    const meta = document.createElement('p');
+    meta.className = 'q-meta';
+    const parts = [];
+    if (showAuthor) parts.push(`${q.author || 'Zuschauer'}${q.anonymous ? ' (anonym im Stream)' : ''}`);
+    if (showStatus) parts.push(q.status === 'done' ? (OUTCOME_LABEL[q.outcome] ?? STATUS_LABEL.done) : STATUS_LABEL[q.status] ?? q.status);
+    if (q.status === 'done' && q.outcome === 'punished' && q.punishment) parts.push(q.punishment);
+    parts.push(new Date(q.created_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
+    meta.textContent = parts.join(' · ');
+    const row = div('q-actions');
+    row.append(...actions(q));
+    li.append(text, meta, row);
+    return li;
+  }));
+}
+
+async function submitQuestion(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const text = form.text.value.trim();
+  if (text.length < 5) return formMsg(form, 'Bitte mindestens 5 Zeichen.');
+  await withLoading(form, async () => {
+    const q = await state.api.askQuestion(text, form.anonymous.checked);
+    if (!state.questions.list.some((x) => x.id === q.id)) state.questions.list = [q, ...state.questions.list];
+    form.reset();
+    $('#q-count').textContent = '0 / 200';
+    renderQuestionsDialog();
+    formMsg(form, 'Danke! Deine Frage wird jetzt geprüft.', true);
+  });
+}
+
+async function withdrawQuestion(q) {
+  if (!confirm('Frage zurückziehen?')) return;
+  try {
+    await state.api.deleteQuestion(q.id);
+    state.questions.list = state.questions.list.filter((x) => x.id !== q.id);
+    renderQuestionsDialog();
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+}
+
+async function reviewQuestion(q, status) {
+  try {
+    const row = await state.api.reviewQuestion(q.id, status);
+    state.questions.list = state.questions.list.map((x) => (x.id === q.id ? row : x));
+    paintQuestionsTile();
+    renderQuestionsDialog();
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+}
+
+async function showQuestion(q) {
+  const { stage } = state.questions;
+  if (stage?.state === 'ask' && stage.question_id !== q.id && !confirm('Im Stream steht noch eine offene Frage. Trotzdem die neue zeigen?')) return;
+  try {
+    state.questions.stage = await state.api.showQuestion(q.id);
+    toast('Die Frage steht jetzt im Stream.', 'ok');
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  paintQuestionsTile();
+  renderQuestionsDialog();
+}
+
+async function resolveQuestion(outcome, btn) {
+  btn.disabled = true;
+  try {
+    state.questions.stage = await state.api.resolveQuestion(outcome);
+    await loadQuestions();
+    if (outcome === 'punished') toast(`😈 Bestrafung: ${state.questions.stage.punishment}`, 'ok', 8000);
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  renderQuestionsDialog();
+}
+
+async function hideQuestion() {
+  try {
+    state.questions.stage = await state.api.hideQuestion();
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+  paintQuestionsTile();
+  renderQuestionsDialog();
+}
+
+async function savePunishments(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const list = form.list.value.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (!list.length) return formMsg(form, 'Es braucht mindestens eine Bestrafung.');
+  await withLoading(form, async () => {
+    state.questions.stage = await state.api.savePunishments(list);
+    formMsg(form, `${state.questions.stage.punishments.length} Bestrafungen gespeichert.`, true);
+  });
+}
+
+// ============================================================
+// Stream-Dino
+// ============================================================
+function setupPet() {
+  $('#pet-feed').addEventListener('click', (e) => petAction('feed', e.currentTarget));
+  $('#pet-pet').addEventListener('click', (e) => petAction('pet', e.currentTarget));
+  $('#pet-say-form').addEventListener('submit', petSay);
+  $('#pet-settings').addEventListener('submit', savePetSettings);
+  $('#pet-costume').addEventListener('change', (e) => setPetCostume(e.currentTarget.value, $('.pet-costume-msg')));
+  // Direkt an den Kästen: im OBS-Fenster stoppt die Haustier-Box input/change (setupObsPet)
+  document.querySelectorAll('[data-pet-evo]').forEach((box) => {
+    box.addEventListener('click', onPetEvoClick);
+    box.addEventListener('change', onPetEvoChange);
+  });
+  // Heißhunger und Füttern: dieselben Knöpfe im Dino-Dialog und im OBS-Fenster
+  document.addEventListener('click', (e) => {
+    const frenzy = e.target.closest('[data-pet-frenzy]');
+    if (frenzy) toggleFrenzy(frenzy);
+    const feed = e.target.closest('[data-pet-feed]');
+    if (feed) obsFeedPet(feed);
+  });
+  // Der Dino läuft nur, solange der Dialog offen ist
+  $('#pet-dialog').addEventListener('close', () => {
+    state.pet.stopBrain?.();
+    state.pet.dino?.destroy();
+    state.pet.dino = null;
+    state.pet.stopBrain = null;
+  });
+  // Hunger ändert sich mit der Zeit – Kachel ab und zu nachziehen
+  setInterval(() => { paintPetTile(); if ($('#pet-dialog').open) paintPetMeter(); }, 30000);
+}
+
+async function loadPet() {
+  try {
+    const [data, events] = await Promise.all([state.api.getPet(), state.api.getPetEvents(20)]);
+    if (!data) throw new Error('Der Dino fehlt in der Datenbank.');
+    Object.assign(state.pet, { data, events, on: true });
+  } catch (err) {
+    console.warn('Dino nicht verfügbar:', err);
+    state.pet.on = false;
+    state.pet.error = germanError(err);
+  }
+  if (state.pet.on && !state.pet.subscribed) {
+    state.pet.subscribed = true;
+    state.api.onPet((data) => {
+      state.pet.data = data;
+      paintPetTile();
+      if (data?.costume) state.pet.dino?.setCostume(data.costume);
+      if ($('#pet-dialog').open) renderPetDialog();
+      if ($('#obs-dialog').open) paintObsPet();
+    });
+    state.api.onPetEvents((ev) => {
+      if (state.pet.events.some((x) => x.id === ev.id)) return;
+      state.pet.events = [ev, ...state.pet.events].slice(0, 20);
+      if ($('#pet-dialog').open) {
+        renderPetLog();
+        petReact(ev);
+      }
+    });
+  }
+  paintPetTile();
+  if ($('#pet-dialog').open) renderPetDialog();
+}
+
+async function openPet() {
+  const tile = tileByKind('pet');
+  if (tile && isLocked(tile)) { openTile(tile.id); return; }
+  renderPetDialog();
+  $('#pet-dialog').showModal();
+  startPetStage();
+  await loadPet();
+}
+
+function startPetStage() {
+  if (state.pet.dino || !state.pet.on) return;
+  state.pet.sfx ??= new Sfx({ volume: 0.6 });
+  const stage = $('#pet-stage');
+  const size = Math.max(100, Math.min(160, stage.clientWidth * 0.26));
+  const d = state.pet.data ?? {};
+  state.pet.dino = new Dino(stage, { size, sfx: state.pet.sfx, name: d.name ?? DEFAULT_PET.name, costume: d.costume, species: d.species, stage: d.stage, reducedMotion });
+  // In der Vorschau knabbert er an den Namen, die zuletzt da waren
+  state.pet.stopBrain = runDino(state.pet.dino, {
+    streamer: streamerName,
+    getPet: () => state.pet.data,
+    names: () => [...new Set(state.pet.events.map((e) => e.who).filter(Boolean))],
+    idleEvery: [14, 28],
+    nibbleEvery: [18, 30],
+    trickEvery: [8, 16],
+  });
+}
+
+function petReact(ev) {
+  const dino = state.pet.dino;
+  if (!dino) return;
+  if (ev.kind === 'feed') dino.eat(ev.who);
+  else if (ev.kind === 'pet') dino.cuddle(ev.who);
+  else if (ev.kind === 'say') dino.say(ev.text, 5000);
+  else if (ev.kind === 'stage') toast(stageLine(ev), 'ok', 7000);
+  else if (ev.kind === 'costume') {
+    dino.chatLine(ev.who, ev.text);
+    dino.setCostume(ev.text);
+  }
+}
+
+function renderPetDialog() {
+  const admin = !!state.profile?.is_admin;
+  const { on, data } = state.pet;
+  const note = $('#pet-note');
+  note.textContent = on ? '' : admin
+    ? (state.pet.error || 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20260928000000_questions_pet.sql ausführen.')
+    : 'Der Dino ist noch nicht eingezogen. Schau später noch mal vorbei.';
+  note.hidden = on;
+  $('#pet-title').textContent = on ? `${speciesOf(data.species).icon} ${data.name}` : 'Das Haustier';
+  $('#pet-feed').disabled = !on;
+  $('#pet-pet').disabled = !on;
+  // Zuschauer füttern hier nur für sich – im Stream über den Twitch-Chat. Admins können beides.
+  $('#pet-live-wrap').hidden = !(admin && on);
+  const command = data?.feed_command || DEFAULT_PET.feed_command;
+  const twitch = state.twitch ?? {};
+  $('#pet-hint').textContent = !on ? ''
+    : admin
+      ? `„Auch im Stream“ an: Füttern und Streicheln sieht man in OBS. Zuschauer füttern im Stream mit ${command} im Twitch-Chat (alle 10 Minuten pro Person).${twitch.connected && twitch.bot_connected && twitch.bot_chat === false ? ' Dafür den Chat-Bot im Admin-Bereich einmal neu verbinden (Chat lesen).' : ''}${twitch.connected && !twitch.bot_connected ? ' Dafür braucht es den Chat-Bot (Admin-Bereich).' : ''}`
+      : `Hier fütterst und streichelst du ${data.name} nur auf der Seite. Im Stream fütterst du ${data.name} mit ${command} im Twitch-Chat von ${streamerName()} – alle 10 Minuten.`;
+  if (on) {
+    startPetStage();
+    state.pet.dino?.setName(data.name);
+    paintPetMeter();
+    const costume = $('#pet-costume');
+    if (document.activeElement !== costume) costume.value = data.costume ?? 'schaffner';
+    paintFrenzyButtons();
+    renderPetEvo();
+  }
+  renderPetLog();
+  $('#pet-admin').hidden = !(admin && on);
+  $('#pet-dialog').classList.toggle('is-admin', admin && on);
+  paintTileStart('pet');
+  if (!(admin && on)) return;
+  const f = $('#pet-settings');
+  if (!f.contains(document.activeElement)) {
+    f.name.value = data.name;
+    f.hungry_after.value = data.hungry_after;
+    f.feed_command.value = data.feed_command || DEFAULT_PET.feed_command;
+    f.phrases.value = (data.phrases ?? []).join('\n');
+  }
+}
+
+function paintPetMeter() {
+  const pet = state.pet.data;
+  if (!pet) return;
+  const fill = $('#pet-meter-fill');
+  // Im Ei: Fortschritt bis zum Schlüpfen statt Hunger
+  if (pet.stage === 'egg') {
+    const need = pet.hatch_feeds ?? 50;
+    const done = Math.min(need, pet.stage_feeds ?? 0);
+    fill.style.width = `${Math.round((done / need) * 100)}%`;
+    fill.classList.remove('is-hungry');
+    $('#pet-meter-label').textContent = 'Schlüpfen';
+    $('#pet-status').textContent = `${pet.name} ist noch im Ei – ${done} von ${need} × gefüttert. Noch ${need - done} × ${pet.feed_command || DEFAULT_PET.feed_command}, dann schlüpft es.`;
+    return;
+  }
+  $('#pet-meter-label').textContent = 'Hunger';
+  const h = isFrenzy(pet) ? 2 : hungerOf(pet);
+  fill.style.width = `${Math.round(Math.min(1, h) * 100)}%`;
+  fill.classList.toggle('is-hungry', h >= 1);
+  const since = pet.last_fed_at ? Math.round((Date.now() - Date.parse(pet.last_fed_at)) / 60000) : null;
+  $('#pet-status').textContent = isStarving(pet)
+    ? `${pet.name} hat Heißhunger und frisst im Stream die Karten an! Schnell füttern.`
+    : h >= 1
+    ? `${pet.name} hat Hunger und knabbert im Stream an den Zuschauern! Schnell füttern.`
+    : `${pet.name} ist satt${pet.last_fed_by ? ` – zuletzt gefüttert von ${pet.last_fed_by}` : ''}${since !== null ? (since < 1 ? ' gerade eben' : ` vor ${since} Min`) : ''}. Hunger in etwa ${Math.max(1, Math.round((1 - h) * pet.hungry_after))} Min.`;
+  if (pet.stage === 'baby') $('#pet-status').textContent += ` · Baby: ${pet.good_days ?? 0} von ${pet.grow_days ?? 5} Streams mit guter Laune (heute ${Math.min(3, pet.feed_day === berlinDay() ? pet.day_feeds ?? 0 : 0)}/3 × gefüttert).`;
+  state.pet.dino?.setHungry(isHungry(pet));
+  state.pet.dino?.setStarving(isStarving(pet));
+}
+
+function renderPetLog() {
+  const list = $('#pet-log');
+  const events = state.pet.events;
+  if (!events.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Noch nichts passiert.';
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...events.slice(0, 10).map((ev) => {
+    const li = document.createElement('li');
+    const icon = document.createElement('span');
+    icon.className = 'prank-log-icon';
+    icon.textContent = ev.kind === 'feed' ? '🍖' : ev.kind === 'pet' ? '🤚' : ev.kind === 'costume' ? '👕' : ev.kind === 'stage' ? (ev.text === 'baby' ? '🐣' : '🎉') : '💬';
+    const main = document.createElement('span');
+    main.className = 'h-main';
+    main.textContent = (ev.kind === 'feed' ? `${ev.who} hat gefüttert`
+      : ev.kind === 'pet' ? `${ev.who} hat gestreichelt`
+        : ev.kind === 'costume' ? `${ev.who} hat das Kostüm gewechselt: ${costumeName(ev.text)}`
+        : ev.kind === 'stage' ? stageLine(ev)
+        : `„${ev.text}“`) + (ev.local ? ' (nur hier)' : '');
+    const time = document.createElement('time');
+    time.dateTime = ev.created_at;
+    time.textContent = new Date(ev.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    li.append(icon, main, time);
+    return li;
+  }));
+}
+
+async function petAction(kind, btn) {
+  btn.disabled = true;
+  // Zuschauer (und Admins ohne „Auch im Stream“): nur hier auf der Seite
+  if (!state.profile?.is_admin || !$('#pet-live').checked) {
+    const who = state.profile?.username ?? 'Du';
+    const ev = { id: `local-${Date.now()}`, kind, who, text: '', created_at: new Date().toISOString(), local: true };
+    state.pet.events = [ev, ...state.pet.events].slice(0, 20);
+    if (kind === 'feed') state.pet.data = { ...state.pet.data, last_fed_at: ev.created_at, last_fed_by: who };
+    petReact(ev);
+    renderPetDialog();
+    setTimeout(() => { btn.disabled = false; }, 2500);
+    return;
+  }
+  try {
+    const ev = await state.api.petAction(kind);
+    if (!state.pet.events.some((x) => x.id === ev.id)) {
+      state.pet.events = [ev, ...state.pet.events].slice(0, 20);
+      petReact(ev);
+    }
+    if (kind === 'feed') state.pet.data = await state.api.getPet();
+    renderPetDialog();
+    paintPetTile();
+  } catch (err) {
+    toast(germanError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function petSay(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const text = form.text.value.trim();
+  if (!text) return;
+  try {
+    const ev = await state.api.petSay(text);
+    if (!state.pet.events.some((x) => x.id === ev.id)) {
+      state.pet.events = [ev, ...state.pet.events].slice(0, 20);
+      petReact(ev);
+    }
+    form.reset();
+    renderPetLog();
+    toast('Der Dino sagt es jetzt im Stream.', 'ok');
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+}
+
+// ---------- Rexi: Kostüm und Heißhunger (Dino-Dialog und OBS-Fenster, nur Admins) ----------
+const petMsgBox = (el) => el?.closest('.obs-pet-admin, .obs-card-form, .pet-costume-box');
+function petMsg(box, text, ok = false) {
+  const el = box?.querySelector('.form-msg');
+  if (!el) { if (text) toast(text, ok ? 'ok' : 'error'); return; }
+  el.textContent = text;
+  el.classList.toggle('is-ok', ok);
+}
+
+// Neuer Stand aus der Datenbank: überall nachziehen
+function applyPetRow(row) {
+  if (!row) return;
+  state.pet.data = { ...state.pet.data, ...row };
+  if (row.costume) state.pet.dino?.setCostume(row.costume);
+  if (row.species) state.pet.dino?.setSpecies(row.species);
+  paintPetTile();
+  renderPetEvo();
+  if ($('#pet-dialog').open) renderPetDialog();
+  if ($('#obs-dialog').open) paintObsPet();
+}
+
+async function setPetCostume(costume, msgEl) {
+  const box = petMsgBox(msgEl);
+  petMsg(box, '');
+  if (costume === state.pet.data?.costume) return;
+  try {
+    applyPetRow(await state.api.petCostume(costume));
+    petMsg(box, `✓ Rexi trägt jetzt: ${costumeName(costume)}.`, true);
+  } catch (err) {
+    petMsg(box, germanError(err));
+    paintObsPet();
+    if ($('#pet-dialog').open) renderPetDialog();
+  }
+}
+
+// Heißhunger auslösen – läuft er schon, beendet derselbe Knopf ihn wieder (ohne Füttern)
+async function toggleFrenzy(btn) {
+  const box = petMsgBox(btn);
+  petMsg(box, '');
+  const on = !isFrenzy(state.pet.data);
+  btn.disabled = true;
+  try {
+    applyPetRow(await state.api.petFrenzy(on));
+    petMsg(box, on ? '🔥 Rexi hat Heißhunger – er frisst die Karten an, bis ihn jemand füttert.' : '✓ Heißhunger beendet.', true);
+  } catch (err) {
+    petMsg(box, germanError(err));
+  } finally {
+    btn.disabled = false;
+    paintFrenzyButtons();
+  }
+}
+
+async function obsFeedPet(btn) {
+  const box = petMsgBox(btn);
+  petMsg(box, '');
+  btn.disabled = true;
+  try {
+    const ev = await state.api.petAction('feed');
+    if (ev && !state.pet.events.some((x) => x.id === ev.id)) {
+      state.pet.events = [ev, ...state.pet.events].slice(0, 20);
+      petReact(ev);
+    }
+    applyPetRow(await state.api.getPet());
+    petMsg(box, '✓ Rexi ist satt – die Karten wachsen wieder zu.', true);
+  } catch (err) {
+    petMsg(box, germanError(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const berlinDay = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+const stageLine = (ev) => {
+  const name = state.pet.data?.name ?? 'Das Haustier';
+  const thanks = ev.who ? ` Danke an ${ev.who}!` : '';
+  return ev.text === 'baby' ? `🐣 ${name} ist geschlüpft!${thanks}` : `🎉 ${name} ist erwachsen!${thanks}`;
+};
+
+// Tier & Entwicklung – im Haustier-Dialog und im OBS-Fenster (Ebene „Haustier“). Tierart und
+// Stadium stellt der Streamer ein (Seiten-Admins auch), Mods sehen den Stand.
+function renderPetEvo() {
+  const pet = { ...DEFAULT_PET, ...state.pet.data };
+  const boss = canStreamerView();
+  document.querySelectorAll('[data-pet-evo]').forEach((box) => {
+    if (box.contains(document.activeElement) && document.activeElement.matches('input')) return;
+    const need = pet.hatch_feeds ?? 50;
+    const progress = pet.stage === 'egg'
+      ? `🥚 Im Ei: ${Math.min(need, pet.stage_feeds ?? 0)} von ${need} × gefüttert`
+      : pet.stage === 'baby'
+        ? `🍼 Baby: ${pet.good_days ?? 0} von ${pet.grow_days ?? 5} Streams mit guter Laune (ein Tag mit 3 × Füttern)`
+        : '🌟 Erwachsen';
+    box.innerHTML = `
+      <p class="pet-evo-label">Tier des Kanals${boss ? '' : ' <small>(wählt der Streamer)</small>'}</p>
+      <div class="pet-species-grid" role="radiogroup" aria-label="Tierart">
+        ${SPECIES.map((s) => `<button type="button" class="pet-species" role="radio" data-species="${s.id}" aria-checked="${s.id === pet.species}" ${boss ? '' : 'disabled'}>
+          <span class="pet-species-pic">${dinoSvg(pet.costume, s.id)}</span><b>${s.name}</b><small>${s.pet}</small></button>`).join('')}
+      </div>
+      <p class="pet-evo-label">Entwicklung</p>
+      <div class="pet-stage-seg" role="radiogroup" aria-label="Stadium">
+        ${STAGES.map((st) => `<button type="button" class="pet-stage-btn" role="radio" data-stage="${st.id}" aria-checked="${st.id === pet.stage}" ${boss ? '' : 'disabled'}>${st.id === 'egg' ? '🥚' : st.id === 'baby' ? '🐣' : '🌟'} ${st.name}</button>`).join('')}
+      </div>
+      <p class="pet-evo-progress">${progress}</p>
+      <div class="pet-evo-nums">
+        <label class="field"><span>Schlüpft nach (× Füttern)</span><input type="number" min="5" max="500" step="1" data-pet-num="hatch_feeds" value="${need}" ${boss ? '' : 'disabled'}></label>
+        <label class="field"><span>Wächst nach (Streams)</span><input type="number" min="1" max="30" step="1" data-pet-num="grow_days" value="${pet.grow_days ?? 5}" ${boss ? '' : 'disabled'}></label>
+      </div>
+      <p class="form-msg pet-evo-msg" role="alert"></p>`;
+  });
+}
+
+async function onPetEvoClick(e) {
+  const box = e.target.closest('[data-pet-evo]');
+  if (!box || !canStreamerView()) return;
+  const pet = { ...DEFAULT_PET, ...state.pet.data };
+  const sp = e.target.closest('[data-species]');
+  const st = e.target.closest('.pet-stage-btn');
+  let patch = null;
+  let ok = '';
+  if (sp && sp.dataset.species !== pet.species) {
+    const next = speciesOf(sp.dataset.species);
+    // Hieß das Tier wie das alte Standard-Tier, bekommt es den neuen Standard-Namen
+    const rename = pet.name === speciesOf(pet.species).pet;
+    patch = { species: next.id, ...(rename ? { name: next.pet } : {}) };
+    ok = `✓ Neues Tier im Kanal: ${rename ? next.pet : pet.name} (${next.name}).`;
+  } else if (st && st.dataset.stage !== pet.stage) {
+    const stage = st.dataset.stage;
+    if (stage === 'egg' && !confirm(`Neues Ei legen? ${pet.name} wird wieder zum Ei und schlüpft nach ${pet.hatch_feeds ?? 50} × Füttern im Chat.`)) return;
+    patch = { stage };
+    ok = stage === 'egg' ? '✓ Ein neues Ei liegt im Stream.' : `✓ ${pet.name} ist jetzt ${stageName(stage)}.`;
+  }
+  if (!patch) return;
+  try {
+    applyPetRow(await state.api.updatePet(patch));
+    toast(ok, 'ok');
+  } catch (err) {
+    box.querySelector('.pet-evo-msg').textContent = germanError(err);
+  }
+}
+
+async function onPetEvoChange(e) {
+  const input = e.target.closest('[data-pet-num]');
+  if (!input || !canStreamerView()) return;
+  const box = input.closest('[data-pet-evo]');
+  const key = input.dataset.petNum;
+  const value = Math.round(Number(input.value));
+  try {
+    applyPetRow(await state.api.updatePet({ [key]: value }));
+  } catch (err) {
+    box.querySelector('.pet-evo-msg').textContent = germanError(err);
+  }
+}
+
+function paintFrenzyButtons() {
+  const on = isFrenzy(state.pet.data);
+  document.querySelectorAll('[data-pet-frenzy]').forEach((b) => {
+    b.textContent = on ? '✋ Heißhunger beenden' : '🔥 Heißhunger auslösen';
+    b.classList.toggle('is-active', on);
+  });
+}
+
+// OBS-Fenster, Ebene „Stream-Dino“: Kostüm, !change, Abklingzeit
+function paintObsPet() {
+  const admin = !!state.profile?.is_admin && !!state.pet?.on;
+  $('#obs-pet-admin').hidden = !admin;
+  if (!admin) return;
+  const pet = { ...DEFAULT_PET, ...state.pet.data };
+  const costume = $('#obs-pet-costume');
+  if (document.activeElement !== costume) costume.value = pet.costume;
+  $('#obs-pet-change').checked = pet.costume_command !== false;
+  const cd = $('#obs-pet-cooldown');
+  if (document.activeElement !== cd) cd.value = pet.costume_cooldown ?? 60;
+  $('#obs-pet-cooldown-out').textContent = `${cd.value} s`;
+  cd.disabled = !$('#obs-pet-change').checked;
+  paintFrenzyButtons();
+  renderPetEvo();
+}
+
+function setupObsPet() {
+  const box = $('#obs-pet-admin');
+  // Diese Felder gehören nicht zu den OBS-Einstellungen (Adresse), sondern zu Rexi
+  for (const type of ['input', 'change']) box.addEventListener(type, (e) => e.stopPropagation());
+  $('#obs-pet-costume').addEventListener('change', (e) => setPetCostume(e.currentTarget.value, e.currentTarget));
+  const save = async (patch, okText) => {
+    petMsg(box, '');
+    try {
+      applyPetRow(await state.api.updatePet(patch));
+      petMsg(box, okText, true);
+    } catch (err) {
+      petMsg(box, germanError(err));
+      paintObsPet();
+    }
+  };
+  $('#obs-pet-change').addEventListener('change', (e) => {
+    const on = e.currentTarget.checked;
+    save({ costume_command: on }, on ? '✓ Zuschauer können mit !change das Kostüm wechseln.' : '✓ !change ist aus.');
+  });
+  const cd = $('#obs-pet-cooldown');
+  cd.addEventListener('input', () => { $('#obs-pet-cooldown-out').textContent = `${cd.value} s`; });
+  cd.addEventListener('change', () => {
+    const sec = Math.round(Number(cd.value));
+    save({ costume_cooldown: sec }, sec ? `✓ !change geht höchstens alle ${sec} Sekunden.` : '✓ !change geht jetzt ohne Pause.');
+  });
+}
+
+async function savePetSettings(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const name = form.name.value.trim();
+  const hungry = Math.round(Number(form.hungry_after.value));
+  const command = form.feed_command.value.trim();
+  if (!name) return formMsg(form, 'Bitte einen Namen eingeben.');
+  if (!/^![^\s!]{1,29}$/.test(command)) return formMsg(form, 'Der Chat-Befehl beginnt mit ! und hat keine Leerzeichen, z. B. !füttern.');
+  if (!(hungry >= 5 && hungry <= 720)) return formMsg(form, 'Hunger nach 5 bis 720 Minuten.');
+  await withLoading(form, async () => {
+    const phrases = form.phrases.value.split('\n').map((l) => l.trim()).filter(Boolean);
+    state.pet.data = await state.api.updatePet({ name, hungry_after: hungry, phrases, feed_command: command });
+    formMsg(form, 'Gespeichert.', true);
+    renderPetDialog();
+    paintPetTile();
+  });
+}
+
+// ---------- Startdatum für Zuschauer (Ärgern, Bingo, Fragen, Dino) ----------
+function paintTileStart(kind) {
+  const input = document.querySelector(`[data-tile-start="${kind}"]`);
+  const tile = tileByKind(kind);
+  input.closest('.tile-start').hidden = !tile;
+  if (tile && document.activeElement !== input) input.value = tile.target_at ? toLocalInput(new Date(tile.target_at)) : '';
+}
+
+async function saveTileStart(input) {
+  const tile = tileByKind(input.dataset.tileStart);
+  if (!tile) return;
+  const target = input.value ? new Date(input.value) : null;
+  input.disabled = true;
+  try {
+    const updated = await state.api.updateTile(tile.id, { target_at: target ? target.toISOString() : null });
+    state.tiles = state.tiles.map((t) => (t.id === updated.id ? updated : t));
+    discordAnnounceTile(updated);
+    renderGrid();
+    if (input.dataset.tileStart === 'prank' && state.twitch.connected) syncPrankRewards();
+    toast(target && target > new Date()
+      ? `Zuschauer sehen bis ${startLabel(target.toISOString())} einen Countdown.`
+      : 'Für alle freigeschaltet.', 'ok');
+  } catch (err) {
+    toast(`Speichern fehlgeschlagen: ${germanError(err)}`, 'error');
+  } finally {
+    input.disabled = false;
+    paintTileStart(input.dataset.tileStart);
+  }
+}
+
+// ============================================================
+// Countdown-Kachel: Details & Bearbeiten
+// ============================================================
+const THEME_BG = {
+  tracks: 'assets/bg-tracks.svg', storm: 'assets/bg-storm.svg', ghost: 'assets/bg-ghost.svg', city: 'assets/bg-city.svg',
+  prank: 'assets/bg-prank.svg', bingo: 'assets/bg-bingo.svg', questions: 'assets/bg-questions.svg', pet: 'assets/bg-pet.svg', shop: 'assets/bg-shop.svg',
+  challenge: 'assets/bg-challenge.svg',
+  ...Object.fromEntries(EXTRA_KINDS.map((k) => [k, `assets/bg-${k}.svg`])),
+};
+
+function openTile(id) {
+  const tile = state.tiles.find((t) => t.id === id);
+  if (!tile) return;
+  state.activeTile = tile;
+  fillTileDialog(tile);
+  showTileForm(false);
+  $('#tile-dialog').showModal();
+}
+
+function fillTileDialog(tile) {
+  const img = safeUrl(tile.background) ?? THEME_BG[tile.theme] ?? THEME_BG.tracks;
+  $('#tile-dialog-hero').style.backgroundImage = `url(${JSON.stringify(img)})`;
+  $('#tile-dialog-title').textContent = tile.title;
+  $('#tile-dialog-desc').textContent = tile.description;
+  const date = tile.target_at ? new Date(tile.target_at) : null;
+  $('#tile-dialog-date').textContent = date
+    ? `Start · ${date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })} · ${date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`
+    : 'Termin folgt';
+  const cd = $('#tile-dialog-countdown');
+  cd.dataset.target = tile.target_at ?? '';
+  cd.replaceChildren();
+  renderCountdown(cd, tile.target_at);
+  $('#tile-edit-btn').hidden = !state.profile?.is_admin || tile.kind !== 'countdown';
+}
+
+function showTileForm(show) {
+  const form = $('#tile-form');
+  $('#tile-view').hidden = show;
+  form.hidden = !show;
+  if (!show) return;
+  const t = state.activeTile;
+  form.title.value = t.title;
+  form.description.value = t.description;
+  form.target_at.value = t.target_at ? toLocalInput(new Date(t.target_at)) : '';
+  form.theme.value = t.theme;
+  form.background.value = t.background ?? '';
+  formMsg(form, '');
+  form.title.focus();
+}
+
+async function saveTile(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const bg = form.background.value.trim();
+  if (bg && !safeUrl(bg)) return formMsg(form, 'Das Hintergrundbild muss eine https-URL sein.');
+  const patch = {
+    title: form.title.value.trim(),
+    description: form.description.value.trim(),
+    target_at: new Date(form.target_at.value).toISOString(),
+    theme: form.theme.value,
+    background: bg || null,
+  };
+  if (!patch.title) return formMsg(form, 'Bitte einen Titel eingeben.');
+  await withLoading(form, async () => {
+    const updated = await state.api.updateTile(state.activeTile.id, patch);
+    state.tiles = state.tiles.map((t) => (t.id === updated.id ? updated : t));
+    state.activeTile = updated;
+    discordAnnounceTile(updated);
+    renderHero();
+    renderGrid();
+    renderArchive();
+    fillTileDialog(updated);
+    showTileForm(false);
+    toast('Gespeichert.', 'ok');
+  });
+}
+
+// Discord (…_discord.sql): neuer Termin einer Content-Idee – postet nur, wenn „Neue Termine ankündigen“
+// an ist, und je Termin einmal (entscheidet der Server). Fehler stören das Speichern nicht.
+function discordAnnounceTile(tile) {
+  if (!tile?.target_at || Date.parse(tile.target_at) <= Date.now() || !state.api.discordPost) return;
+  state.api.discordPost('idea', tile.id, true).catch((err) => console.warn('Discord-Ankündigung:', err?.message ?? err));
+}
+
+function toLocalInput(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ============================================================
+// OBS-Overlay
+// ============================================================
+// Jede Einstellung landet nur in der Adresse, wenn sie vom Standard abweicht.
+// Die Standards stehen als value/checked im Formular (index.html) und in
+// js/overlay.js – beide gleich halten. Positionen setzt die Vorschau: Karten
+// und Kamera-Rahmen lassen sich dort verschieben (overlay.html?edit=1).
+const OBS_KEY = 'obs_options';
+const OBS_WS_KEY = 'zd_obs_ws'; // früher Klartext in localStorage – wird beim ersten Lesen verschlüsselt umgezogen
+const OBS_UNITS = { ercool: ' s', ercombo: '×', ermax: '', ersize: '%', lbsize: '%', gsize: '%', fwsize: '%', sasize: '%', qzsize: '%', qusize: '%', ttsize: '%', cdsize: '%', gwsize: '%', hwsize: '%', plsize: '%', ctsize: '%', sgsize: '%', hrsize: '%', cmsize: '%', sosize: '%', cpsize: '%', cptop: '', btsize: '%', scsize: '%', spsize: '%', wsize: '%', nsize: '%', bsize: '%', psize: '%', qsize: '%', ssize: '%', csize: '%', asize: '%', rsize: '%', chsize: '%', chh: '%', chmax: '', dsize: '%', tsize: '%', tspeed: ' px/s', vol: '%', vwheel: '%', valert: '%', vprank: '%', vpet: '%', vquest: '%', vbingo: '%', vshop: '%', vchal: '%', vtts: '%', vquiz: '%', vforbid: '%', vsub: '%', vpause: '%', vcards: '%', vgive: '%', sfxpitch: '%', avfollow: '%', avsub: '%', avresub: '%', avgift: '%', avbits: '%', avredeem: '%', avtip: '%', avcharity: '%', hold: ' s', rotate: ' s', margin: ' px', bg: '%' };
+const OBS_PARTS = ['wheel', 'next', 'bingo', 'quest', 'shop', 'challenge', 'alerts', 'recent', 'chat', 'forbid', 'subathon', 'quiz', 'queue', 'tts', 'cards', 'giveaway', 'hotwords', 'poll', 'counter', 'gamewheel', 'heart', 'chatcontrol', 'songs', 'cup', 'bet', 'scratch', 'sponsor', 'scene', 'labels', 'goal'];
+const OBS_SIZE = {
+  wheel: 'wsize', next: 'nsize', bingo: 'bsize', quest: 'qsize', shop: 'ssize', challenge: 'csize', alerts: 'asize', recent: 'rsize', chat: 'chsize',
+  forbid: 'fwsize', subathon: 'sasize', quiz: 'qzsize', queue: 'qusize', tts: 'ttsize', cards: 'cdsize', giveaway: 'gwsize', hotwords: 'hwsize', poll: 'plsize', counter: 'ctsize', gamewheel: 'sgsize', heart: 'hrsize', chatcontrol: 'cmsize', songs: 'sosize', cup: 'cpsize', bet: 'btsize', scratch: 'scsize', sponsor: 'spsize', labels: 'lbsize', goal: 'gsize',
+};
+const obs = { ws: null, scene: null, shotTimer: 0, busy: false, stream: null, sources: [], previewSound: false, presets: null };
+// Live-Overlay: Einstellungen liegen in overlay_config, OBS lädt overlay.html?live=1
+const obsLive = { ready: false, params: '', access: { can_edit: false, is_owner: false, admins_can_edit: false }, timer: 0, filling: false };
+const obsLiveUrl = () => withChannelParam(new URL('overlay.html?live=1', location.href)).href;
+const obsLocked = () => obsLive.ready && !obsLive.access.can_edit;
+
+function setupObs() {
+  const form = $('#obs-options');
+  $('#obs-btn').addEventListener('click', openObsWindow);
+  $('#obs-guide-btn').addEventListener('click', () => showObsGuide($('#obs-dialog').classList.contains('guide-hidden')));
+  form.addEventListener('input', () => updateObs());
+  form.addEventListener('change', () => updateObs());
+  form.addEventListener('reset', () => setTimeout(() => { saveObs(null); updateObs(); }));
+  $('#obs-copy').addEventListener('click', copyObsUrl);
+  // Anleitung „In OBS einrichten“ (js/obs-setup.js)
+  setupObsSetup({
+    url: () => $('#obs-url').value,
+    copy: copyObsUrl,
+    status: async () => obsStatus(),
+    connect: () => {
+      $('#obs-help').open = true;
+      $('#obs-connect').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      $('#obs-ws-form').password.focus({ preventScroll: true });
+    },
+    // Letzter Schritt: einen Follower-Alert in alle OBS-Quellen schicken
+    testAlert: async (btn) => {
+      btn.disabled = true;
+      try {
+        await state.api.testAlert('follow');
+        toast('✓ Test-Alert geschickt – er erscheint gleich in der OBS-Vorschau.', 'ok');
+      } catch (err) {
+        toast(`Test-Alert ging nicht: ${germanError(err)}`, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    },
+  });
+  $('#obs-setup-open').addEventListener('click', () => openObsSetup(0));
+  setupObsModules();
+  $('#obs-ticker-form').addEventListener('submit', saveTickerTexts);
+  $('#obs-alert-upload-btn').addEventListener('click', uploadAlertSound);
+  // Die Upload-Felder gehören nicht zu den OBS-Einstellungen
+  for (const type of ['input', 'change']) $('#obs-alert-upload').addEventListener(type, (e) => e.stopPropagation());
+  $('#obs-alert-sounds').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-sound-test]');
+    if (btn) testAlertSound(btn.dataset.soundTest);
+  });
+  $('#obs-alerts').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-alert]');
+    if (btn) testAlert(btn.dataset.alert, btn);
+  });
+  $('#obs-allow-admins').addEventListener('change', allowAdminsObs);
+  $('#obs-mods-toggle').addEventListener('change', toggleMods);
+  $('#obs-mods-sync').addEventListener('click', syncMods);
+  $('#showcase-toggle').addEventListener('change', toggleShowcase);
+  $('#obs-content-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-content-open], [data-content-unlock]');
+    const tile = btn && state.tiles.find((t) => t.id === (btn.dataset.contentOpen ?? btn.dataset.contentUnlock));
+    if (!tile) return;
+    if (btn.dataset.contentOpen) TILE_OPEN[tile.kind]?.(tile);
+    else unlockTile(tile, btn);
+  });
+  $('#obs-ws-form').addEventListener('submit', (e) => { e.preventDefault(); connectObs(); });
+  $('#obs-ws-disconnect').addEventListener('click', () => disconnectObs(true));
+  $('#obs-cam-source').addEventListener('change', useObsCamera);
+  $('#obs-share').addEventListener('click', shareObsWindow);
+  setupObsLayers();
+  setupObsTools();
+  // Vorschau und Bildabruf beim Schließen beenden – sie liefen sonst im Hintergrund weiter.
+  $('#obs-dialog').addEventListener('close', () => {
+    clearTimeout(obsPreviewTimer);
+    clearTimeout(obs.shotTimer);
+    $('#obs-preview iframe')?.remove();
+    stopObsShare();
+  });
+  new ResizeObserver(fitObsPreview).observe($('#obs-preview'));
+
+  // Verschieben in der Vorschau meldet das Overlay per postMessage.
+  addEventListener('message', (e) => {
+    // Nur die OBS-Vorschau – nicht die Vorschauen im Alert-Designer oder in der Design-Bibliothek
+    if (e.origin !== location.origin || e.source !== $('#obs-preview iframe')?.contentWindow) return;
+    if (e.data?.type === 'stellwerk-obs-select') {
+      const cam = form.elements.prank.checked || !form.elements.camframe.checked ? 'prank' : 'camframe';
+      openObsLayer(e.data.key === 'cam' ? cam : e.data.key, { scroll: true });
+      return;
+    }
+    if (e.data?.type !== 'stellwerk-obs') return;
+    if (obsLocked()) { renderObsPreview(); return; } // nicht erlaubt: zurück auf den gespeicherten Stand
+    const field = form.elements[e.data.key];
+    if (!field || typeof e.data.value !== 'string') return;
+    field.value = e.data.value;
+    if (e.data.key === 'cam') $('#obs-cam-source').value = '';
+    updateObs({ fromPreview: true });
+  });
+}
+
+// ---------- OBS-Editor-Werkzeuge: Bereiche einklappen, Ebenen suchen, Rückgängig, Testen ----------
+const OBS_COLS_KEY = 'sh_obs_cols';
+// Verlauf: jede Änderung als Parameter-Text (wie obsUrl), höchstens 40 Schritte
+const obsHist = { list: [], at: -1, timer: 0, applying: false };
+
+function setupObsTools() {
+  const dlg = $('#obs-dialog');
+  const body = dlg.querySelector('.obs-body');
+  // Bereiche ein- und ausklappen – nie beide zugleich
+  const setCols = (closed) => {
+    body.classList.toggle('is-closed-left', closed === 'left');
+    body.classList.toggle('is-closed-right', closed === 'right');
+    dlg.querySelectorAll('[data-obs-col]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.obsCol !== closed)));
+    try { localStorage.setItem(OBS_COLS_KEY, closed); } catch { /* egal */ }
+    if (closed !== 'left') fitObsPreview();
+  };
+  let saved = '';
+  try { saved = localStorage.getItem(OBS_COLS_KEY) ?? ''; } catch { /* egal */ }
+  setCols(['left', 'right'].includes(saved) ? saved : '');
+  dlg.querySelectorAll('[data-obs-col]').forEach((btn) => btn.addEventListener('click', () => {
+    const side = btn.dataset.obsCol;
+    setCols(body.classList.contains(`is-closed-${side}`) ? '' : side);
+  }));
+
+  setupObsLayout();
+
+  // Ebenen suchen und filtern – die Felder gehören nicht zu den OBS-Einstellungen
+  const tools = $('#obs-layer-tools');
+  for (const type of ['input', 'change']) tools.addEventListener(type, (e) => { e.stopPropagation(); filterObsLayers(); });
+  $('#obs-layer-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+
+  // Rückgängig / Wiederholen
+  $('#obs-undo').addEventListener('click', () => stepObsHistory(-1));
+  $('#obs-redo').addEventListener('click', () => stepObsHistory(1));
+  $('#obs-history-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-hist]');
+    if (btn) gotoObsHistory(Number(btn.dataset.hist));
+  });
+  dlg.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    // In Textfeldern bleibt Strg+Z beim Browser (Text rückgängig)
+    if (e.target.closest('input[type="text"], input[type="search"], input:not([type]), textarea')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) { e.preventDefault(); stepObsHistory(-1); }
+    else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); stepObsHistory(1); }
+  });
+
+  // ▶ Testen: die gewählte Ebene führt in der Vorschau vor, was sie kann
+  $('#obs-insp-test').addEventListener('click', () => {
+    if (!obsSelected) return;
+    const frame = $('#obs-preview iframe');
+    if (!frame) { toast('Die Vorschau ist eingeklappt – erst „Vorschau“ oben einschalten.', 'info'); return; }
+    const row = $(`#obs-dialog .obs-layer[data-layer="${obsSelected}"]`);
+    if (row && !row.classList.contains('is-on')) toast('Die Ebene ist aus – sie erscheint nur in der Vorschau kurz zum Testen, wenn du sie einschaltest.', 'info', 5000);
+    frame.contentWindow?.postMessage({ type: 'stellwerk-test', key: obsSelected }, location.origin);
+  });
+}
+
+// Anordnung der Bereiche auf der OBS-Seite: unter der Vorschau oder links und rechts daneben (css/style.css)
+const OBS_LAYOUT_KEY = 'sh_obs_layout';
+const OBS_LAYOUTS = ['bottom', 'side', 'side-r'];
+function setObsLayout(layout) {
+  const name = OBS_LAYOUTS.includes(layout) ? layout : 'bottom';
+  const dlg = $('#obs-dialog');
+  dlg.querySelector('.obs-body').dataset.layout = name;
+  dlg.querySelectorAll('[data-obs-layout]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.obsLayout === name)));
+  try { localStorage.setItem(OBS_LAYOUT_KEY, name); } catch { /* egal */ }
+  requestAnimationFrame(fitObsPreview);
+}
+function setupObsLayout() {
+  let saved = '';
+  try { saved = localStorage.getItem(OBS_LAYOUT_KEY) ?? ''; } catch { /* egal */ }
+  setObsLayout(saved);
+  $('#obs-dialog').querySelectorAll('[data-obs-layout]').forEach((b) => b.addEventListener('click', () => setObsLayout(b.dataset.obsLayout)));
+}
+
+function filterObsLayers() {
+  const q = $('#obs-layer-search').value.trim().toLowerCase();
+  const onlyOn = $('#obs-layer-only-on').checked;
+  let shown = 0;
+  $('#obs-dialog').querySelectorAll('.obs-layer').forEach((row) => {
+    const name = `${row.querySelector('.obs-layer-name')?.textContent ?? ''} ${row.dataset.layer}`.toLowerCase();
+    const hide = (q && !name.includes(q)) || (onlyOn && !row.classList.contains('is-on'));
+    row.classList.toggle('is-filtered', !!hide);
+    if (!hide) shown++;
+  });
+  $('#obs-dialog').querySelectorAll('.obs-layers .obs-group').forEach((g) => {
+    g.classList.toggle('is-filtered', !g.querySelector('.obs-layer:not(.is-filtered)'));
+  });
+  $('#obs-layer-none').hidden = shown > 0;
+}
+
+// Was hat sich geändert? Für die Einträge im Verlauf („Bingo verschoben“, „Größe · Alerts“ …)
+function describeObsChange(before, after) {
+  const a = new URLSearchParams(before);
+  const b = new URLSearchParams(after);
+  const keys = [...new Set([...a.keys(), ...b.keys()])].filter((k) => a.get(k) !== b.get(k));
+  if (!keys.length) return 'Änderung';
+  const layerName = (key) => $(`#obs-dialog .obs-layer[data-layer="${key}"] .obs-layer-name`)?.firstChild?.textContent.trim() ?? key;
+  const ownerOf = (el) => {
+    for (const [key, body] of obsBodies) if (body.contains(el)) return layerName(key);
+    return '';
+  };
+  const label = (k) => {
+    if (OBS_PARTS.includes(k)) {
+      if (!a.has(k)) return `${layerName(k)} an`;
+      if (!b.has(k)) return `${layerName(k)} aus`;
+      return `${layerName(k)} verschoben`;
+    }
+    const el = $('#obs-options').elements[k];
+    if (!el || !(el instanceof Element)) return k;
+    if (el.type === 'checkbox' && Object.values(OBS_LAYER_SWITCH).includes(el.name)) {
+      const key = Object.keys(OBS_LAYER_SWITCH).find((x) => OBS_LAYER_SWITCH[x] === el.name);
+      return `${layerName(key)} ${el.checked ? 'an' : 'aus'}`;
+    }
+    const row = el.closest('.obs-row, label');
+    const text = row?.querySelector(':scope > span')?.textContent.trim() || el.getAttribute('aria-label') || k;
+    const owner = ownerOf(el);
+    return owner ? `${text} · ${owner}` : text;
+  };
+  const first = label(keys[0]);
+  return keys.length > 1 ? `${first} (+${keys.length - 1})` : first;
+}
+
+function recordObsHistory({ reset = false } = {}) {
+  clearTimeout(obsHist.timer);
+  const commit = () => {
+    const q = new URL(obsUrl()).search.slice(1);
+    if (reset) {
+      obsHist.list = [{ q, label: 'Geöffnet', at: new Date() }];
+      obsHist.at = 0;
+    } else {
+      const cur = obsHist.list[obsHist.at];
+      if (!cur || cur.q === q) return;
+      obsHist.list = obsHist.list.slice(0, obsHist.at + 1);
+      obsHist.list.push({ q, label: describeObsChange(cur.q, q), at: new Date() });
+      if (obsHist.list.length > 40) obsHist.list.shift();
+      obsHist.at = obsHist.list.length - 1;
+    }
+    paintObsHistory();
+  };
+  if (reset) commit();
+  else obsHist.timer = setTimeout(commit, 500);
+}
+
+function gotoObsHistory(i) {
+  if (i < 0 || i >= obsHist.list.length || i === obsHist.at || obsLocked()) return;
+  clearTimeout(obsHist.timer);
+  obsHist.at = i;
+  obsHist.applying = true;
+  applyObsParams(obsHist.list[i].q);
+  updateObs({ now: true });
+  obsHist.applying = false;
+  scheduleObsSave();
+  paintObsHistory();
+}
+
+function stepObsHistory(step) {
+  const target = obsHist.list[obsHist.at + step];
+  if (!target) return;
+  const label = step < 0 ? obsHist.list[obsHist.at].label : target.label;
+  gotoObsHistory(obsHist.at + step);
+  toast(`${step < 0 ? '↶ Rückgängig' : '↷ Wiederholt'}: ${label}`, 'info', 2200);
+}
+
+function paintObsHistory() {
+  const locked = obsLocked();
+  $('#obs-undo').disabled = locked || obsHist.at <= 0;
+  $('#obs-redo').disabled = locked || obsHist.at >= obsHist.list.length - 1;
+  const list = $('#obs-history-list');
+  if (obsHist.list.length <= 1) {
+    list.innerHTML = '<li class="is-empty">Noch keine Änderungen. Strg+Z macht die letzte rückgängig.</li>';
+    return;
+  }
+  const time = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  list.replaceChildren(...obsHist.list.map((h, i) => {
+    const li = document.createElement('li');
+    li.classList.toggle('is-now', i === obsHist.at);
+    li.classList.toggle('is-future', i > obsHist.at);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.hist = String(i);
+    btn.disabled = locked;
+    const n = document.createElement('small');
+    n.textContent = String(i);
+    const t = document.createElement('span');
+    t.textContent = h.label;
+    const at = document.createElement('small');
+    at.textContent = time(h.at);
+    btn.append(n, t, at);
+    li.append(btn);
+    return li;
+  }).reverse());
+}
+
+// ---------- OBS-Fenster v2: Reiter und Ebenen ----------
+// Jede Ebene (Karte im Overlay) hat eine Zeile: Schalter, Name, Größe – aufgeklappt
+// die Einstellungen. Die Felder selbst sind die alten (Namen = Parameter im Overlay).
+const OBS_LAYER_SWITCH = { wheel: 'wheel_on', next: 'next_on', bingo: 'bingo_on', quest: 'quest_on', shop: 'shop_on', challenge: 'challenge_on', alerts: 'alerts_on', recent: 'recent_on', chat: 'chat_on', prank: 'prank', pet: 'pet', ticker: 'ticker_show',
+  forbid: 'forbid_on', subathon: 'subathon_on', quiz: 'quiz_on', queue: 'queue_on', tts: 'tts_on', cards: 'cards_on', giveaway: 'giveaway_on', hotwords: 'hotwords_on', poll: 'poll_on', counter: 'counter_on', gamewheel: 'gamewheel_on', heart: 'heart_on', chatcontrol: 'chatcontrol_on', songs: 'songs_on', cup: 'cup_on', bet: 'bet_on', scratch: 'scratch_on', sponsor: 'sponsor_on', pause: 'pause',
+  scene: 'scene_on', camframe: 'camframe', labels: 'labels_on', goal: 'goal_on', erain: 'erain',
+};
+const OBS_LAYER_SIZE = { ...OBS_SIZE, prank: 'psize', pet: 'dsize', ticker: 'tsize', erain: 'ersize' };
+const POS_NAMES = { br: 'unten rechts', bl: 'unten links', bc: 'unten Mitte', tr: 'oben rechts', tl: 'oben links', tc: 'oben Mitte' };
+let obsSelected = null;
+// Einstellungen je Ebene: stehen im Markup in der Ebenenliste, der Editor zeigt die gewählte im Inspektor
+const obsBodies = new Map();
+
+function setupObsLayers() {
+  const dlg = $('#obs-dialog');
+  setupObsDocks();
+  addObsLookFields();
+  setupObsMixer();
+  setupObsPresets();
+  $('#obs-sound-check').addEventListener('click', runObsSoundCheck);
+  dlg.querySelectorAll('.obs-layer').forEach((row) => obsBodies.set(row.dataset.layer, row.querySelector('.obs-layer-body')));
+  $('#obs-insp-close').addEventListener('click', () => openObsLayer(null));
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && obsSelected && !e.target.closest('input, select, textarea')) { e.preventDefault(); e.stopPropagation(); openObsLayer(null); }
+  });
+  dlg.querySelectorAll('.obs-tab').forEach((tab) => tab.addEventListener('click', () => showObsTab(tab.dataset.tab)));
+  dlg.querySelectorAll('.obs-layer').forEach((row) => {
+    row.querySelector('.obs-layer-name').addEventListener('click', () => {
+      openObsLayer(obsSelected === row.dataset.layer ? null : row.dataset.layer);
+    });
+  });
+  // Standardplatz: Wert aus dem Formular-Standard (index.html)
+  dlg.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-reset-pos]');
+    if (!btn) return;
+    const el = $('#obs-options').elements[btn.dataset.resetPos];
+    if (!el || obsLocked()) return;
+    el.value = obsDefault(el);
+    updateObs({ now: true });
+  });
+  $('#obs-pill').addEventListener('click', () => {
+    const box = $('#obs-connect');
+    box.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
+    if (!obs.ws?.connected) $('#obs-ws-form').password.focus({ preventScroll: true });
+  });
+  $('#obs-head-apply').addEventListener('click', applyObs);
+  setupAlertLooks();
+  setupObsThemes();
+  // Info-Leiste: die Häkchen ergeben das Feld lbitems (läuft vor dem Formular-Ereignis)
+  $('#obs-lbitems').addEventListener('change', () => {
+    const items = [...document.querySelectorAll('#obs-lbitems [data-lbitem]')].filter((c) => c.checked).map((c) => c.dataset.lbitem);
+    $('#obs-options').elements.lbitems.value = items.join(',') || 'follow';
+  });
+  // Eigene OBS-Quelle je Szene: dieselben Live-Einstellungen, nur die Szene steht in der Adresse
+  $('#obs-scene-links').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-scene-copy]');
+    if (!btn) return;
+    const url = new URL(obsLive.ready ? obsLiveUrl() : obsUrl());
+    url.searchParams.set('scene', btn.dataset.sceneCopy);
+    try {
+      await navigator.clipboard.writeText(url.href);
+      toast(`Adresse kopiert – in OBS als eigene Browserquelle (1920 × 1080) in die Szene legen.${obsLive.ready ? '' : ' Ohne Live-Modus stehen die Einstellungen in der Adresse.'}`, 'ok', 6000);
+    } catch {
+      prompt('Adresse für die Browserquelle:', url.href);
+    }
+  });
+  $('#obs-pet-say').addEventListener('submit', obsPetSay);
+  setupObsPet();
+}
+
+// ---------- Aussehen je Ebene: Farbe, Schrift, Einblenden (Parameter lc_/lcc_/lf_/la_/ls_, siehe js/overlay.js) ----------
+const LOOK_LAYERS = ['wheel', 'next', 'bingo', 'quest', 'shop', 'challenge', 'alerts', 'recent', 'chat', 'ticker', 'forbid', 'subathon',
+  'quiz', 'queue', 'tts', 'cards', 'giveaway', 'hotwords', 'poll', 'counter', 'gamewheel', 'heart', 'chatcontrol', 'songs', 'cup', 'bet', 'scratch', 'sponsor', 'labels', 'goal'];
+const LOOK_NO_ANIM = new Set(['wheel', 'alerts', 'ticker']); // haben eigene Effekte (Rad-Auftritt, Alert-Designer, Lauftext)
+const LOOK_COLORS = [['', 'Design-Farbe'], ['ffb81c', 'Gold'], ['9146ff', 'Twitch-Lila'], ['ff4fd8', 'Pink'], ['ff5a4e', 'Rot'], ['ff7a28', 'Orange'],
+  ['3ddc84', 'Grün'], ['35c7ff', 'Türkis'], ['4f7cff', 'Blau'], ['ffffff', 'Weiß'], ['custom', 'Eigene Farbe …']];
+const LOOK_FONTS = [['', 'Design-Schrift'], ['display', 'Barlow Condensed (kräftig)'], ['barlow', 'Barlow'], ['inter', 'Inter (schlicht)'],
+  ['mono', 'JetBrains Mono (Technik)'], ['serif', 'Georgia (klassisch)'], ['comic', 'Comic (verspielt)'], ['impact', 'Impact (laut)']];
+const LOOK_ANIMS = [['', 'Standard'], ['fade', 'Einblenden'], ['up', 'Von unten'], ['down', 'Von oben'], ['left', 'Von rechts'], ['right', 'Von links'],
+  ['zoom', 'Heranzoomen'], ['pop', 'Aufploppen'], ['flip', 'Aufklappen'], ['none', 'Ohne Animation']];
+const LOOK_SPEEDS = [['', 'Normal'], ['slow', 'Langsam'], ['fast', 'Schnell']];
+function addObsLookFields() {
+  const opts = (list) => list.map(([v, t], i) => `<option value="${v}"${i === 0 ? ' selected' : ''}>${t}</option>`).join('');
+  for (const key of LOOK_LAYERS) {
+    const body = $(`#obs-dialog .obs-layer[data-layer="${key}"] .obs-layer-body`);
+    if (!body) continue;
+    const box = document.createElement('div');
+    box.className = 'obs-look-block';
+    box.innerHTML = `<b class="obs-look-title">🎨 Aussehen</b>
+      <label class="obs-row"><span>Farbe</span><select name="lc_${key}">${opts(LOOK_COLORS)}</select></label>
+      <label class="obs-row obs-look-custom"><span>Eigene Farbe</span><input type="color" name="lcc_${key}" value="#ffb81c"></label>
+      <label class="obs-row"><span>Schrift</span><select name="lf_${key}">${opts(LOOK_FONTS)}</select></label>
+      ${LOOK_NO_ANIM.has(key) ? '' : `<label class="obs-row"><span>Einblenden</span><select name="la_${key}">${opts(LOOK_ANIMS)}</select></label>
+      <label class="obs-row"><span>Tempo</span><select name="ls_${key}">${opts(LOOK_SPEEDS)}</select></label>`}`;
+    body.append(box);
+  }
+}
+
+// ---------- Ton: Mixer mit 🔇 (stumm/zurück) und ▶ (in der Vorschau anhören) ----------
+function setupObsMixer() {
+  const mixer = $('#obs-mixer');
+  const head = mixer.querySelector('.obs-mixer-head');
+  const toggle = document.createElement('label');
+  toggle.className = 'toggle obs-preview-sound';
+  toggle.innerHTML = '<input type="checkbox" id="obs-preview-sound"><span class="toggle-ui" aria-hidden="true"></span>🔈 Ton in der Vorschau';
+  head.after(toggle);
+  $('#obs-preview-sound').addEventListener('change', (e) => { obs.previewSound = e.target.checked; renderObsPreview(); });
+  setupObsStudio();
+  mixer.querySelectorAll('.obs-mix[data-mix]').forEach((row) => {
+    const range = row.querySelector('input[type=range]');
+    const key = row.dataset.mix;
+    const mute = document.createElement('button');
+    mute.type = 'button';
+    mute.className = 'obs-mini-btn obs-mix-mute';
+    mute.textContent = '🔇';
+    mute.title = 'Stumm / wieder an';
+    mute.setAttribute('aria-label', `${row.textContent.trim()} stumm schalten`);
+    mute.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (range.disabled) return;
+      if (Number(range.value) > 0) { range.dataset.prev = range.value; range.value = '0'; }
+      else range.value = range.dataset.prev && range.dataset.prev !== '0' ? range.dataset.prev : '100';
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'obs-mini-btn obs-mix-play';
+    play.textContent = '▶';
+    play.title = 'In der Vorschau anhören';
+    play.setAttribute('aria-label', `${row.textContent.trim()} in der Vorschau anhören`);
+    play.addEventListener('click', (e) => { e.preventDefault(); previewLayerSound(key); });
+    row.append(mute, play);
+  });
+  const paintMutes = () => mixer.querySelectorAll('.obs-mix').forEach((row) => {
+    const r = row.querySelector('input[type=range]');
+    row.classList.toggle('is-muted', Number(r?.value) === 0);
+  });
+  $('#obs-options').addEventListener('input', paintMutes);
+  $('#obs-options').addEventListener('change', paintMutes);
+  setTimeout(paintMutes);
+}
+
+// ---------- Sound-Studio: Klangfarbe, Hall, Tonhöhe (Parameter sfxeq, sfxrev, sfxpitch) ----------
+const STUDIO_PRESETS = [
+  { id: 'natural', name: '🎧 Natürlich', eq: '', rev: '', pitch: 100 },
+  { id: 'cinema', name: '🎬 Kino', eq: 'bass', rev: 'hall', pitch: 100 },
+  { id: 'arena', name: '🏟️ Stadion', eq: '', rev: 'arena', pitch: 100 },
+  { id: 'arcade', name: '🕹️ Arcade', eq: 'bright', rev: '', pitch: 115 },
+  { id: 'radio', name: '📻 Radio', eq: 'radio', rev: 'room', pitch: 100 },
+  { id: 'echo', name: '🌀 Echo-Kammer', eq: 'warm', rev: 'echo', pitch: 100 },
+  { id: 'monster', name: '👹 Monster', eq: 'bass', rev: 'hall', pitch: 70 },
+  { id: 'mini', name: '🐿️ Mini', eq: 'bright', rev: '', pitch: 160 },
+];
+function applyStudioFx() {
+  const f = $('#obs-options');
+  setSfxFx({ eq: f.elements.sfxeq.value, rev: f.elements.sfxrev.value, pitch: Number(f.elements.sfxpitch.value) / 100 });
+}
+function paintStudio() {
+  const f = $('#obs-options');
+  const now = `${f.elements.sfxeq.value}|${f.elements.sfxrev.value}|${f.elements.sfxpitch.value}`;
+  $('#obs-studio-presets').querySelectorAll('[data-studio]').forEach((b) => {
+    const p = STUDIO_PRESETS.find((x) => x.id === b.dataset.studio);
+    b.setAttribute('aria-pressed', String(`${p.eq}|${p.rev}|${p.pitch}` === now));
+    b.disabled = obsLocked();
+  });
+}
+function setupObsStudio() {
+  const f = $('#obs-options');
+  const fill = (el, list) => {
+    el.replaceChildren(...list.map((x) => new Option(x.name, x.id)));
+    el.options[0].defaultSelected = true;
+  };
+  fill(f.elements.sfxeq, SFX_EQ);
+  fill(f.elements.sfxrev, SFX_REVERB);
+  const box = $('#obs-studio-presets');
+  box.replaceChildren(...STUDIO_PRESETS.map((p) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'obs-studio-preset';
+    b.dataset.studio = p.id;
+    b.textContent = p.name;
+    return b;
+  }));
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-studio]');
+    const p = b && STUDIO_PRESETS.find((x) => x.id === b.dataset.studio);
+    if (!p || obsLocked()) return;
+    setSelect(f.elements.sfxeq, p.eq);
+    setSelect(f.elements.sfxrev, p.rev);
+    f.elements.sfxpitch.value = String(p.pitch);
+    updateObs({ now: true });
+    playStudioSample();
+  });
+  $('#obs-studio-try').addEventListener('click', playStudioSample);
+  f.addEventListener('input', paintStudio);
+  f.addEventListener('change', paintStudio);
+  setTimeout(paintStudio);
+}
+// Probe: der Abo-Sound (wie eingestellt) – mit Klangfarbe, Hall und Tonhöhe
+function playStudioSample() {
+  const f = $('#obs-options');
+  playPreview(f.elements.ssub.value || 'default', 'sub');
+}
+
+// Ton der Ebene in der Vorschau vorführen (schaltet „Ton in der Vorschau“ dafür ein)
+function previewLayerSound(key) {
+  const send = () => $('#obs-preview iframe')?.contentWindow?.postMessage({ type: 'stellwerk-test', key }, location.origin);
+  if (!$('#obs-preview iframe')) { toast('Die Vorschau ist eingeklappt – erst „Vorschau“ oben einschalten.', 'info'); return; }
+  if (obs.previewSound) { send(); return; }
+  obs.previewSound = true;
+  $('#obs-preview-sound').checked = true;
+  renderObsPreview();
+  $('#obs-preview iframe')?.addEventListener('load', () => setTimeout(send, 900), { once: true });
+}
+
+// ---------- Ton-Prüfung mit OBS (js/obs-ws.js soundCheck) ----------
+async function runObsSoundCheck() {
+  const btn = $('#obs-sound-check');
+  const box = $('#obs-sound-result');
+  if (!obs.ws?.connected) { toast('Erst mit OBS verbinden.', 'info'); return; }
+  btn.disabled = true;
+  box.hidden = false;
+  box.replaceChildren(Object.assign(document.createElement('p'), { textContent: '🔊 Spiele in OBS einen Test-Ton … (3 Sekunden)' }));
+  try {
+    const r = await obs.ws.soundCheck({ tts: true });
+    const rows = [];
+    const add = (ok, text) => rows.push([ok, text]);
+    if (!r.source) {
+      add(false, 'Die Quelle „StreamHelp-Overlay“ gibt es in OBS noch nicht – erst „In OBS übernehmen“ klicken.');
+    } else {
+      add(r.reroute, r.reroute ? '„Audio über OBS steuern“ ist an – der Ton steht im OBS-Mixer als „StreamHelp-Overlay“.'
+        : '„Audio über OBS steuern“ ist aus – der Ton geht dann am Stream vorbei (nur auf deine Lautsprecher).');
+      add(!r.muted, r.muted ? 'Die Quelle „StreamHelp-Overlay“ ist in OBS stumm geschaltet.' : 'Die Quelle ist nicht stumm.');
+      if (r.volumeDb !== null && r.volumeDb < -30) add(false, `Die Quelle ist in OBS sehr leise (${Math.round(r.volumeDb)} dB).`);
+      if (r.event === false) add(false, 'OBS konnte den Test-Ton nicht ans Overlay schicken (OBS zu alt?). Ton bitte im Stream selbst prüfen.');
+      else if (r.heard === true) add(true, `OBS hat den Test-Ton gehört (Pegel ${Math.round(r.peak * 100)} %). ✓ Der Ton ist im Stream.`);
+      else if (r.heard === false) add(false, 'OBS hat keinen Ton vom Overlay bekommen. Ist die Quelle in der aktuellen Szene sichtbar und die Gesamtlautstärke im Overlay über 0?');
+    }
+    const desk = r.desktop.filter((d) => !d.muted);
+    add(desk.length > 0, desk.length
+      ? `Vorlesen (Windows-Stimme) läuft über „${desk[0].name}“ – das nimmt OBS auf.`
+      : r.desktop.length ? 'Desktop-Audio ist in OBS stumm – dann ist das Vorlesen nicht im Stream.'
+        : 'In OBS ist kein Desktop-Audio eingerichtet – das Vorlesen (Windows-Stimme) ist dann nicht im Stream. Einstellungen → Audio → „Desktop-Audio“ auf „Standard“.');
+    box.replaceChildren(...rows.map(([ok, text]) => {
+      const p = document.createElement('p');
+      p.className = ok ? 'is-ok' : 'is-bad';
+      p.textContent = `${ok ? '✓' : '⚠'} ${text}`;
+      return p;
+    }));
+    if (r.source && (!r.reroute || r.muted)) {
+      const fix = document.createElement('button');
+      fix.type = 'button';
+      fix.className = 'btn btn--primary btn--sm';
+      fix.textContent = '🛠 Beheben und neu prüfen';
+      fix.addEventListener('click', async () => {
+        fix.disabled = true;
+        try { await obs.ws.fixOverlayAudio(); toast('In OBS korrigiert.', 'ok'); await runObsSoundCheck(); }
+        catch (err) { toast(germanError(err), 'error'); fix.disabled = false; }
+      });
+      box.append(fix);
+    }
+  } catch (err) {
+    box.replaceChildren(Object.assign(document.createElement('p'), { className: 'is-bad', textContent: `⚠ ${germanError(err)}` }));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------- Vorlagen (overlay_presets) ----------
+// Farbe aus dem Logo: Vorschläge als Knöpfe, Klick setzt die Akzentfarbe
+async function pickObsBrand(file) {
+  const box = $('#obs-brand-swatches');
+  try {
+    const colors = await extractColors(file);
+    box.replaceChildren(...colors.map((c) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'obs-brand-swatch';
+      b.style.background = c;
+      b.style.color = inkOn(c);
+      b.textContent = c;
+      b.title = `${c} als Akzentfarbe`;
+      b.disabled = obsLocked();
+      b.addEventListener('click', () => {
+        $('#obs-options').elements.accent.value = c;
+        updateObs({ now: true });
+        box.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        toast(`Akzentfarbe ${c} übernommen.`, 'ok');
+      });
+      b.setAttribute('aria-pressed', 'false');
+      return b;
+    }));
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+}
+
+function setupObsPresets() {
+  $('#obs-brand-file').addEventListener('change', (e) => { if (e.target.files[0]) pickObsBrand(e.target.files[0]); e.target.value = ''; });
+  $('#obs-scbg-clear').addEventListener('click', () => {
+    $('#obs-options').elements.scbg.value = '';
+    updateObs({ now: true });
+  });
+  $('#obs-preset-save').addEventListener('click', saveObsPreset);
+  $('#obs-preset-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveObsPreset(); } });
+}
+
+async function loadObsPresets() {
+  if (!state.api) return;
+  // Eigene Looks aus dem Look-Baukasten (look=1) stehen in der Design-Bibliothek, nicht hier
+  const all = await state.api.getOverlayPresets().catch(() => null);
+  obs.looks = all?.filter(isLookPreset) ?? [];
+  obs.presets = all?.filter((p) => !isLookPreset(p)) ?? null;
+  paintObsPresets();
+}
+
+function paintObsPresets() {
+  const list = $('#obs-preset-list');
+  const locked = obsLocked();
+  $('#obs-preset-save').disabled = locked;
+  $('#obs-preset-name').disabled = locked;
+  if (obs.presets === null) {
+    list.innerHTML = '<li class="obs-preset-empty">Für Vorlagen fehlt die Migration supabase/migrations/20261027000000_overlay_presets.sql.</li>';
+    return;
+  }
+  if (!obs.presets.length) {
+    list.innerHTML = '<li class="obs-preset-empty">Noch keine Vorlagen – stell das Overlay ein und speichere es oben unter einem Namen.</li>';
+    return;
+  }
+  list.replaceChildren(...obs.presets.map((pr) => {
+    const li = document.createElement('li');
+    const name = document.createElement('b');
+    name.textContent = pr.name;
+    const load = document.createElement('button');
+    load.type = 'button';
+    load.className = 'btn btn--ghost btn--sm';
+    load.textContent = 'Laden';
+    load.disabled = locked;
+    load.addEventListener('click', () => {
+      if (!confirm(`Vorlage „${pr.name}“ laden? Die aktuellen Overlay-Einstellungen werden ersetzt (Rückgängig geht mit Strg+Z).`)) return;
+      applyObsParams(pr.params);
+      updateObs({ now: true });
+      toast(`Vorlage „${pr.name}“ geladen.`, 'ok');
+    });
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'obs-mini-btn';
+    del.textContent = '🗑';
+    del.title = 'Vorlage löschen';
+    del.setAttribute('aria-label', `Vorlage „${pr.name}“ löschen`);
+    del.disabled = locked;
+    del.addEventListener('click', async () => {
+      if (!confirm(`Vorlage „${pr.name}“ löschen?`)) return;
+      try { await state.api.deleteOverlayPreset(pr.id); await loadObsPresets(); } catch (err) { toast(germanError(err), 'error'); }
+    });
+    li.append(name, load, del);
+    return li;
+  }));
+}
+
+async function saveObsPreset() {
+  const input = $('#obs-preset-name');
+  const name = input.value.trim();
+  if (!name) { input.focus(); toast('Bitte einen Namen für die Vorlage eingeben.', 'info'); return; }
+  const params = new URL(obsUrl()).search.replace(/^\?/, '');
+  if (obs.looks?.some((p) => p.name.toLowerCase() === name.toLowerCase())) { toast(`„${name}“ heißt schon einer deiner Looks – bitte einen anderen Namen.`, 'error'); return; }
+  const exists = obs.presets?.some((p) => p.name.toLowerCase() === name.toLowerCase());
+  if (exists && !confirm(`Es gibt schon eine Vorlage „${name}“. Überschreiben?`)) return;
+  try {
+    await state.api.saveOverlayPreset(name, params);
+    input.value = '';
+    toast(`Vorlage „${name}“ gespeichert.`, 'ok');
+    await loadObsPresets();
+  } catch (err) {
+    toast(germanError(err), 'error');
+  }
+}
+
+function showObsTab(name) {
+  const dlg = $('#obs-dialog');
+  if (name === 'look') loadObsPresets();
+  if (name === 'modules') renderObsModules();
+  dlg.querySelectorAll('.obs-tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+  dlg.querySelectorAll('.obs-pane').forEach((p) => { p.hidden = p.dataset.pane !== name; });
+}
+
+// Alert-Design-Bibliothek: Kacheln mit Mini-Vorschau, Auswahl landet im Feld alook
+function setupAlertLooks() {
+  const gallery = $('#al-gallery');
+  const input = $('#obs-options').elements.alook;
+  gallery.replaceChildren(...ALERT_LOOKS.map((look) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'al-look';
+    btn.dataset.look = look.id;
+    btn.setAttribute('role', 'radio');
+    btn.title = look.desc;
+    btn.innerHTML = '<span class="al-thumb" aria-hidden="true"><i>⭐</i><b>Name</b><s></s></span><span class="al-look-name"></span>';
+    btn.querySelector('.al-thumb').dataset.look = look.id;
+    btn.querySelector('.al-look-name').textContent = look.name;
+    return btn;
+  }));
+  gallery.addEventListener('click', (e) => {
+    const btn = e.target.closest('.al-look');
+    if (!btn || obsLocked()) return;
+    input.value = btn.dataset.look;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    // Vorschau: Alerts-Ebene auswählen, damit man das Design gleich sieht
+    if (!$('#obs-options').elements.alerts_on.checked) toast('Tipp: Die Ebene „Alerts“ ist noch aus – links einschalten, dann erscheint das Design im Stream.', 'info', 5000);
+  });
+}
+
+// Overlay-Design: Kacheln mit Mini-Vorschau, Auswahl landet im Feld otheme
+function setupObsThemes() {
+  const box = $('#obs-themes');
+  const input = $('#obs-options').elements.otheme;
+  box.replaceChildren(...OVERLAY_THEMES.map((t) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'obs-theme';
+    btn.dataset.theme = t.id;
+    btn.setAttribute('role', 'radio');
+    btn.title = t.desc;
+    btn.innerHTML = '<span class="obs-theme-thumb" aria-hidden="true"><i></i><b></b><s></s></span><span class="obs-theme-name"></span>';
+    btn.querySelector('.obs-theme-thumb').dataset.theme = t.id;
+    btn.querySelector('.obs-theme-name').textContent = t.name;
+    return btn;
+  }));
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('.obs-theme');
+    if (!btn || obsLocked()) return;
+    input.value = btn.dataset.theme;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function paintAlertLooks() {
+  const theme = $('#obs-options').elements.otheme.value || 'standard';
+  document.querySelectorAll('#obs-themes .obs-theme').forEach((b) => {
+    b.setAttribute('aria-checked', String(b.dataset.theme === theme));
+    b.disabled = obsLocked();
+  });
+  const items = $('#obs-options').elements.lbitems.value.split(',');
+  document.querySelectorAll('#obs-lbitems [data-lbitem]').forEach((c) => { c.checked = items.includes(c.dataset.lbitem); c.disabled = obsLocked(); });
+  const value = $('#obs-options').elements.alook.value || 'classic';
+  document.querySelectorAll('#al-gallery .al-look').forEach((b) => {
+    b.setAttribute('aria-checked', String(b.dataset.look === value));
+    b.disabled = obsLocked();
+  });
+}
+
+// Ebene auswählen: ihre Einstellungen erscheinen rechts im Inspektor, die Vorschau markiert sie
+function openObsLayer(key, { scroll = false } = {}) {
+  obsSelected = key;
+  const inspector = $('#obs-inspector');
+  $('#obs-dialog').querySelectorAll('.obs-layer').forEach((row) => {
+    const open = row.dataset.layer === key;
+    const body = obsBodies.get(row.dataset.layer);
+    row.classList.toggle('is-open', open);
+    row.querySelector('.obs-layer-name').setAttribute('aria-expanded', String(open));
+    if (open) {
+      inspector.append(body);
+      body.hidden = false;
+      $('#obs-insp-name').textContent = row.querySelector('.obs-layer-name').firstChild.textContent.trim();
+      $('#obs-insp-head').style.setProperty('--lc', row.style.getPropertyValue('--lc'));
+      if (scroll) row.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'nearest' });
+    } else if (body.parentElement !== row) {
+      body.hidden = true;
+      row.append(body);
+    }
+  });
+  $('#obs-insp-head').hidden = !key;
+  $('#obs-insp-empty').hidden = !!key;
+  if (key) showObsTab('props');
+  paintObsInspector();
+  highlightObsLayer();
+}
+
+// ---------- Docks (OBS-Editor im OBS-Stil): Szenen, Steuerung, Handy-Reiter ----------
+// Szenen = der Szenen-Bildschirm des Overlays (Ebene „scene“): Live heißt „keiner“.
+const OBS_SCENES = [['', 'Live', 'ph-broadcast'], ['start', "Gleich geht's los", 'ph-hourglass-medium'], ['chat', 'Just Chatting', 'ph-chats-circle'],
+  ['brb', 'Bin gleich zurück', 'ph-coffee'], ['end', 'Danke fürs Zuschauen', 'ph-flag-checkered']];
+const obsSceneNow = () => {
+  const f = $('#obs-options');
+  return f.elements.scene_on.checked ? f.elements.scene.value : '';
+};
+// Seite der Twitch-Erweiterung im Creator-Dashboard (Installieren/Aktivieren) – ohne Version zeigt Twitch nur die Startseite
+// ID und Version stehen in js/config.js (dort erlaubt sie auch der Secret-Scan)
+function extensionUrl() {
+  const id = CONFIG.TWITCH_EXTENSION_ID;
+  const version = CONFIG.TWITCH_EXTENSION_VERSION;
+  if (!id || !version) return $('#obs-ext-link').getAttribute('href');
+  return `https://dashboard.twitch.tv/extensions/${encodeURIComponent(id)}-${encodeURIComponent(version)}`;
+}
+
+function setupObsDocks() {
+  const dlg = $('#obs-dialog');
+  const body = dlg.querySelector('.obs-body');
+  $('#obs-ext-link').href = extensionUrl();
+  const list = $('#obs-scene-list');
+  list.replaceChildren(...OBS_SCENES.map(([id, name, icon]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'obs-scene';
+    b.dataset.scene = id;
+    b.setAttribute('role', 'radio');
+    b.innerHTML = `<i class="ph ${icon}" aria-hidden="true"></i><span></span>`;
+    b.querySelector('span').textContent = name;
+    return b;
+  }));
+  list.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-scene]');
+    if (!b || obsLocked()) return;
+    const f = $('#obs-options');
+    f.elements.scene_on.checked = !!b.dataset.scene;
+    if (b.dataset.scene) setSelect(f.elements.scene, b.dataset.scene);
+    updateObs({ now: true });
+  });
+  dlg.querySelectorAll('.obs-mtabs [data-mtab]').forEach((b) => b.addEventListener('click', () => setObsMobileTab(b.dataset.mtab)));
+  setObsMobileTab(body.dataset.mtab || 'layers');
+  // Auf dem Handy: Ebene gewählt → gleich ihre Eigenschaften zeigen
+  $('#obs-layers').addEventListener('click', (e) => {
+    if (e.target.closest('.obs-layer-name') && matchMedia('(max-width: 719px)').matches) setObsMobileTab('props');
+  });
+  paintObsScenes();
+}
+function setObsMobileTab(name) {
+  const dlg = $('#obs-dialog');
+  dlg.querySelector('.obs-body').dataset.mtab = name;
+  dlg.querySelectorAll('.obs-mtabs [data-mtab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mtab === name)));
+}
+function paintObsScenes() {
+  const now = obsSceneNow();
+  $('#obs-scene-list').querySelectorAll('[data-scene]').forEach((b) => {
+    const on = b.dataset.scene === now;
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', String(on));
+    b.disabled = obsLocked();
+  });
+  $('#obs-head-scene').textContent = OBS_SCENES.find(([id]) => id === now)?.[1] ?? 'Live';
+  const rows = [...$('#obs-dialog').querySelectorAll('.obs-layers .obs-layer')];
+  $('#obs-layer-count').textContent = `${rows.filter((r) => r.classList.contains('is-on')).length} von ${rows.length} an`;
+}
+
+// Kopf des Inspektors: Farbe und an/aus der gewählten Ebene
+function paintObsInspector() {
+  const row = obsSelected && $(`#obs-dialog .obs-layer[data-layer="${obsSelected}"]`);
+  if (!row) return;
+  const on = row.classList.contains('is-on');
+  $('#obs-insp-head').classList.toggle('is-on', on);
+  $('#obs-insp-state').textContent = on ? 'im Stream sichtbar' : 'aus – links einschalten';
+}
+
+function highlightObsLayer() {
+  $('#obs-preview iframe')?.contentWindow?.postMessage({ type: 'stellwerk-select', key: obsSelected }, location.origin);
+}
+
+function describeObsPos(value) {
+  if (POS_NAMES[value]) return POS_NAMES[value];
+  const [x, y] = String(value).split(',').map(Number);
+  return Number.isFinite(x) && Number.isFinite(y) ? `frei · ${Math.round(x)} % / ${Math.round(y)} %` : '–';
+}
+
+function paintObsLayers() {
+  const f = $('#obs-options');
+  const dlg = $('#obs-dialog');
+  dlg.querySelectorAll('.obs-layer').forEach((row) => {
+    const key = row.dataset.layer;
+    const sw = OBS_LAYER_SWITCH[key];
+    const on = sw ? f.elements[sw].checked : true;
+    row.classList.toggle('is-on', on);
+    const size = f.elements[OBS_LAYER_SIZE[key]];
+    row.querySelector('.obs-layer-size').textContent = size ? `${size.value} %` : '';
+    const body = obsBodies.get(key);
+    const pos = body?.querySelector('[data-pos-for]');
+    if (pos) {
+      const el = f.elements[key];
+      pos.textContent = describeObsPos(el.value);
+      body.querySelector('[data-reset-pos]').disabled = el.value === obsDefault(el) || obsLocked();
+    }
+  });
+  paintObsInspector();
+  paintAlertLooks();
+  // Mischpult: Regler von ausgeschalteten Ebenen abblenden, 0 % heißt stumm
+  dlg.querySelectorAll('.obs-mix').forEach((row) => {
+    const sw = OBS_LAYER_SWITCH[row.dataset.mix];
+    row.classList.toggle('is-off', !!sw && !f.elements[sw].checked);
+    const input = row.querySelector('input');
+    row.classList.toggle('is-muted', Number(input.value) === 0 || Number(f.elements.vol.value) === 0);
+  });
+  dlg.querySelectorAll('[data-group]').forEach((g) => {
+    const rows = [...g.querySelectorAll('.obs-layer')];
+    g.querySelector('.obs-group-count').textContent = `${rows.filter((r) => r.classList.contains('is-on')).length} / ${rows.length} an`;
+  });
+  // Texte & Tests: nur Admins sehen dort etwas
+  const admin = !!state.profile?.is_admin;
+  $('#obs-pet-say').hidden = !admin || !state.pet?.on;
+  paintObsPet();
+  $('#obs-admin-empty').hidden = admin || !$('#obs-allow-wrap').hidden;
+}
+
+async function obsPetSay(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const text = form.text.value.trim();
+  if (!text) return;
+  formMsg(form, '');
+  await withLoading(form, async () => {
+    await state.api.petSay(text);
+    form.reset();
+    formMsg(form, '✓ Rexi sagt es jetzt im Stream.', true);
+  });
+}
+
+function obsFields() {
+  return [...$('#obs-options').elements].filter((el) => el.name && !el.name.endsWith('-out'));
+}
+
+function obsDefault(el) {
+  if (el.type === 'checkbox') return el.defaultChecked;
+  if (el.tagName === 'SELECT') return [...el.options].find((o) => o.defaultSelected)?.value ?? el.options[0].value;
+  return el.defaultValue;
+}
+
+function obsUrl({ preview = false } = {}) {
+  const f = $('#obs-options');
+  const url = new URL('overlay.html', location.href);
+  const p = url.searchParams;
+  // Alles ist erst einmal aus: in der Adresse steht nur, was eingeschaltet ist (mit Position).
+  for (const key of OBS_PARTS) {
+    if (f.elements[`${key}_on`].checked) p.set(key, f.elements[key].value);
+  }
+  for (const el of obsFields()) {
+    if (OBS_PARTS.includes(el.name) || el.name.endsWith('_on')) continue;
+    const value = el.type === 'checkbox' ? el.checked : el.value.trim();
+    if (value === obsDefault(el) || value === '') continue;
+    if (el.type === 'checkbox') p.set(el.name, value ? '1' : '0');
+    else if (el.type === 'color') p.set(el.name, value.slice(1));
+    else p.set(el.name, value);
+  }
+  // Vorschau stumm – außer „Ton in der Vorschau“ ist an (Mixer: ▶ Probehören)
+  if (preview) { if (!obs.previewSound) p.set('vol', '0'); p.set('test', '1'); p.set('edit', '1'); }
+  return withChannelParam(url).href;
+}
+
+function loadObs() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(OBS_KEY)); } catch { /* ohne Speicher: Standards */ }
+  if (!saved || typeof saved !== 'object') return;
+  // Ältere gespeicherte Einstellungen: "0" als Position hieß "nicht zeigen".
+  for (const key of OBS_PARTS) {
+    if (saved[key] === '0') { saved[`${key}_on`] = false; delete saved[key]; }
+  }
+  for (const el of obsFields()) {
+    if (!(el.name in saved)) continue;
+    if (el.type === 'checkbox') el.checked = Boolean(saved[el.name]);
+    else if (el.tagName === 'SELECT') setSelect(el, String(saved[el.name]));
+    else el.value = String(saved[el.name]);
+  }
+}
+
+function saveObs(values) {
+  try {
+    if (values) localStorage.setItem(OBS_KEY, JSON.stringify(values));
+    else localStorage.removeItem(OBS_KEY);
+  } catch { /* nur Komfort */ }
+}
+
+// Die OBS-Einstellungen laufen in einem eigenen Fenster (index.html?obs), nicht als Pop-up
+function openObsWindow() {
+  markStart(START, 'obs');
+  const url = withChannelParam(new URL(location.pathname, location.href));
+  url.searchParams.set('obs', '1');
+  const win = window.open(url.href, 'streamhelp-obs');
+  if (win) win.focus();
+  else location.href = url.href; // Fenster blockiert: dann eben hier
+}
+
+function startObsPage() {
+  // Den OBS-Editor nutzen nur Streamer, Admins und freigegebene Mods – alle anderen zurück aufs Dashboard
+  if (!isTeam()) {
+    const c = channelParam();
+    location.replace(`${location.pathname}${c ? `#/c/${c}` : ''}`);
+    return;
+  }
+  document.body.classList.add('obs-page');
+  document.title = 'OBS · StreamHelp';
+  if (new URLSearchParams(location.search).has('welcome')) {
+    history.replaceState(null, '', withChannelParam(new URL(`${location.pathname}?obs=1`, location.href)).href);
+    toast(`Twitch ist verbunden. Das ist deine Streameransicht, ${streamerName()}: OBS einrichten, Mods freigeben und deine Content-Ideen starten.`, 'ok', 10000);
+  }
+  const back = $('#obs-dialog .dialog-head [data-close]');
+  back.textContent = '← Zur Webseite';
+  back.setAttribute('aria-label', 'Zur Webseite');
+  if (!$('#obs-dialog').open) openObsDialog({ page: true });
+}
+
+function leaveObsPage() {
+  if (window.opener && !window.opener.closed) { window.close(); return; }
+  const c = channelParam();
+  location.href = `${location.pathname}${c ? `#/c/${c}` : ''}`;
+}
+
+// Anleitung zum Verbinden: beim ersten Mal offen, danach eingeklappt hinter „❓ Anleitung“
+const OBS_GUIDE_KEY = 'sh_obs_guide_seen';
+function applyObsGuide() {
+  let seen = false;
+  try { seen = localStorage.getItem(OBS_GUIDE_KEY) === '1'; } catch { /* ohne Speicher: immer zeigen */ }
+  showObsGuide(!seen);
+  $('#obs-guide-btn').hidden = !seen;
+  if (!seen) {
+    $('#obs-help').open = true;
+    try { localStorage.setItem(OBS_GUIDE_KEY, '1'); } catch { /* egal */ }
+  }
+}
+function showObsGuide(on) {
+  $('#obs-dialog').classList.toggle('guide-hidden', !on);
+  const btn = $('#obs-guide-btn');
+  btn.setAttribute('aria-expanded', String(on));
+  btn.textContent = on ? '✕ Anleitung ausblenden' : '❓ Anleitung';
+  if (on) $('#obs-help').open = true;
+}
+
+async function openObsDialog({ page = false } = {}) {
+  obsLive.ready = false; // erst frisch laden, sonst würde der alte Stand gespeichert
+  loadObs();
+  if (page) $('#obs-dialog').show();
+  else $('#obs-dialog').showModal();
+  // Mods richten nichts in OBS ein – die Anleitungen zum Verbinden bleiben für sie weg
+  $('#obs-dialog').classList.toggle('is-mod', isTeam() && !canStreamerView());
+  applyObsGuide();
+  autoOpenObsSetup({ isMod: isTeam() && !canStreamerView() });
+  updateObs({ now: true });
+  recordObsHistory({ reset: true });
+  loadTickerTexts();
+  fillAlertSounds();
+  loadObsLive();
+  paintObsConnection();
+  paintStreamerView({ firstOpen: true });
+  // Schon einmal verbunden? Dann gleich wieder – das Passwort liegt verschlüsselt nur in diesem Browser.
+  if (obs.ws?.connected) pollObsShot();
+  else readObsLogin().then((password) => {
+    if (password === null || obs.ws?.connected) return;
+    $('#obs-ws-form').password.value = password;
+    connectObs({ quiet: true });
+  });
+
+  const note = $('#obs-note');
+  if (state.api.demo) {
+    note.textContent = 'Demo-Modus: OBS läuft in einem eigenen Browser und bekommt die Drehungen von dieser Seite nicht mit. Die Vorschau hier funktioniert, weil sie im selben Browser läuft.';
+    note.hidden = false;
+  } else {
+    const ready = await state.api.overlayReady().catch(() => false);
+    note.textContent = state.profile.is_admin
+      ? 'Einmal nötig: In Supabase im SQL Editor die Datei supabase/migrations/20260923000000_overlay.sql ausführen. Vorher bleibt das Overlay in OBS leer.'
+      : 'Das Overlay ist noch nicht freigeschaltet und bleibt in OBS vorerst leer. Ein Admin muss dafür einmal die Datenbank einrichten – sag dem Streamer Bescheid.';
+    note.hidden = ready;
+  }
+}
+
+// ---------- Live: zentrale Einstellungen ----------
+async function loadObsLive() {
+  try {
+    const [config, access] = await Promise.all([state.api.getOverlayConfig(), state.api.overlayAccess()]);
+    Object.assign(obsLive, { ready: true, params: config?.params ?? '', access, error: '' });
+    // Gibt es schon gespeicherte Einstellungen, zeigt der Dialog genau die
+    if (obsLive.params) applyObsParams(obsLive.params);
+  } catch (err) {
+    console.warn('Live-Overlay nicht verfügbar:', err);
+    obsLive.ready = false;
+    obsLive.error = germanError(err);
+  }
+  paintObsLive();
+  updateObs({ now: true });
+  recordObsHistory({ reset: true });
+}
+
+// Umkehrung von obsUrl(): Parameter → Formular
+function applyObsParams(query) {
+  const f = $('#obs-options');
+  const p = new URLSearchParams(query);
+  obsLive.filling = true;
+  for (const el of obsFields()) {
+    if (el.name.endsWith('_on')) continue;
+    const def = obsDefault(el);
+    const v = p.get(el.name);
+    if (el.type === 'checkbox') el.checked = v === null ? def : v !== '0';
+    else if (el.type === 'color') el.value = v === null ? def : `#${v}`;
+    else if (el.tagName === 'SELECT') setSelect(el, v === null ? def : v);
+    else if (OBS_PARTS.includes(el.name)) el.value = v === null || v === '0' ? def : v;
+    else el.value = v === null ? def : v;
+  }
+  for (const key of OBS_PARTS) f.elements[`${key}_on`].checked = !!p.get(key) && p.get(key) !== '0';
+  obsLive.filling = false;
+}
+
+function paintObsLive() {
+  const status = $('#obs-live-status');
+  const { ready, access } = obsLive;
+  $('#obs-allow-wrap').hidden = !(ready && access.is_owner);
+  $('#obs-allow-admins').checked = !!access.admins_can_edit;
+  status.classList.toggle('is-locked', obsLocked());
+  status.textContent = !ready
+    ? (state.profile?.is_admin && obsLive.error ? `Live-Modus fehlt: ${obsLive.error}` : 'Diese Adresse enthält die Einstellungen – nach Änderungen in OBS neu einfügen.')
+    : access.can_edit
+      ? `✓ Live: Jede Änderung hier erscheint sofort in OBS.${obsLive.savedAt ? ` Zuletzt gespeichert um ${obsLive.savedAt} Uhr.` : ''}`
+      : access.admins_can_edit || !state.profile?.is_admin
+        ? '🔒 Das Overlay passen der Streamer, freigegebene Mods und freigeschaltete Admins an. Du siehst hier die aktuellen Einstellungen.'
+        : '🔒 Der Streamer hat das Anpassen noch nicht freigegeben. Du siehst hier die aktuellen Einstellungen.';
+  const saved = $('#obs-saved');
+  saved.dataset.state = !ready ? 'off' : access.can_edit ? 'on' : 'locked';
+  saved.textContent = !ready ? 'Adresse enthält alles' : access.can_edit ? 'Live gespeichert' : 'Nur ansehen';
+  saved.title = status.textContent;
+}
+
+function scheduleObsSave() {
+  if (!obsLive.ready || !obsLive.access.can_edit || obsLive.filling) return;
+  clearTimeout(obsLive.timer);
+  obsLive.timer = setTimeout(saveObsLive, 250);
+}
+
+async function saveObsLive() {
+  clearTimeout(obsLive.timer);
+  const query = new URL(obsUrl()).search.slice(1);
+  if (query === obsLive.params) return;
+  try {
+    await state.api.saveOverlayConfig(query);
+    obsLive.params = query;
+    obsLive.savedAt = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch (err) {
+    toast(`Nicht gespeichert: ${germanError(err)}`, 'error');
+  }
+  paintObsLive();
+}
+
+async function allowAdminsObs(e) {
+  const box = e.currentTarget;
+  const on = box.checked;
+  try {
+    await state.api.allowAdminsOverlay(on);
+    obsLive.access.admins_can_edit = on;
+    toast(on ? 'Admins dürfen das OBS-Overlay jetzt anpassen.' : 'Nur noch du passt das OBS-Overlay an.', 'ok');
+  } catch (err) {
+    box.checked = !on;
+    toast(germanError(err), 'error');
+  }
+  paintObsLive();
+}
+
+// ---------- Streameransicht: Content-Ideen und Mods ----------
+// Streamer, Admins und freigegebene Mods sehen im OBS-Fenster den Reiter „Content“.
+function paintStreamerView({ firstOpen = false } = {}) {
+  const admin = !!state.profile?.is_admin;
+  $('#obs-dialog .obs-tab[data-tab="content"]').hidden = !admin;
+  $('#obs-title').textContent = 'OBS-Editor';
+  $('#obs-eyebrow').textContent = !admin ? 'Für den Stream'
+    : state.access?.is_mod ? `Als Mod für ${streamerName()}` : `Für ${streamerName()}`;
+  renderGuard();
+  if (!admin) return;
+  if (firstOpen) showObsTab('props');
+  renderObsContent();
+  loadMods();
+}
+
+const TILE_ICON = {
+  wheel: '🎡', countdown: '📅', prank: '🍅', bingo: '🎯', questions: '❓', pet: '🦖', shop: '🛒', challenge: '🏆',
+  ...Object.fromEntries(EXTRA_KINDS.map((k) => [k, extraIcon(k)])),
+};
+const TILE_OPEN = {
+  wheel: () => openWheel(),
+  countdown: (t) => openTile(t.id),
+  prank: () => openPrank(),
+  bingo: () => openBingo(),
+  questions: () => openQuestions(),
+  pet: () => openPet(),
+  shop: () => openShop(),
+  challenge: () => openChallenge(),
+  ...Object.fromEntries(EXTRA_KINDS.map((k) => [k, () => openExtra(k)])),
+};
+const hasStart = (t) => ['prank', 'bingo', 'questions', 'pet', 'shop', 'challenge', ...EXTRA_KINDS].includes(t.kind);
+
+function renderObsContent() {
+  const list = $('#obs-content-list');
+  const tiles = state.tiles.filter((t) => TILE_OPEN[t.kind] && !isArchived(t));
+  if (!tiles.length) {
+    const li = document.createElement('li');
+    li.className = 'obs-content-empty';
+    li.textContent = 'Noch keine Content-Ideen.';
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...tiles.map((tile) => {
+    const li = document.createElement('li');
+    li.className = 'obs-content-row';
+    const icon = document.createElement('span');
+    icon.className = 'obs-content-icon';
+    icon.textContent = TILE_ICON[tile.kind] ?? '✨';
+    const main = document.createElement('span');
+    main.className = 'obs-content-main';
+    const title = document.createElement('b');
+    title.textContent = tile.title;
+    const status = document.createElement('small');
+    const locked = hasStart(tile) && tile.target_at && Date.parse(tile.target_at) > Date.now();
+    status.textContent = locked ? `🔒 Zuschauer ab ${startLabel(tile.target_at)}`
+      : hasStart(tile) ? '🟢 Für alle offen'
+        : tile.kind === 'countdown' ? (tile.target_at ? `📅 ${startLabel(tile.target_at)}` : 'Ohne Termin')
+          : '🟢 Jederzeit';
+    main.append(title, status);
+    const actions = document.createElement('span');
+    actions.className = 'obs-content-actions';
+    if (locked) {
+      const unlock = document.createElement('button');
+      unlock.type = 'button';
+      unlock.className = 'obs-mini-btn';
+      unlock.dataset.contentUnlock = tile.id;
+      unlock.textContent = 'Jetzt freischalten';
+      actions.append(unlock);
+    }
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'btn btn--outline btn--sm';
+    open.dataset.contentOpen = tile.id;
+    open.textContent = 'Öffnen ›';
+    actions.append(open);
+    li.append(icon, main, actions);
+    return li;
+  }));
+}
+
+async function unlockTile(tile, btn) {
+  btn.disabled = true;
+  try {
+    const updated = await state.api.updateTile(tile.id, { target_at: null });
+    state.tiles = state.tiles.map((t) => (t.id === updated.id ? updated : t));
+    renderGrid();
+    if (tile.kind === 'prank' && state.twitch.connected) syncPrankRewards();
+    toast(`„${tile.title}“ ist jetzt für alle Zuschauer freigeschaltet.`, 'ok');
+  } catch (err) {
+    toast(`Freischalten fehlgeschlagen: ${germanError(err)}`, 'error');
+  } finally {
+    renderObsContent();
+  }
+}
+
+// Showcase auf der Startseite: Zustimmung des Streamers (Migration …_contact_showcase.sql)
+async function loadShowcase() {
+  const box = $('#showcase-toggle');
+  const status = $('#showcase-status');
+  box.disabled = true;
+  try {
+    box.checked = await state.api.channelShowcase();
+    box.disabled = !(state.access?.is_owner || state.api.demo);
+  } catch (err) {
+    status.textContent = missingFunction(err)
+      ? 'Einmal nötig: supabase/migrations/20261101000000_contact_showcase.sql im SQL Editor ausführen.'
+      : germanError(err);
+  }
+}
+
+async function toggleShowcase(e) {
+  const box = e.currentTarget;
+  box.disabled = true;
+  try {
+    box.checked = await state.api.setChannelShowcase(box.checked);
+    toast(box.checked ? 'Dein Kanal steht jetzt auf der Startseite.' : 'Dein Kanal steht nicht mehr auf der Startseite.', 'ok');
+  } catch (err) {
+    box.checked = !box.checked;
+    toast(germanError(err), 'error');
+  } finally {
+    box.disabled = false;
+  }
+}
+
+async function loadMods() {
+  try {
+    state.mods = await state.api.getMods();
+  } catch (err) {
+    console.warn('Mods nicht verfügbar:', err);
+    state.mods = [];
+  }
+  paintMods();
+}
+
+function paintMods() {
+  const a = state.access;
+  const box = $('#obs-mods');
+  const status = $('#obs-mods-status');
+  const toggle = $('#obs-mods-toggle');
+  const list = $('#obs-mods-list');
+  if (!a) {
+    status.textContent = 'Einmal nötig: supabase/migrations/20261012000000_streamer_mods.sql im SQL Editor ausführen – dann lassen sich hier Mods freigeben.';
+    toggle.disabled = true;
+    $('#obs-mods-sync').hidden = true;
+    list.replaceChildren();
+    return;
+  }
+  box.classList.toggle('is-on', !!a.mods_enabled);
+  toggle.checked = !!a.mods_enabled;
+  toggle.disabled = !a.is_owner;
+  $('#obs-mods-wrap').title = a.is_owner ? '' : 'Das schaltet nur der Streamer.';
+  $('#obs-mods-sync').hidden = !(a.is_owner || a.is_site_admin);
+  const names = state.mods.map((m) => m.display_name || m.login).filter(Boolean);
+  status.textContent = a.is_mod ? `Du steuerst als Mod von ${streamerName()} mit.`
+    : !a.mods_scope && !state.api.demo && !names.length
+      ? 'Für die Mod-Liste braucht die Seite ein neues Twitch-Recht: Twitch einmal neu verbinden (Seitenleiste → Twitch-Verbindung → Neu verbinden).'
+      : names.length ? `${names.length} ${names.length === 1 ? 'Mod' : 'Mods'} von Twitch${a.mods_enabled ? ' – dürfen mitsteuern:' : ' – noch nicht freigegeben:'}`
+        : 'Noch keine Mods von Twitch geholt.';
+  list.replaceChildren(...names.map((n) => {
+    const li = document.createElement('li');
+    li.textContent = n;
+    return li;
+  }));
+}
+
+async function toggleMods(e) {
+  const box = e.currentTarget;
+  const on = box.checked;
+  box.disabled = true;
+  try {
+    await state.api.allowModsOverlay(on);
+    state.access = { ...state.access, mods_enabled: on };
+    toast(on ? 'Deine Mods dürfen jetzt OBS und die Content-Ideen mitsteuern.' : 'Mods steuern nicht mehr mit.', 'ok');
+  } catch (err) {
+    box.checked = !on;
+    toast(germanError(err), 'error');
+  } finally {
+    paintMods();
+  }
+}
+
+async function syncMods(e) {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const r = await state.api.syncMods();
+    if (r?.missing_scope) {
+      state.access = { ...state.access, mods_scope: false };
+      toast('Für die Mod-Liste Twitch einmal neu verbinden – die Seite braucht dafür ein neues Recht.', 'error', 9000);
+    } else {
+      state.access = { ...state.access, mods_scope: true };
+      toast(`${r?.count ?? 0} Mods von Twitch geholt.`, 'ok');
+    }
+    await loadMods();
+  } catch (err) {
+    toast(`Mods holen fehlgeschlagen: ${germanError(err)}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Laufband-Texte: nur Admins sehen und ändern sie hier
+async function loadTickerTexts() {
+  const form = $('#obs-ticker-form');
+  form.hidden = !state.profile?.is_admin;
+  if (form.hidden) return;
+  formMsg(form, '');
+  try {
+    const items = await state.api.getTicker();
+    form.items.value = (items ?? DEFAULT_TICKER).join('\n');
+  } catch (err) {
+    form.items.value = DEFAULT_TICKER.join('\n');
+    formMsg(form, germanError(err));
+  }
+}
+
+// Wert in eine Auswahl setzen – fehlt die Option noch (z. B. ein eigener Sound,
+// der noch lädt), kommt sie dazu, damit die Einstellung nicht verloren geht.
+function setSelect(el, value) {
+  if (![...el.options].some((o) => o.value === value)) el.add(new Option(value.startsWith('c:') ? 'Eigener Sound' : value, value));
+  el.value = value;
+}
+
+// ---------- Alert-Sounds ----------
+async function fillAlertSounds() {
+  const [sounds, alertSounds] = await Promise.all([
+    state.api.getSounds().catch(() => []),
+    state.api.getAlertSounds().catch((err) => { console.warn('Alert-Sounds nicht geladen:', err); obs.alertSoundsError = germanError(err); return []; }),
+  ]);
+  obs.sounds = sounds;
+  obs.alertSounds = alertSounds;
+  paintAlertSoundOptions();
+  renderAlertSoundList();
+}
+
+// Auswahl je Alert-Art: Standard, kein Ton, eigene Alert-Sounds, Soundboard, Sounds aus „Ärgere den Streamer“
+function paintAlertSoundOptions() {
+  const group = (label, options) => {
+    const g = document.createElement('optgroup');
+    g.label = label;
+    g.append(...options);
+    return g;
+  };
+  for (const k of ALERT_KINDS) {
+    const el = $('#obs-options').elements[k.param];
+    const current = el.value;
+    const groups = [
+      group('Effekt-Sounds', ALERT_SFX.map((x) => new Option(`${x.emoji} ${x.name}`, `x:${x.id}`))),
+      obs.alertSounds?.length && group('Eigene Alert-Sounds', obs.alertSounds.map((x) => new Option(`🔔 ${x.name}`, `a:${x.path}`))),
+      group('Soundboard', BOARD.map((b) => new Option(`${b.emoji} ${b.name}`, b.id))),
+      obs.sounds?.length && group('Aus „Ärgere den Streamer“', obs.sounds.map((x) => new Option(x.name, `c:${x.path}`))),
+    ].filter(Boolean);
+    el.replaceChildren(new Option('Standard', ''), new Option('Kein Ton', 'none'), ...groups);
+    el.options[0].defaultSelected = true;
+    setSelect(el, current);
+  }
+}
+
+function renderAlertSoundList() {
+  const box = $('#obs-alert-upload');
+  box.hidden = !state.profile?.is_admin;
+  if (box.hidden) return;
+  const list = $('#obs-alert-sound-list');
+  if (!obs.alertSounds?.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = obs.alertSoundsError || 'Noch keine eigenen Alert-Sounds.';
+    list.replaceChildren(li);
+    return;
+  }
+  list.replaceChildren(...obs.alertSounds.map((x) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<button class="icon-btn icon-btn--sm" type="button" aria-label="Anhören">▶</button><span></span><small>${x.duration.toFixed(1)} s</small>
+      <button class="icon-btn icon-btn--sm" type="button" aria-label="Löschen">✕</button>`;
+    li.querySelector('span').textContent = x.name;
+    const [play, del] = li.querySelectorAll('button');
+    play.addEventListener('click', () => playPreview(`a:${x.path}`, 'follow'));
+    del.addEventListener('click', () => deleteAlertSound(x, del));
+    return li;
+  }));
+}
+
+async function uploadAlertSound() {
+  const msg = $('#obs-alert-upload-msg');
+  const fileEl = $('#obs-alert-file');
+  const nameEl = $('#obs-alert-name');
+  const btn = $('#obs-alert-upload-btn');
+  msg.classList.remove('is-ok');
+  const file = fileEl.files[0];
+  if (!file) { msg.textContent = 'Bitte zuerst eine Sound-Datei wählen.'; return; }
+  if (file.size > ALERT_SOUND_BYTES) { msg.textContent = `Die Datei ist zu groß (höchstens ${ALERT_SOUND_BYTES / 1024 / 1024} MB).`; return; }
+  const name = (nameEl.value.trim() || file.name.replace(/\.[^.]+$/, '')).slice(0, 30);
+  btn.disabled = true;
+  try {
+    const duration = await audioDuration(file);
+    if (duration > ALERT_SOUND_SECONDS + 0.4) throw new Error(`Der Sound ist ${duration.toFixed(1)} Sekunden lang – höchstens ${ALERT_SOUND_SECONDS} Sekunden.`);
+    const sound = await state.api.uploadAlertSound(file, name, Math.round(Math.min(duration, ALERT_SOUND_SECONDS) * 10) / 10);
+    obs.alertSounds = [sound, ...(obs.alertSounds ?? [])];
+    obs.alertSoundsError = '';
+    paintAlertSoundOptions();
+    renderAlertSoundList();
+    fileEl.value = '';
+    nameEl.value = '';
+    msg.textContent = `✓ „${sound.name}“ hochgeladen – oben bei einer Alert-Art auswählen.`;
+    msg.classList.add('is-ok');
+  } catch (err) {
+    console.error(err);
+    msg.textContent = germanError(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteAlertSound(sound, btn) {
+  if (!confirm(`Alert-Sound „${sound.name}“ löschen?`)) return;
+  btn.disabled = true;
+  try {
+    await state.api.deleteAlertSound(sound);
+    obs.alertSounds = obs.alertSounds.filter((x) => x.id !== sound.id);
+    // Wer den Sound benutzt hat, bekommt wieder den Standardklang
+    const f = $('#obs-options');
+    let changed = false;
+    for (const k of ALERT_KINDS) {
+      if (f.elements[k.param].value === `a:${sound.path}`) { f.elements[k.param].value = ''; changed = true; }
+    }
+    paintAlertSoundOptions();
+    renderAlertSoundList();
+    if (changed) updateObs();
+  } catch (err) {
+    btn.disabled = false;
+    $('#obs-alert-upload-msg').textContent = germanError(err);
+  }
+}
+
+function testAlertSound(kind) {
+  const f = $('#obs-options');
+  playPreview(f.elements[ALERT_KINDS.find((k) => k.kind === kind).param].value || 'default', kind);
+}
+
+// Einen Alert-Sound hier im Browser anhören (mit der Lautstärke aus dem Dialog)
+async function playPreview(choice, kind) {
+  const f = $('#obs-options');
+  obs.sfx ??= new Sfx();
+  const pct = (name) => { const v = Number(f.elements[name]?.value); return Number.isFinite(v) ? v / 100 : 1; };
+  applyStudioFx();
+  obs.sfx.volume = pct('vol') * pct('valert') * pct(`av${kind}`);
+  if (!obs.sfx.volume) { toast('Die Lautstärke steht auf 0 – Gesamtlautstärke, „Alerts“ im Mixer oder der Regler dieses Alerts.', 'error'); return; }
+  // Beim ersten Klick muss der Browser den Ton erst freigeben
+  if (!obs.sfx.get()) await obs.sfx.ctx?.resume().catch(() => {});
+  playAlertSound(obs.sfx, kind, choice, (value) => {
+    const [prefix, path] = [value.slice(0, 1), value.slice(2)];
+    return (prefix === 'a' ? obs.alertSounds : obs.sounds)?.find((x) => x.path === path)?.url;
+  });
+}
+
+// ---------- Alerts (Follower, Abos) ----------
+async function testAlert(kind, btn) {
+  const msg = $('#obs-alerts-msg');
+  msg.classList.remove('is-ok');
+  btn.disabled = true;
+  try {
+    await state.api.testAlert(kind);
+    msg.textContent = '✓ Probe-Alert geschickt – er erscheint in allen OBS-Quellen, in denen die Ebene „Alerts“ an ist.';
+    msg.classList.add('is-ok');
+  } catch (err) {
+    msg.textContent = germanError(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveTickerTexts(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const items = form.items.value.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (!items.length) return formMsg(form, 'Das Laufband braucht mindestens einen Text.');
+  await withLoading(form, async () => {
+    const saved = await state.api.saveTicker(items);
+    form.items.value = saved.join('\n');
+    formMsg(form, 'Gespeichert – läuft jetzt in OBS.', true);
+    renderObsPreview();
+  });
+}
+
+let obsPreviewTimer = 0;
+
+function updateObs({ now = false, fromPreview = false } = {}) {
+  const f = $('#obs-options');
+  const values = {};
+  for (const el of obsFields()) values[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+  for (const [name, unit] of Object.entries(OBS_UNITS)) f.elements[`${name}-out`].value = `${f.elements[name].value}${unit}`;
+  // Chat-Höhe ganz links = wächst mit den Nachrichten
+  if (Number(f.elements.chh.value) < 20) f.elements['chh-out'].value = 'auto';
+  obsFields().forEach((el) => { el.disabled = false; });
+  for (const key of OBS_PARTS) if (OBS_SIZE[key]) f.elements[OBS_SIZE[key]].disabled = !f.elements[`${key}_on`].checked;
+  // Chat mit fester Höhe: die Höhe bestimmt, wie viele Nachrichten zu sehen sind
+  if (Number(f.elements.chh.value) >= 20) f.elements.chmax.disabled = true;
+  f.psize.disabled = !f.prank.checked;
+  f.dsize.disabled = !f.pet.checked;
+  f.pground.disabled = !f.pet.checked;
+  f.pclimb.disabled = !f.pet.checked;
+  f.bstyle.disabled = !f.bingo_on.checked;
+  // Ohne Recht zum Ändern: alles nur ansehen
+  if (obsLocked()) obsFields().forEach((el) => { el.disabled = true; });
+  saveObs(values);
+  paintObsLayers();
+  filterObsLayers();
+  paintObsScenes();
+  // Hintergrund aus der Design-Bibliothek (Artist-Design): anzeigen, damit man ihn wieder entfernen kann
+  $('#obs-scbg-row').hidden = !f.scbg.value;
+  $('#obs-scbg-clear').disabled = obsLocked();
+  if (!obsLive.filling && !obsHist.applying) recordObsHistory();
+  // Live: immer dieselbe Adresse, die Einstellungen liegen in der Datenbank
+  $('#obs-url').value = obsLive.ready ? obsLiveUrl() : obsUrl();
+  scheduleObsSave();
+
+  // Hat die Vorschau selbst die Änderung gemeldet (verschoben), zeigt sie sie
+  // schon – nicht neu laden, sonst springt alles zurück.
+  const frame = $('#obs-preview iframe');
+  if (fromPreview && frame) { frame.dataset.src = obsUrl({ preview: true }); return; }
+  clearTimeout(obsPreviewTimer);
+  obsPreviewTimer = setTimeout(renderObsPreview, now ? 0 : 200);
+}
+
+function renderObsPreview() {
+  const box = $('#obs-preview');
+  const src = obsUrl({ preview: true });
+  const old = box.querySelector('iframe');
+  if (old?.dataset.src === src) return;
+  old?.remove();
+  const frame = document.createElement('iframe');
+  frame.title = 'Vorschau des OBS-Overlays – Karten lassen sich verschieben';
+  frame.src = frame.dataset.src = src;
+  frame.addEventListener('load', highlightObsLayer);
+  box.append(frame);
+  fitObsPreview();
+}
+
+function fitObsPreview() {
+  const box = $('#obs-preview');
+  const frame = box.querySelector('iframe');
+  if (frame && box.clientWidth) frame.style.transform = `scale(${box.clientWidth / 1920})`;
+}
+
+async function copyObsUrl() {
+  const input = $('#obs-url');
+  try {
+    await navigator.clipboard.writeText(input.value);
+    toast('Adresse kopiert – jetzt in OBS einfügen.', 'ok');
+  } catch {
+    input.select();
+    toast('Adresse ist markiert – mit Strg+C kopieren.');
+  }
+}
+
+// ---------- Overlay-Module (js/overlay-modules.js): je Modul eine eigene Browserquelle ----------
+const obsBaseUrl = () => (obsLive.ready ? obsLiveUrl() : obsUrl());
+async function copyText(text, okText) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okText, 'ok');
+  } catch {
+    prompt('Adresse kopieren:', text);
+  }
+}
+async function applyModule(btn, mod) {
+  if (!obs.ws?.connected) { toast('Erst oben mit OBS verbinden – oder den Link kopieren und von Hand als Browserquelle einfügen.', 'info', 6000); return; }
+  btn.disabled = true;
+  try {
+    if (obsLive.ready && obsLive.access.can_edit) await saveObsLive();
+    const { moduleSourceName } = await import('./obs-ws.js');
+    const name = moduleSourceName(mod.name);
+    const { scene, created } = await obs.ws.applyOverlay(moduleUrl(obsBaseUrl(), mod), name);
+    toast(created ? `Fertig: „${name}“ liegt jetzt in der Szene „${scene}“.` : `„${name}“ ist aktualisiert (Szene „${scene}“).`, 'ok', 6000);
+  } catch (err) {
+    toast(`OBS: ${err.message}`, 'error', 7000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+function customModule() {
+  const layers = [...$('#obs-modules-checks').querySelectorAll('input:checked')].map((i) => i.value);
+  const label = $('#obs-modules-name').value.trim() || 'Eigenes Modul';
+  const id = label.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'eigenes';
+  return { id, name: label, layers };
+}
+function setupObsModules() {
+  $('#obs-modules-checks').replaceChildren(...LAYERS.map(([key, name]) => {
+    const label = document.createElement('label');
+    label.className = 'obs-modules-check';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = key;
+    label.append(box, ` ${name}`);
+    return label;
+  }));
+  $('#obs-modules-checks').addEventListener('change', () => { $('#obs-modules-apply').disabled = !customModule().layers.length; });
+  $('#obs-modules-copy').addEventListener('click', () => {
+    const mod = customModule();
+    if (!mod.layers.length) { toast('Erst Ebenen anhaken.', 'info'); return; }
+    copyText(moduleUrl(obsBaseUrl(), mod), 'Link kopiert – in OBS als Browserquelle (1920 × 1080) einfügen.');
+  });
+  $('#obs-modules-apply').addEventListener('click', (e) => {
+    const mod = customModule();
+    if (mod.layers.length) applyModule(e.currentTarget, mod);
+  });
+}
+function renderObsModules() {
+  const list = $('#obs-modules-list');
+  const on = (key) => {
+    const el = $('#obs-options').elements[OBS_LAYER_SWITCH[key] ?? `${key}_on`];
+    return !el || el.checked;
+  };
+  list.replaceChildren(...MODULES.map((mod) => {
+    const li = document.createElement('li');
+    li.className = 'obs-module';
+    const active = mod.layers.filter(on);
+    const head = document.createElement('div');
+    head.className = 'obs-module-head';
+    const title = document.createElement('b');
+    title.textContent = `${mod.icon} ${mod.name}`;
+    const hint = document.createElement('small');
+    hint.textContent = `${mod.hint} ${active.length ? `An: ${active.map(layerName).join(', ')}` : 'Gerade ist keine dieser Ebenen an.'}`;
+    head.append(title, hint);
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn btn--ghost btn--sm';
+    copy.textContent = 'Link kopieren';
+    copy.addEventListener('click', () => copyText(moduleUrl(obsBaseUrl(), mod), `Link für „${mod.name}“ kopiert – in OBS als Browserquelle (1920 × 1080) einfügen.`));
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.className = 'btn btn--primary btn--sm';
+    apply.textContent = 'In OBS anlegen';
+    apply.addEventListener('click', () => applyModule(apply, mod));
+    const row = document.createElement('div');
+    row.className = 'obs-module-actions';
+    row.append(copy, apply);
+    li.classList.toggle('is-empty', !active.length);
+    li.append(head, row);
+    return li;
+  }));
+  $('#obs-modules-warn').hidden = false;
+}
+
+// ---------- Statistik → OBS gerade (js/dash-obsdata.js) ----------
+// Das OBS-Fenster läuft in einem eigenen Tab – die Statistik verbindet sich darum selbst (gleiches gespeichertes Passwort).
+const statsObs = { ws: null };
+const STATS_OBS = {
+  obs: () => (obs.ws?.connected ? obs.ws : statsObs.ws),
+  openObs: () => openObsWindow(),
+  savedPassword: () => readObsLogin().catch(() => null),
+  async connect(password) {
+    const { ObsSocket } = await import('./obs-ws.js');
+    statsObs.ws?.close();
+    const ws = new ObsSocket();
+    await ws.connect({ password: password ?? '' });
+    statsObs.ws = ws;
+    saveSecret(OBS_WS_KEY, password ?? '');
+  },
+};
+
+// ---------- Verbindung zu OBS (WebSocket) ----------
+async function readObsLogin() {
+  let legacy = null;
+  try { legacy = localStorage.getItem(OBS_WS_KEY); } catch { /* kein Zugriff */ }
+  if (legacy !== null) {
+    try { localStorage.removeItem(OBS_WS_KEY); } catch { /* egal */ }
+    let old = null;
+    try { old = JSON.parse(legacy)?.password ?? null; } catch { /* kaputt */ }
+    if (typeof old === 'string') await saveSecret(OBS_WS_KEY, old);
+  }
+  return loadSecret(OBS_WS_KEY);
+}
+
+async function connectObs({ quiet = false } = {}) {
+  const form = $('#obs-ws-form');
+  const btn = form.querySelector('button[type="submit"]');
+  const msg = $('#obs-ws-msg');
+  msg.textContent = '';
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  $('#obs-connect').dataset.state = 'busy';
+  try {
+    const { ObsSocket } = await import('./obs-ws.js');
+    obs.ws ??= new ObsSocket();
+    obs.ws.onClose = () => { disconnectObs(false); msg.textContent = 'Verbindung zu OBS getrennt.'; };
+    const password = form.password.value;
+    await obs.ws.connect({ password });
+    saveSecret(OBS_WS_KEY, password); // nur Komfort – klappt es nicht, fragt die Seite beim nächsten Mal wieder
+    stopObsShare();
+    obs.scene = await obs.ws.programScene();
+    await loadObsSources({ pick: true });
+    paintObsConnection();
+    pollObsShot();
+  } catch (err) {
+    console.warn(err);
+    obs.ws?.close();
+    $('#obs-connect').dataset.state = 'off';
+    if (!quiet) msg.textContent = err.message;
+    paintObsConnection();
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+  }
+}
+
+function disconnectObs(forget) {
+  clearTimeout(obs.shotTimer);
+  obs.ws?.close();
+  obs.scene = null;
+  if (forget) {
+    try { localStorage.removeItem(OBS_WS_KEY); } catch { /* egal */ }
+    forgetSecret(OBS_WS_KEY);
+    $('#obs-ws-form').password.value = '';
+  }
+  $('#obs-shot').hidden = true;
+  paintObsConnection();
+}
+
+function paintObsConnection() {
+  const on = !!obs.ws?.connected;
+  const box = $('#obs-connect');
+  box.dataset.state = on ? 'on' : box.dataset.state === 'busy' ? 'busy' : 'off';
+  $('#obs-ws-form').hidden = on;
+  $('#obs-connected').hidden = !on;
+  $('#obs-share').hidden = on;
+  $('#obs-ws-title').textContent = on ? 'Mit OBS verbunden' : 'Mit OBS verbinden';
+  $('#obs-ws-status').textContent = on
+    ? `Vorschau zeigt die Szene „${obs.scene ?? '…'}“. „In OBS übernehmen“ oben in der Kopfzeile legt die Browserquelle „StreamHelp-Overlay“ an bzw. aktualisiert sie.`
+    : 'Dann siehst du unten dein echtes OBS-Bild, die Seite findet deine Kamera und richtet das Overlay in OBS ein.';
+  $('#obs-preview-label').textContent = on ? `Live aus OBS · ${obs.scene ?? ''}` : obs.stream ? 'Geteiltes Fenster' : 'Beispielbild';
+  $('#obs-preview').classList.toggle('has-shot', on || !!obs.stream);
+  const pill = $('#obs-pill');
+  pill.dataset.state = box.dataset.state;
+  $('#obs-pill-title').textContent = on ? 'Mit OBS verbunden' : box.dataset.state === 'busy' ? 'Verbinde mit OBS …' : 'Nicht mit OBS verbunden';
+  const cam = obs.sources?.[Number($('#obs-cam-source').value)]?.name;
+  $('#obs-pill-detail').textContent = on
+    ? [`Szene „${obs.scene ?? '…'}“`, cam && `Kamera: ${cam}`].filter(Boolean).join(' · ')
+    : obs.stream ? 'Geteiltes Fenster als Vorschau' : 'Verbinden zeigt das echte Bild und richtet die Quelle ein.';
+  $('#obs-head-apply').hidden = !on;
+}
+
+// Bildquellen der aktuellen Szene; die wahrscheinliche Kamera wird vorgeschlagen.
+async function loadObsSources({ pick = false } = {}) {
+  obs.sources = await obs.ws.sources(obs.scene);
+  const select = $('#obs-cam-source');
+  const current = select.value;
+  select.replaceChildren(
+    new Option('– selbst in der Vorschau festlegen –', ''),
+    ...obs.sources.map((src, i) => new Option(`${src.camera ? '📷 ' : ''}${src.name}${src.enabled ? '' : ' (ausgeblendet)'}`, String(i))),
+  );
+  const guess = obs.sources.findIndex((src) => src.camera && src.enabled);
+  if (pick && guess >= 0) {
+    select.value = String(guess);
+    useObsCamera();
+  } else if (!pick) {
+    select.value = current;
+  }
+}
+
+function useObsCamera() {
+  const src = obs.sources[Number($('#obs-cam-source').value)];
+  if (!$('#obs-cam-source').value || !src) return;
+  const { x, y, w, h } = src.rect;
+  const f = $('#obs-options');
+  f.cam.value = [x, y, w, h].join(',');
+  f.prank.checked = true;
+  $('#obs-preview iframe')?.contentWindow?.postMessage({ type: 'stellwerk-cam', value: f.cam.value }, location.origin);
+  updateObs({ fromPreview: true });
+}
+
+// Programmbild etwa jede Sekunde holen, solange der Dialog offen ist.
+function pollObsShot() {
+  clearTimeout(obs.shotTimer);
+  const tick = async () => {
+    if (!obs.ws?.connected || !$('#obs-dialog').open) return;
+    try {
+      const scene = await obs.ws.programScene();
+      if (scene !== obs.scene) {
+        obs.scene = scene;
+        await loadObsSources({ pick: false });
+        paintObsConnection();
+      }
+      const img = $('#obs-shot');
+      img.src = await obs.ws.screenshot(scene);
+      img.hidden = false;
+    } catch (err) {
+      console.warn('OBS-Bild:', err);
+    }
+    obs.shotTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+async function applyObs() {
+  const btns = [$('#obs-head-apply')];
+  const busy = (on) => btns.forEach((b) => { b.disabled = on; b.classList.toggle('is-loading', on); });
+  busy(true);
+  try {
+    if (obsLive.ready && obsLive.access.can_edit) await saveObsLive();
+    const { scene, created } = await obs.ws.applyOverlay(obsLive.ready ? obsLiveUrl() : obsUrl());
+    toast(created
+      ? `Fertig: „StreamHelp-Overlay“ liegt jetzt in der Szene „${scene}“ ganz oben.`
+      : `Fertig: „StreamHelp-Overlay“ ist aktualisiert und liegt in „${scene}“ ganz oben.`, 'ok', 6000);
+  } catch (err) {
+    toast(`OBS: ${err.message}`, 'error', 7000);
+  } finally {
+    busy(false);
+  }
+}
+
+// ---------- Ohne Verbindung: ein Fenster teilen ----------
+// Z. B. in OBS Rechtsklick auf die Vorschau → „Fenster-Projektor (Programm)“ und dieses Fenster teilen.
+async function shareObsWindow() {
+  try {
+    obs.stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 10 }, audio: false });
+  } catch {
+    return; // abgebrochen
+  }
+  const video = $('#obs-video');
+  video.srcObject = obs.stream;
+  video.hidden = false;
+  video.play().catch(() => {});
+  obs.stream.getVideoTracks()[0]?.addEventListener('ended', stopObsShare);
+  paintObsConnection();
+}
+
+function stopObsShare() {
+  obs.stream?.getTracks().forEach((t) => t.stop());
+  obs.stream = null;
+  const video = $('#obs-video');
+  video.srcObject = null;
+  video.hidden = true;
+  if ($('#obs-dialog').open) paintObsConnection();
+}
+
+// ============================================================
+// Twitch verbinden (Seite „Twitch-Verbindung“, nur Streameransicht)
+// ============================================================
+function renderTwitchPanel() {
+  const body = $('#twitch-dialog-body');
+  if (!body || !state.profile) return;
+  const { twitch } = state;
+  $('#twitch-state').textContent = twitch.connected
+    ? `Verbunden mit ${twitch.display_name ?? twitch.login}`
+    : 'Noch nicht verbunden';
+  if (twitch.connected) {
+    body.innerHTML = `
+      <p>Verbunden mit <b data-fill="channel"></b>. ${noAffiliate() ? 'Kanalpunkte, Abos und Bits gibt es auf Twitch erst ab Affiliate – Chat-Bot, Follower-Alerts und Overlay laufen trotzdem.' : `Die Kanalpunkte-Belohnungen sind ${twitch.subscription_active ? 'aktiv' : '<b>nicht aktiv</b> (bitte neu verbinden)'}.`}</p>
+      <p class="form-hint">Neue StreamHelp-Funktionen brauchen manchmal neue Twitch-Rechte. Meldet der Gesundheitscheck oben fehlende Rechte: einmal „Neu verbinden“ und alles erlauben.</p>
+      <p class="form-msg" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="btn btn--twitch" type="button" data-action="reconnect">Neu verbinden</button>
+        <button class="btn btn--ghost" type="button" data-action="disconnect">Kanal trennen</button>
+      </div>`;
+    body.querySelector('[data-fill="channel"]').textContent = twitch.display_name ?? twitch.login;
+  } else {
+    body.innerHTML = `
+      <p>Der Streamer meldet sich mit seinem Twitch-Account an und erlaubt StreamHelp:</p>
+      <ul class="perm-list">
+        <li><span>Kanalpunkte-Belohnungen verwalten<small>Legt die Belohnungen (Glücksrad, Ärgern, Vorlesen, Karten) an und markiert Einlösungen als erledigt.</small></span></li>
+        <li><span>Kanalpunkte-Einlösungen lesen<small>Damit alles läuft, auch wenn diese Seite geschlossen ist – und für Kanalpunkte-Alerts.</small></span></li>
+        <li><span>Chat-Bot zulassen<small>Der StreamHelp-Bot darf in den Chat schreiben. Im Namen des Streamers schreibt die Seite nie.</small></span></li>
+        <li><span>Follower, Abos und Bits lesen<small>Für die Alerts im OBS-Overlay.</small></span></li>
+        <li><span>Mods und Vorhersagen<small>Mods erkennen und die Bingo-Tipprunde starten.</small></span></li>
+      </ul>
+      <p class="form-msg" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="btn btn--twitch" type="button" data-action="connect">Mit Twitch verbinden</button>
+      </div>`;
+  }
+  body.querySelectorAll('[data-action]').forEach((b) => b.addEventListener('click', () => twitchAction(b)));
+}
+
+async function refreshTwitch() {
+  state.twitch = await state.api.twitchStatus().then((t) => t ?? { connected: false }).catch(() => ({ connected: false }));
+  renderHeader();
+  renderHero();
+  renderWheelPanel();
+  renderBotPanel();
+}
+
+async function twitchAction(btn) {
+  const action = btn.dataset.action;
+  const msg = $('#twitch-dialog-body .form-msg');
+  if (msg) msg.textContent = '';
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  try {
+    if (action === 'disconnect') {
+      if (!confirm('Twitch wirklich trennen? Kanalpunkte, Alerts und Chat-Befehle laufen dann nicht mehr.')) {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+        return;
+      }
+      await state.api.twitchDisconnect();
+      await refreshTwitch();
+      toast('Twitch wurde getrennt. Die Belohnungen sind deaktiviert.', 'ok');
+      runHealth({ force: true });
+    } else {
+      // Merken, dass der Streamer gerade verbindet – für eine verständliche Meldung,
+      // falls Twitch falsch zurückleitet (siehe boot).
+      try { sessionStorage.setItem('zd_twitch_flow', '1'); } catch { /* egal */ }
+      await state.api.twitchConnect(); // leitet zu Twitch weiter
+    }
+  } catch (err) {
+    console.error(err);
+    const text = germanError(err);
+    if (msg) msg.textContent = text;
+    else toast(text, 'error', 7000);
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+  }
+}
+
+// ============================================================
+// Bot & Chat (Streamer, Admins, freigegebene Mods)
+// ============================================================
+function renderBotPanel() {
+  const status = $('#bot-status');
+  if (!status || !isTeam()) return;
+  const t = state.twitch;
+  const connected = !!t.bot_connected;
+  $('#bot-card').classList.toggle('is-on', connected);
+  status.textContent = connected
+    ? `✓ ${t.bot_name ?? t.bot_login} ist verbunden${t.bot_scope === false ? ' – darf aber noch nicht im Kanal schreiben: der Streamer muss Twitch einmal neu verbinden.' : ' und liest den Chat mit.'}`
+    : t.connected ? 'Noch kein Bot verbunden – Chat-Befehle und Bot-Nachrichten gehen erst mit Bot.'
+      : 'Noch kein Bot verbunden. Zuerst muss der Streamer Twitch verbinden, dann den Bot.';
+  $('#bot-connect').textContent = connected ? '🔄 Anderen Bot verbinden' : '🤖 Bot verbinden';
+  $('#bot-disconnect').hidden = !connected;
+  // Plattform: Alle Kanäle teilen sich den StreamHelp-Bot – verbinden und trennen nur der Plattform-Admin
+  const shared = state.platform && !state.access?.is_platform_admin;
+  if (shared) {
+    $('#bot-connect').hidden = true;
+    $('#bot-disconnect').hidden = true;
+    status.textContent = connected
+      ? `✓ Der StreamHelp-Bot ${t.bot_name ?? t.bot_login} liest deinen Chat mit${t.bot_scope === false ? ' – darf aber noch nicht schreiben: Twitch einmal neu verbinden.' : ' und schreibt Ergebnisse hinein.'}`
+      : 'Der StreamHelp-Bot ist gerade nicht verbunden – das StreamHelp-Team kümmert sich darum.';
+  }
+  // Zwei Plattform-Bots: Auswahl und Protokoll (js/dash-bot.js, Migration …_bot_stats.sql)
+  const botCtx = { api: state.api, toast, germanError, refreshTwitch };
+  renderBotPick(t, botCtx);
+  setupBotLog(botCtx);
+  renderBotLog(botCtx);
+  renderCommands();
+  loadWatchtime();
+  watchLive();
+  // Erst die Bot-Einstellungen, dann der Editor (er zeigt deren An/Aus in der Liste)
+  renderBotPlus({ api: state.api, toast, germanError })
+    .then(() => renderBotStudio({ state, api: state.api, toast, cmdError, cleanCommand, streamerName }));
+}
+
+// Watchtime live: Jede Zählung (höchstens jede Minute, …_bot_stats.sql) lädt die Rangliste neu
+let watchUnsub = null;
+function watchLive() {
+  if (watchUnsub || !state.api.onWatchState) return;
+  let timer = 0;
+  watchUnsub = state.api.onWatchState(() => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!document.querySelector('section.page[data-page="bot"]')?.hidden) loadWatchtime(); }, 1500);
+  });
+}
+
+function renderCommands() {
+  const feed = state.pet.data?.feed_command || '!füttern';
+  const cmds = [
+    ['!watchtime [@name]', 'Wie lange man schon zuschaut'],
+    ['!befehle', 'Listet alle aktiven Befehle'],
+    ['!join [Name]', 'Mitspieler-Warteschlange: anstellen (Name im Spiel optional)'],
+    ['!leave', 'Aus der Warteschlange raus'],
+    ['!a !b !c !d', 'Antwort im Fortnite-Quiz'],
+    [feed, 'Den Dino füttern'],
+    ['!change [Kostüm]', 'Dino-Kostüm wechseln (Kapitän, Mechaniker, Bauarbeiter)'],
+    ['!erwischt', 'Verbotenes Wort: den Streamer erwischt'],
+    ['!rate [Tipp]', 'Pausen-Bildschirm: mitraten'],
+    ['!uptime !game !title', 'Stream-Infos (unten an- und ausschalten)'],
+    ['!followage', 'Seit wann man folgt'],
+    ['!so @name', 'Mods: Shoutout'],
+    ['!permit @name', 'Mods: einen Link erlauben (Moderation)'],
+    ['!sr [YouTube-Link]', 'Song wünschen – dazu !song, !queue, !wrongsong, Mods: !skip'],
+    ['!clip', 'Clip der letzten Sekunden – der Bot postet den Link (nur live)'],
+    ['!stats !topchatter !topwatch', 'Zahlen zum Stream, die fleißigsten Chatter und die Watchtime-Bestenliste'],
+  ];
+  $('#cmd-list').replaceChildren(...cmds.map(([cmd, text]) => {
+    const li = document.createElement('li');
+    const code = document.createElement('code');
+    code.textContent = cmd;
+    li.append(code, text);
+    return li;
+  }));
+}
+
+async function connectBot() {
+  const btn = $('#bot-connect');
+  const msg = $('#bot-msg');
+  msg.textContent = '';
+  msg.classList.remove('is-ok');
+  btn.disabled = true;
+  try {
+    try { sessionStorage.setItem('zd_bot_dash', '1'); } catch { /* egal */ }
+    await state.api.botConnect(); // leitet zu Twitch weiter
+  } catch (err) {
+    msg.textContent = `Verbinden fehlgeschlagen: ${germanError(err)}`;
+    btn.disabled = false;
+  }
+}
+
+async function disconnectBot() {
+  const btn = $('#bot-disconnect');
+  const msg = $('#bot-msg');
+  if (!confirm('Chat-Bot wirklich trennen? Chat-Befehle gehen dann nicht mehr.')) return;
+  btn.disabled = true;
+  try {
+    await state.api.botDisconnect();
+    await refreshTwitch();
+    msg.textContent = 'Chat-Bot getrennt.';
+    msg.classList.add('is-ok');
+  } catch (err) {
+    msg.textContent = `Trennen fehlgeschlagen: ${germanError(err)}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------- Eigene Befehle ----------
+const cmdError = (err) => (/duplicate key|bot_commands_command_key/i.test(err.message) ? 'Diesen Befehl gibt es schon.'
+  : /aliases_check/i.test(err.message) ? 'Aliase: höchstens 5, jeweils mit ! und 2–25 Kleinbuchstaben, Ziffern oder _.'
+    : /check constraint|violates check/i.test(err.message) ? 'Ungültig: Befehl mit ! und 2–25 Kleinbuchstaben, Ziffern oder _ (eingebaute wie !join gehen nicht), Antwort 1–400 Zeichen.'
+      : /aliases|permission|user_cooldown|reply_type|live_only/i.test(err.message) ? 'Für die neuen Einstellungen einmal supabase/migrations/20261109000000_chat_bot_plus.sql im SQL Editor ausführen.'
+        : /bot_commands|relation .* does not exist|schema cache/i.test(err.message) ? 'Einmal nötig: supabase/migrations/20261017000000_chat_bot_commands.sql im SQL Editor ausführen.'
+          : germanError(err));
+const cleanCommand = (v) => `!${String(v ?? '').trim().toLowerCase().replace(/^!+/, '').replace(/\s+/g, '_')}`;
+
+// ---------- Watchtime ----------
+// Rangliste (StreamHelp + Import), „zählt seit“, Twitch-Daten (Follower seit, Konto seit) und der
+// Import alter Zahlen aus einem anderen Bot (js/watch-import.js).
+const watchDay = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '');
+let watchDatesAsked = false;
+
+async function loadWatchtime() {
+  const status = $('#watch-status');
+  const list = $('#watch-top');
+  try {
+    const [top, ws, info] = await Promise.all([
+      state.api.watchTop(10), state.api.watchState(), state.api.watchInfo?.().catch(() => null) ?? null,
+    ]);
+    const ago = ws?.last_tick_at ? Math.round((Date.now() - Date.parse(ws.last_tick_at)) / 60000) : null;
+    const since = info?.counting_since ? ` · zählt seit ${watchDay(info.counting_since)}` : '';
+    status.textContent = (ws?.live
+      ? `🔴 Live – zählt gerade ${ws.viewers ?? 0} Zuschauer${ws.source === 'chat' ? ' (nur Schreibende – Twitch neu verbinden für alle)' : ''}`
+      : ago !== null ? `Offline – zuletzt geprüft vor ${ago < 1 ? 'weniger als 1' : ago} Min`
+        : info?.counting_since ? 'Offline' : 'Zählt ab dem nächsten Stream (OBS-Overlay muss laufen).') + since;
+    list.replaceChildren(...(top ?? []).map((w) => {
+      const extra = [
+        w.followed_at && `Follower seit ${watchDay(w.followed_at)}`,
+        w.account_created_at && `Twitch seit ${watchDay(w.account_created_at)}`,
+        w.imported > 0 && 'inkl. Import',
+      ].filter(Boolean).join(' · ');
+      return h('li', {},
+        h('div', { class: 'watch-who' }, h('b', {}, w.display_name || w.login), extra ? h('small', { title: extra }, extra) : null),
+        h('span', {}, w.pretty));
+    }));
+    if (!top?.length) list.innerHTML = '<li class="cmd-empty">Noch keine Watchtime erfasst.</li>';
+    renderWatchImport(info);
+    // Twitch-Daten der Rangliste einmal nachholen lassen (die Edge Function fragt höchstens 1× pro Woche)
+    if (!watchDatesAsked && (top ?? []).some((w) => w.twitch_id && !w.account_created_at)) {
+      watchDatesAsked = true;
+      state.api.watchDates?.().then((r) => { if (r?.updated) loadWatchtime(); }).catch(() => {});
+    }
+  } catch (err) {
+    status.textContent = cmdError(err);
+    list.replaceChildren();
+  }
+}
+
+function renderWatchImport(info) {
+  const box = $('#watch-import');
+  if (!box) return;
+  const imp = info?.imported;
+  const file = h('input', { type: 'file', accept: '.csv,.txt,text/csv', hidden: true });
+  const pick = h('button', { type: 'button', class: 'btn btn--ghost btn--sm' }, imp?.count ? '📥 Neuen Import hochladen' : '📥 Alte Watchtime importieren (CSV)');
+  pick.addEventListener('click', () => file.click());
+  const msg = h('p', { class: 'form-msg', role: 'status' });
+  const parts = [];
+  if (imp?.count) {
+    const clear = h('button', { type: 'button', class: 'btn btn--ghost btn--sm' }, '🗑️ Import entfernen');
+    clear.addEventListener('click', async () => {
+      if (!confirm('Importierte Watchtime entfernen? Die von StreamHelp gezählte Zeit bleibt.')) return;
+      try { await state.api.watchImportClear(); toast('Import entfernt.', 'ok'); loadWatchtime(); } catch (err) { msg.textContent = cmdError(err); }
+    });
+    parts.push(h('p', { class: 'watch-import-info' },
+      `Importiert: ${imp.count.toLocaleString('de-DE')} Zuschauer · ${Math.round(imp.seconds / 3600).toLocaleString('de-DE')} Std${imp.source ? ` aus ${imp.source}` : ''}${imp.at ? ` (${watchDay(imp.at)})` : ''}`), clear);
+  }
+  file.addEventListener('change', async () => {
+    const f = file.files?.[0];
+    file.value = '';
+    if (!f) return;
+    msg.textContent = '';
+    if (f.size > 8 * 1024 * 1024) { msg.textContent = 'Die Datei ist zu groß (höchstens 8 MB).'; return; }
+    try {
+      const { parseWatchCsv } = await import('./watch-import.js');
+      const res = parseWatchCsv(await f.text(), f.name);
+      if (!res.rows.length) { msg.textContent = 'In der Datei steht keine Watchtime, die sich lesen lässt.'; return; }
+      const hours = Math.round(res.rows.reduce((a, r) => a + r.seconds, 0) / 3600);
+      const top = res.rows.slice(0, 3).map((r) => `${r.name} (${Math.round(r.seconds / 3600)} Std)`).join(', ');
+      const ok = confirm(`${res.rows.length.toLocaleString('de-DE')} Zuschauer mit zusammen ${hours.toLocaleString('de-DE')} Std gefunden (Quelle: ${res.source})${res.skipped ? `, ${res.skipped} Zeilen übersprungen` : ''}.\n\nGanz vorne: ${top}\n\nImportieren? Ein früherer Import wird dabei ersetzt.`);
+      if (!ok) return;
+      const r = await state.api.watchImport(res.rows.slice(0, 50000), res.source);
+      toast(`Importiert: ${Number(r?.count ?? res.rows.length).toLocaleString('de-DE')} Zuschauer.`, 'ok');
+      loadWatchtime();
+    } catch (err) {
+      msg.textContent = err?.message ? cmdError(err) : String(err);
+    }
+  });
+  box.replaceChildren(h('div', { class: 'watch-import-row' }, ...parts, pick), file, msg);
+}
+
+// ============================================================
+// Kanalpunkte: alle Belohnungen auf einen Blick, Kosten im jeweiligen Fenster
+// ============================================================
+const POINTS_OPEN = {
+  wheel: () => openWheelEdit(),
+  prank: () => openPrank(),
+  tts: () => openExtra('tts'),
+  cards: () => openExtra('cards'),
+  bingo: () => openBingo(),
+};
+
+async function renderPoints() {
+  const list = $('#points-list');
+  const t = state.twitch;
+  const rewards = await listRewards().catch(() => []);
+  const byKey = Object.fromEntries((rewards ?? []).map((r) => [r.key, r]));
+  const s = state.prank.settings ?? {};
+  const rows = [
+    { key: 'wheel', icon: '🎡', title: t.reward_title ?? 'Glücksrad', cost: t.reward_cost ?? 10000, on: !!t.reward_active, text: 'Zuschauer drehen das Fortnite-Glücksrad.' },
+    state.prank.on && { key: 'prank', icon: '🍅', title: 'Ärgere den Streamer', cost: s.throw_cost ?? s.reward_cost ?? null, on: s.enabled !== false && !!t.connected, text: 'Werfen und Sounds per Kanalpunkte.' },
+    { key: 'tts', icon: '🔊', title: byKey.tts?.title ?? 'Nachricht vorlesen', cost: byKey.tts?.cost ?? null, on: !!byKey.tts?.enabled && !!byKey.tts?.reward_id, text: 'Eine Nachricht wird im Stream vorgelesen.' },
+    { key: 'cards', icon: '🃏', title: byKey.cards?.title ?? 'Sammelkarten-Pack', cost: byKey.cards?.cost ?? null, on: !!byKey.cards?.enabled && !!byKey.cards?.reward_id, text: 'Zuschauer öffnen ein Pack Stream-Sammelkarten.' },
+    state.bingo.on && { key: 'bingo', icon: '🎯', title: 'Bingo-Tipprunde', cost: null, on: !!t.connected, text: 'Twitch-Vorhersage: Zuschauer setzen eigene Punkte auf eine Bingo-Reihe.', button: 'Bingo öffnen' },
+  ].filter(Boolean);
+  // Titel von Twitch tragen oft schon ein Emoji – das Symbol steht daneben
+  const plain = (text) => String(text ?? '').replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, '');
+  list.replaceChildren(...rows.map((r) => {
+    const card = document.createElement('article');
+    card.className = 'dash-card';
+    const head = document.createElement('header');
+    head.className = 'dash-card-head';
+    const ico = document.createElement('span');
+    ico.className = 'dash-ico';
+    ico.textContent = r.icon;
+    const box = document.createElement('div');
+    const h = document.createElement('h2');
+    h.textContent = plain(r.title);
+    const st = document.createElement('span');
+    st.className = `pt-state${r.on ? ' is-on' : ''}`;
+    st.textContent = r.on ? 'Aktiv auf Twitch' : t.connected ? 'Aus' : 'Twitch nicht verbunden';
+    box.append(h, st);
+    head.append(ico, box);
+    const cost = document.createElement('p');
+    cost.className = 'pt-cost';
+    if (r.cost != null) {
+      cost.textContent = Number(r.cost).toLocaleString('de-DE');
+      const small = document.createElement('small');
+      small.textContent = 'Kanalpunkte';
+      cost.append(small);
+    } else {
+      cost.textContent = r.key === 'bingo' ? 'Eigener Einsatz' : '–';
+    }
+    const text = document.createElement('p');
+    text.className = 'dash-status';
+    text.textContent = r.text;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn--outline btn--sm';
+    btn.dataset.pointsOpen = r.key;
+    btn.textContent = r.button ?? 'Kosten & Einstellungen ›';
+    card.append(head, cost, text, btn);
+    return card;
+  }));
+}
+
+// ============================================================
+// Alerts: Twitch-Gesundheitscheck (Edge Function twitch-oauth → twitch_health)
+// Prüft automatisch beim Öffnen des Dashboards und alle 10 Minuten, ob die
+// Verbindung alle Rechte für die neuesten Funktionen hat und die Abos laufen.
+// Probleme sehen Streamer, Mods und Admins sofort (Kopfzeile, Banner, Seitenleiste).
+// ============================================================
+const HEALTH_EVERY = 10 * 60 * 1000;
+const SUB_LABEL = {
+  'channel.follow': '💜 Follower', 'channel.subscribe': '⭐ Abos', 'channel.subscription.message': '🔁 Resubs',
+  'channel.subscription.gift': '🎁 Abo-Geschenke', 'channel.cheer': '💎 Bits',
+  'channel.channel_points_custom_reward_redemption.add': '🎟️ Kanalpunkte', 'channel.chat.message': '💬 Chat (Bot)',
+  'channel.raid': '🚀 Raids', 'stream.online': '▶️ Stream-Start', 'stream.offline': '⏹️ Stream-Ende',
+  'channel.ad_break.begin': '📺 Werbepausen', 'channel.hype_train.begin': '🚂 Hype-Train (Start)',
+  'channel.hype_train.progress': '🚂 Hype-Train (Stufen)', 'channel.hype_train.end': '🚂 Hype-Train (Ende)',
+  'channel.goal.progress': '🎯 Ziele', 'channel.goal.end': '🎯 Ziele (Ende)',
+};
+
+async function startHealth() {
+  const h = state.health;
+  // Erst den letzten Stand zeigen, dann (gedrosselt) neu prüfen lassen
+  const last = await state.api.getTwitchHealth().catch(() => null);
+  if (last) { h.data = last; renderHealth(); }
+  if (!h.subscribed && state.api.onTwitchHealth) {
+    h.subscribed = true;
+    state.api.onTwitchHealth((row) => { h.data = row; renderHealth(); });
+  }
+  runHealth();
+  clearInterval(h.timer);
+  h.timer = setInterval(() => { if (state.user && isTeam() && !document.hidden) runHealth(); }, HEALTH_EVERY);
+}
+
+async function runHealth({ force = false, loud = false } = {}) {
+  const h = state.health;
+  if (h.busy || !isTeam()) return;
+  h.busy = true;
+  renderHealth();
+  try {
+    const r = await state.api.twitchHealth(force);
+    if (r) h.data = r;
+    if (loud) toast(h.data?.ok ? '✓ Twitch geprüft – alles läuft.' : 'Twitch geprüft – es gibt noch Probleme (siehe Liste).', h.data?.ok ? 'ok' : 'error', 6000);
+  } catch (err) {
+    console.warn('Gesundheitscheck:', err);
+    if (loud) toast(`Prüfen fehlgeschlagen: ${/unbekannte aktion/i.test(err.message) ? 'Die Edge Function twitch-oauth ist noch alt – sie wird beim nächsten Merge neu hochgeladen.' : germanError(err)}`, 'error', 8000);
+    h.error = err;
+  } finally {
+    h.busy = false;
+    renderHealth();
+  }
+}
+
+// Probleme, die nur ein neues Verbinden mit Twitch löst (twitch-oauth → _shared/health.ts)
+const RECONNECT_CODES = ['missing_scopes', 'token_invalid', 'token_refresh', 'not_connected'];
+
+function renderHealth() {
+  const h = state.health;
+  const d = h.data;
+  const problems = Array.isArray(d?.problems) ? d.problems : [];
+  const errors = problems.filter((p) => p.level === 'error');
+  const level = !d ? 'unknown' : errors.length ? 'error' : problems.length ? 'warn' : 'ok';
+  const card = $('#health-card');
+  card.dataset.state = h.busy ? 'checking' : level;
+  $('#health-title').textContent = h.busy ? 'Twitch wird geprüft …'
+    : !d ? 'Noch nicht geprüft'
+      : level === 'ok' ? 'Alles läuft – Twitch schickt Alerts, Kanalpunkte und Chat'
+        : level === 'warn' ? 'Läuft – mit Hinweisen'
+          : `${errors.length} ${errors.length === 1 ? 'Problem' : 'Probleme'} mit Twitch`;
+  const time = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const meta = [];
+  if (d?.checked_at) meta.push(`Zuletzt geprüft: ${time(d.checked_at)}`);
+  if (d?.last_event_at) meta.push(`Letzte Nachricht von Twitch: ${time(d.last_event_at)}${d.last_event_type ? ` (${SUB_LABEL[d.last_event_type] ?? d.last_event_type})` : ''}`);
+  else if (d) meta.push('Von Twitch kam noch keine Nachricht an.');
+  $('#health-meta').textContent = meta.join(' · ');
+  $('#health-check').disabled = h.busy;
+
+  $('#health-problems').replaceChildren(...problems.map((p) => {
+    const li = document.createElement('li');
+    li.classList.toggle('is-warn', p.level !== 'error');
+    const b = document.createElement('b');
+    b.textContent = `${p.level === 'error' ? '✕' : '⚠️'} ${p.text}`;
+    const small = document.createElement('small');
+    const fix = document.createElement('b');
+    fix.textContent = 'Lösung: ';
+    small.append(fix, p.fix ?? '');
+    li.append(b, small);
+    if (RECONNECT_CODES.includes(p.code)) {
+      const hint = document.createElement('small');
+      hint.textContent = 'Wichtig: „Mit Twitch anmelden“ reicht dafür nicht – das meldet nur bei der Webseite an. Der Streamer muss die Twitch-Verbindung neu herstellen und bei Twitch alles erlauben.';
+      li.append(hint);
+      if (canStreamerView()) {
+        const go = document.createElement('button');
+        go.type = 'button';
+        go.className = 'btn btn--primary btn--sm';
+        go.dataset.twitchReconnect = '';
+        go.textContent = '🔄 Twitch neu verbinden';
+        li.append(go);
+      }
+    }
+    return li;
+  }));
+  const subs = d?.details?.subscriptions ?? {};
+  $('#health-subs').replaceChildren(...Object.entries(SUB_LABEL).filter(([type]) => subs[type]).map(([type, label]) => {
+    const st = subs[type].state;
+    const li = document.createElement('li');
+    li.className = st === 'ok' ? '' : st === 'pending' ? 'is-wait' : 'is-bad';
+    li.textContent = label;
+    if (st === 'not_affiliate') li.className = 'is-off';
+    li.title = st === 'ok' ? 'Aktiv' : st === 'pending' ? 'Twitch schaltet es gerade frei' : st === 'missing_scope' ? 'Recht fehlt – Twitch neu verbinden'
+      : st === 'not_affiliate' ? 'Gibt es auf Twitch erst ab Affiliate' : `Fehlt (${subs[type].status ?? subs[type].message ?? st})`;
+    return li;
+  }));
+
+  // Kopfzeile, Seitenleiste, Banner
+  const btn = $('#health-btn');
+  btn.hidden = !isTeam() || !d;
+  btn.dataset.state = level;
+  btn.textContent = level === 'ok' ? 'Twitch OK' : level === 'warn' ? 'Twitch: Hinweise' : `Twitch: ${errors.length} ${errors.length === 1 ? 'Problem' : 'Probleme'}`;
+  btn.title = 'Twitch-Verbindung – Details unter „Twitch-Verbindung“';
+  $('#sb-alert-badge').hidden = !errors.length || !isTeam();
+  h.level = level;
+  renderAcctHead(level);
+  $('#sb-alert-badge').textContent = String(errors.length);
+  const banner = $('#health-banner');
+  banner.hidden = !errors.length || !isTeam() || state.page === 'twitch';
+  // Lösung „neu verbinden“: Knopf dafür (nur wer Twitch verbinden darf – der Streamer bzw. Seiten-Admin)
+  const reconnect = canStreamerView() && errors.some((p) => RECONNECT_CODES.includes(p.code));
+  banner.querySelector('[data-twitch-reconnect]').hidden = !reconnect;
+  if (errors.length) {
+    $('#health-banner-title').textContent = errors.length === 1 ? 'Twitch-Problem: Alerts oder Kanalpunkte kommen evtl. nicht an' : `${errors.length} Twitch-Probleme: Alerts oder Kanalpunkte kommen evtl. nicht an`;
+    $('#health-banner-detail').textContent = `${errors[0].text} → ${errors[0].fix}`;
+    // Einmal pro neuem Problem auch als Meldung
+    const sig = errors.map((p) => p.code).join(',');
+    if (sig !== h.told) {
+      h.told = sig;
+      toast(`⚠️ Twitch: ${errors[0].text}`, 'error', 9000);
+    }
+  } else {
+    h.told = '';
+  }
+}
+
+// ============================================================
+// Hilfsfunktionen
+// ============================================================
+function toast(text, type = 'info', ms = 4500) {
+  const host = $('#toasts');
+  const el = document.createElement('div');
+  el.className = `toast toast--${type}`;
+  el.textContent = text;
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  host.append(el);
+  raiseToasts();
+  setTimeout(() => {
+    el.classList.add('is-leaving');
+    setTimeout(() => {
+      el.remove();
+      if (!host.children.length) hideToasts();
+    }, 260);
+  }, ms);
+}
+
+// Ein Dialog mit showModal() liegt in der "top layer" und deckt alles
+// Normale zu – auch die Meldungen. Als Popover landen sie selbst in der
+// top layer und bleiben lesbar. Jedes erneute Zeigen hebt sie über einen
+// Dialog, der zwischenzeitlich geöffnet wurde.
+function raiseToasts() {
+  const host = $('#toasts');
+  if (typeof host.showPopover !== 'function') return; // ältere Browser: wie bisher
+  try {
+    if (host.matches(':popover-open')) host.hidePopover();
+    host.showPopover();
+  } catch { /* Popover nicht möglich – Meldungen bleiben in der normalen Ebene */ }
+}
+
+function hideToasts() {
+  const host = $('#toasts');
+  try { if (host.matches(':popover-open')) host.hidePopover(); } catch { /* egal */ }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
