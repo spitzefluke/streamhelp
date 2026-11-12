@@ -1682,7 +1682,7 @@ const VIEWS = {
   money: ['Pro, Sponsoring, Spenden', 'Start-Checks – Freischalten Schritt für Schritt in STARTKLAR.md'],
   artists: ['Artists', 'Bewerbungen freischalten und Uploads prüfen'],
   security: ['Sicherheit', 'Datenbank-Check und Anmelde-Möglichkeiten'],
-  console: ['StreamHelp Console', 'Tasten belegen, 3D-Modell, Technik-Baukasten und Release-Check'],
+  console: ['StreamHelp Console', 'Tasten belegen, 3D-Modell, Technik-Baukasten, Release-Check, Anleitung und Werbung'],
   touch: ['Touch-Bildschirm', 'Console · Oberfläche des Touch-Displays einstellen und im Simulator testen'],
 };
 

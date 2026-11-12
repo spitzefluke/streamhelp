@@ -81,12 +81,17 @@ export class ObsSocket {
     });
   }
 
+  // Auch eine noch laufende Anmeldung: Deren alter Socket darf danach nichts mehr am Zustand ändern
+  // (sonst hieße es „verbunden“, obwohl der neue Socket noch wartet), offene Anfragen enden sofort.
   close() {
     if (!this.ws) return;
     this.ws.onclose = null;
+    this.ws.onmessage = null;
     this.ws.close();
     this.ws = null;
     this.identified = false;
+    for (const p of this.pending.values()) p.reject(new Error('Verbindung zu OBS getrennt.'));
+    this.pending.clear();
   }
 
   request(requestType, requestData = {}) {

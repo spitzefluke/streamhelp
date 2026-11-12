@@ -322,7 +322,18 @@ export function normalizeKit(raw) {
     by: String(x?.by ?? '').slice(0, 40),
     at: String(x?.at ?? '').slice(0, 30),
   })).filter((x) => x.text);
-  return { parts, prices, qty: Math.round(num(k.qty, 1, 100000, KIT_DEFAULT.qty)), factor: num(k.factor, 1, 10, KIT_DEFAULT.factor), checks, features, tips, design, answers, rear, pack, ideas };
+  // Bedienungsanleitung (js/dash-console-manual.js) und Werbungs-Builder (js/dash-console-ads.js): kurze Texte
+  const texts = (src, limits) => {
+    const out = {};
+    for (const [id, max] of Object.entries(limits)) {
+      const v = typeof src?.[id] === 'string' ? src[id].trim().slice(0, max) : '';
+      if (v) out[id] = v;
+    }
+    return out;
+  };
+  const manual = texts(k.manual, { name: 60, maker: 120, address: 200, email: 120, web: 120 });
+  const ads = texts(k.ads, { name: 60, slogan: 80, price: 10, link: 120, code: 24, tone: 10 });
+  return { parts, prices, qty: Math.round(num(k.qty, 1, 100000, KIT_DEFAULT.qty)), factor: num(k.factor, 1, 10, KIT_DEFAULT.factor), checks, features, tips, design, answers, rear, pack, ideas, manual, ads };
 }
 
 // Aufdruck und Inhalt der Verpackung für die 3D-Ansicht

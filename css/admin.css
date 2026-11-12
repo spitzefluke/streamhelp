@@ -428,13 +428,36 @@
 .dash-card h2 { font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
 .dash-status { margin-top: 3px; color: var(--muted); font-size: 14px; }
 .x-empty { color: var(--dim); font-size: 14px; padding: 6px 2px; }
-/* Reiter: Belegung | 3D-Ansicht | Baukasten | Release-Check (Fehler und „Lädt …“ bleiben immer sichtbar) */
+/* Reiter: Belegung | 3D-Ansicht | Baukasten | Release-Check | Anleitung | Werbung
+   (Fehler und „Lädt …“ bleiben immer sichtbar) */
 .adm-console[data-tab="keys"] > .cs-3d-card, .adm-console[data-tab="keys"] > .cs-kit,
 .adm-console[data-tab="view3d"] > .cs-main, .adm-console[data-tab="view3d"] > .cs-kit,
-.adm-console[data-tab="kit"] > .cs-main, .adm-console[data-tab="kit"] > .cs-3d-card,
-.adm-console[data-tab="kit"] .cs-kit > :is(.ck-release, .ck-duties, .ck-spec),
-.adm-console[data-tab="release"] > .cs-main, .adm-console[data-tab="release"] > .cs-3d-card,
-.adm-console[data-tab="release"] .cs-kit > :not(.ck-release, .ck-duties, .ck-spec) { display: none; }
+.adm-console:is([data-tab="kit"], [data-tab="release"], [data-tab="manual"], [data-tab="ads"]) > :is(.cs-main, .cs-3d-card),
+.adm-console[data-tab="kit"] .cs-kit > :is(.ck-release, .ck-duties, .ck-spec, .ck-manual, .ck-ads),
+.adm-console[data-tab="release"] .cs-kit > :not(.ck-release, .ck-duties, .ck-spec),
+.adm-console[data-tab="manual"] .cs-kit > :not(.ck-manual),
+.adm-console[data-tab="ads"] .cs-kit > :not(.ck-ads) { display: none; }
+
+/* Bedienungsanleitung */
+.ck-manual textarea, .ck-ads textarea { min-height: 38px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text); font: inherit; font-size: 14px; resize: vertical; }
+.ck-manual-frame { width: 100%; height: min(70vh, 720px); border: 1px solid var(--line); border-radius: 14px; background: #f4f4f7; }
+
+/* Werbungs-Builder */
+.ck-ad-h { margin: 8px 0 0; font-size: 16px; text-transform: none; letter-spacing: 0; }
+.ck-ad-formats { display: flex; flex-wrap: wrap; gap: 8px; }
+.ck-ad-format { display: grid; gap: 2px; min-height: 44px; padding: 6px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text-2); font-weight: 600; font-size: 13px; text-align: left; cursor: pointer; }
+.ck-ad-format small { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-weight: 400; }
+.ck-ad-format[aria-pressed="true"] { border-color: rgba(var(--acc-rgb), .7); background: rgba(var(--acc-rgb), .22); color: #fff; }
+.ck-ad-stage { display: grid; place-items: center; padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: repeating-conic-gradient(#14101f 0 25%, #100c19 0 50%) 0 0 / 20px 20px; }
+.ck-ad-canvas { display: block; max-width: 100%; max-height: 560px; width: auto; height: auto; border-radius: 8px; box-shadow: 0 20px 40px -20px rgba(0, 0, 0, .9); }
+.ck-ad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; }
+.ck-ad-out { display: grid; gap: 6px; min-width: 0; }
+.ck-ad-out-head { display: flex; align-items: center; gap: 10px; }
+.ck-ad-out-head b { font-size: 14px; }
+.ck-ad-out-head .btn { margin-left: auto; min-height: 30px; font-size: 12px; padding: 0 12px; }
+.ck-ad-count { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.ck-ad-count.is-warn { color: #ff9d95; }
+.ck-ad-text { width: 100%; font-family: var(--font-mono) !important; font-size: 12.5px !important; line-height: 1.5; }
 .adm-console .cs-badge { display: none; } /* steht schon in der Kopfzeile */
 
 /* ---------- Console → Touch-Bildschirm (js/dash-console-touch.js, Oberfläche in css/console-touch.css) ---------- */

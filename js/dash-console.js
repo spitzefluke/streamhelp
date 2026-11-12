@@ -9,6 +9,8 @@ import { colorKeys, console3dActive, drawConsoleDisplay, mountConsole3d, setBoxM
 import { kitBoxSpec, kitLook, kitPorts, kitRearOpts, normalizeKit, renderKit } from './dash-console-kit.js';
 import { renderRear } from './dash-console-rear.js';
 import { renderSpecCard } from './dash-console-spec.js';
+import { renderManualCard } from './dash-console-manual.js';
+import { renderAdsCard } from './dash-console-ads.js';
 import { renderSurvey } from './dash-console-survey.js';
 import { renderTips } from './dash-console-tips.js';
 
@@ -479,6 +481,9 @@ function paintKit() {
   cards.splice(4, 0, renderSurvey({ kit: cfg.kit, onChange })); // nach „Was kommt in Version 1?“
   cards.splice(5, 0, renderRear({ kit: cfg.kit, onChange, onShow: showRear }));
   cards.push(renderSpecCard({ kit: cfg.kit, keys: cfg.keys, by: cfg.updated_by, at: cfg.updated_at, toast: ctx.toast }));
+  // Reiter „Anleitung“ und „Werbung“ im Admin-Bereich
+  cards.push(renderManualCard({ kit: cfg.kit, keys: cfg.keys, onChange, toast: ctx.toast }));
+  cards.push(renderAdsCard({ kit: cfg.kit, keys: cfg.keys, onChange, toast: ctx.toast }));
   kitBox.replaceChildren(...cards);
 }
 

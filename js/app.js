@@ -6143,11 +6143,12 @@ const OBS_SIZE = {
   wheel: 'wsize', next: 'nsize', bingo: 'bsize', quest: 'qsize', shop: 'ssize', challenge: 'csize', alerts: 'asize', recent: 'rsize', chat: 'chsize',
   forbid: 'fwsize', subathon: 'sasize', quiz: 'qzsize', queue: 'qusize', tts: 'ttsize', cards: 'cdsize', giveaway: 'gwsize', hotwords: 'hwsize', poll: 'plsize', counter: 'ctsize', gamewheel: 'sgsize', heart: 'hrsize', chatcontrol: 'cmsize', songs: 'sosize', cup: 'cpsize', bet: 'btsize', scratch: 'scsize', sponsor: 'spsize', labels: 'lbsize', goal: 'gsize',
 };
-const obs = { ws: null, scene: null, shotTimer: 0, busy: false, stream: null, sources: [], previewSound: false, presets: null };
+const obs = { ws: null, scene: null, shotTimer: 0, shotGen: 0, connectSeq: 0, busy: false, stream: null, sources: [], previewSound: false, presets: null };
 // Live-Overlay: Einstellungen liegen in overlay_config, OBS lädt overlay.html?live=1
-const obsLive = { ready: false, params: '', access: { can_edit: false, is_owner: false, admins_can_edit: false }, timer: 0, filling: false };
+const obsLive = { ready: false, loading: false, loadSeq: 0, pending: false, again: false, params: '', access: { can_edit: false, is_owner: false, admins_can_edit: false }, timer: 0, filling: false };
 const obsLiveUrl = () => withChannelParam(new URL('overlay.html?live=1', location.href)).href;
-const obsLocked = () => obsLive.ready && !obsLive.access.can_edit;
+// Gesperrt: ohne Recht zum Ändern – und solange der gespeicherte Stand noch lädt (sonst gingen Änderungen verloren)
+const obsLocked = () => obsLive.loading || (obsLive.ready && !obsLive.access.can_edit);
 
 function setupObs() {
   const form = $('#obs-options');
@@ -6219,6 +6220,9 @@ function setupObs() {
     stopObsShare();
   });
   new ResizeObserver(fitObsPreview).observe($('#obs-preview'));
+  // Änderungen von woanders übernehmen (Design-Bibliothek, Console, zweites Fenster, Mods)
+  addEventListener('focus', pullObsLive);
+  setInterval(() => { if (document.visibilityState === 'visible') pullObsLive(); }, 15000);
 
   // Verschieben in der Vorschau meldet das Overlay per postMessage.
   addEventListener('message', (e) => {
@@ -7159,6 +7163,7 @@ function showObsGuide(on) {
 
 async function openObsDialog({ page = false } = {}) {
   obsLive.ready = false; // erst frisch laden, sonst würde der alte Stand gespeichert
+  obsLive.loading = true;
   loadObs();
   if (page) $('#obs-dialog').show();
   else $('#obs-dialog').showModal();
@@ -7196,16 +7201,22 @@ async function openObsDialog({ page = false } = {}) {
 
 // ---------- Live: zentrale Einstellungen ----------
 async function loadObsLive() {
+  const seq = ++obsLive.loadSeq; // zweimal geöffnet: nur die letzte Antwort zählt
+  obsLive.loading = true;
+  paintObsLive();
   try {
     const [config, access] = await Promise.all([state.api.getOverlayConfig(), state.api.overlayAccess()]);
+    if (seq !== obsLive.loadSeq) return;
     Object.assign(obsLive, { ready: true, params: config?.params ?? '', access, error: '' });
     // Gibt es schon gespeicherte Einstellungen, zeigt der Dialog genau die
     if (obsLive.params) applyObsParams(obsLive.params);
   } catch (err) {
+    if (seq !== obsLive.loadSeq) return;
     console.warn('Live-Overlay nicht verfügbar:', err);
     obsLive.ready = false;
     obsLive.error = germanError(err);
   }
+  obsLive.loading = false;
   paintObsLive();
   updateObs({ now: true });
   recordObsHistory({ reset: true });
@@ -7236,7 +7247,9 @@ function paintObsLive() {
   $('#obs-allow-wrap').hidden = !(ready && access.is_owner);
   $('#obs-allow-admins').checked = !!access.admins_can_edit;
   status.classList.toggle('is-locked', obsLocked());
-  status.textContent = !ready
+  status.textContent = obsLive.loading
+    ? 'Lädt die gespeicherten Einstellungen …'
+    : !ready
     ? (state.profile?.is_admin && obsLive.error ? `Live-Modus fehlt: ${obsLive.error}` : 'Diese Adresse enthält die Einstellungen – nach Änderungen in OBS neu einfügen.')
     : access.can_edit
       ? `✓ Live: Jede Änderung hier erscheint sofort in OBS.${obsLive.savedAt ? ` Zuletzt gespeichert um ${obsLive.savedAt} Uhr.` : ''}`
@@ -7250,23 +7263,100 @@ function paintObsLive() {
 }
 
 function scheduleObsSave() {
-  if (!obsLive.ready || !obsLive.access.can_edit || obsLive.filling) return;
+  if (!obsLive.ready || obsLive.loading || !obsLive.access.can_edit || obsLive.filling) return;
   clearTimeout(obsLive.timer);
+  obsLive.pending = true;
   obsLive.timer = setTimeout(saveObsLive, 250);
 }
 
-async function saveObsLive() {
+// Die Einstellungen in overlay_config ändern auch andere: Design-Bibliothek, Alert-Designer, Console (Szene),
+// ein zweites offenes OBS-Fenster oder ein Mod. Der Editor schreibt deshalb nie seinen ganzen alten Stand
+// zurück, sondern nur, was hier geändert wurde – auf den frischen Stand aus der Datenbank.
+// Nur Parameter, die der Editor selbst kennt, zählen als „hier geändert“; alle anderen bleiben, wie sie sind.
+const obsManaged = () => new Set(obsFields().map((el) => el.name).filter((n) => !n.endsWith('_on')));
+function sameObsParams(a, b, keys = obsManaged()) {
+  const pa = new URLSearchParams(a);
+  const pb = new URLSearchParams(b);
+  for (const k of keys) if (pa.get(k) !== pb.get(k)) return false;
+  return true;
+}
+// Was sich von `from` nach `to` geändert hat, auf `target` übertragen
+function carryObsParams(from, to, target, keys = obsManaged()) {
+  const pa = new URLSearchParams(from);
+  const pb = new URLSearchParams(to);
+  const t = new URLSearchParams(target);
+  for (const k of keys) {
+    const v = pb.get(k);
+    if (pa.get(k) === v) continue;
+    if (v === null) t.delete(k); else t.set(k, v);
+  }
+  return t.toString();
+}
+
+// Woanders geändert: Formular, Vorschau und Verlauf (Rückgängig) auf den neuen Stand bringen,
+// ohne die eigenen, noch nicht gespeicherten Änderungen zu verlieren.
+function adoptObsRemote(from, to) {
+  const keys = obsManaged();
+  if (sameObsParams(from, to, keys)) return;
+  const cur = new URL(obsUrl()).search.slice(1);
+  for (const h of obsHist.list) h.q = carryObsParams(from, to, h.q, keys);
+  obsHist.applying = true;
+  applyObsParams(carryObsParams(from, to, cur, keys));
+  updateObs({ now: true });
+  obsHist.applying = false;
+  paintObsHistory();
+  toast('Das Overlay wurde gerade woanders geändert (z. B. Design-Bibliothek, Console oder ein anderes Fenster) – der Editor zeigt jetzt den neuen Stand.', 'info', 5000);
+}
+
+// Immer nur ein Speichern zugleich: sonst kann eine ältere Anfrage nach der neueren ankommen und sie überschreiben.
+// Wer saveObsLive() abwartet, wartet auch auf alles, was während des Speicherns noch dazukam.
+let obsSaving = null;
+function saveObsLive() {
   clearTimeout(obsLive.timer);
-  const query = new URL(obsUrl()).search.slice(1);
-  if (query === obsLive.params) return;
+  obsLive.pending = false;
+  if (obsSaving) { obsLive.again = true; return obsSaving; }
+  obsSaving = (async () => {
+    try {
+      do {
+        obsLive.again = false;
+        await saveObsLiveOnce();
+      } while (obsLive.again);
+    } finally {
+      obsSaving = null;
+    }
+  })();
+  return obsSaving;
+}
+
+async function saveObsLiveOnce() {
+  const mine = new URL(obsUrl()).search.slice(1);
+  const base = obsLive.params;
+  if (sameObsParams(mine, base)) return;
   try {
-    await state.api.saveOverlayConfig(query);
-    obsLive.params = query;
+    // Frischer Stand; geht das Lesen schief, wie früher auf dem bekannten Stand aufbauen
+    const fresh = await state.api.getOverlayConfig().catch(() => null);
+    const theirs = fresh ? (fresh.params ?? '') : base;
+    const merged = carryObsParams(base, mine, theirs);
+    await state.api.saveOverlayConfig(merged);
+    obsLive.params = merged;
     obsLive.savedAt = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    adoptObsRemote(mine, merged);
   } catch (err) {
     toast(`Nicht gespeichert: ${germanError(err)}`, 'error');
   }
   paintObsLive();
+}
+
+// Während der Editor offen ist: ab und zu und beim Zurückkommen ins Fenster nachsehen, ob jemand anderes
+// etwas geändert hat. Nicht, solange hier noch etwas zum Speichern ansteht.
+async function pullObsLive() {
+  if (!$('#obs-dialog')?.open || !obsLive.ready || obsLive.loading || obsSaving || obsLive.pending) return;
+  const fresh = await state.api.getOverlayConfig().catch(() => null);
+  if (!fresh || !obsLive.ready || obsLive.loading || obsSaving || obsLive.pending) return;
+  const theirs = fresh.params ?? '';
+  const base = obsLive.params;
+  obsLive.params = theirs;
+  adoptObsRemote(base, theirs);
 }
 
 async function allowAdminsObs(e) {
@@ -7858,6 +7948,9 @@ async function readObsLogin() {
 }
 
 async function connectObs({ quiet = false } = {}) {
+  // Zwei Versuche zugleich (automatisch beim Öffnen + Klick auf „Verbinden“): Nur der letzte zählt.
+  // Sonst schloss der Fehlschlag des alten Versuchs (Zeitüberschreitung nach 6 s) die neue, gute Verbindung.
+  const attempt = ++obs.connectSeq;
   const form = $('#obs-ws-form');
   const btn = form.querySelector('button[type="submit"]');
   const msg = $('#obs-ws-msg');
@@ -7871,6 +7964,7 @@ async function connectObs({ quiet = false } = {}) {
     obs.ws.onClose = () => { disconnectObs(false); msg.textContent = 'Verbindung zu OBS getrennt.'; };
     const password = form.password.value;
     await obs.ws.connect({ password });
+    if (attempt !== obs.connectSeq) return;
     saveSecret(OBS_WS_KEY, password); // nur Komfort – klappt es nicht, fragt die Seite beim nächsten Mal wieder
     stopObsShare();
     obs.scene = await obs.ws.programScene();
@@ -7878,18 +7972,23 @@ async function connectObs({ quiet = false } = {}) {
     paintObsConnection();
     pollObsShot();
   } catch (err) {
+    if (attempt !== obs.connectSeq) return; // von einem neueren Versuch abgelöst
     console.warn(err);
     obs.ws?.close();
     $('#obs-connect').dataset.state = 'off';
     if (!quiet) msg.textContent = err.message;
     paintObsConnection();
   } finally {
-    btn.disabled = false;
-    btn.classList.remove('is-loading');
+    if (attempt === obs.connectSeq) {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+    }
   }
 }
 
 function disconnectObs(forget) {
+  obs.connectSeq += 1; // ein noch laufender Versuch zählt nicht mehr
+  obs.shotGen += 1;
   clearTimeout(obs.shotTimer);
   obs.ws?.close();
   obs.scene = null;
@@ -7957,8 +8056,10 @@ function useObsCamera() {
 // Programmbild etwa jede Sekunde holen, solange der Dialog offen ist.
 function pollObsShot() {
   clearTimeout(obs.shotTimer);
+  // Nur eine Schleife zugleich: ein zweiter Aufruf, während ein Bild noch lädt, startete sonst eine zweite
+  const gen = ++obs.shotGen;
   const tick = async () => {
-    if (!obs.ws?.connected || !$('#obs-dialog').open) return;
+    if (gen !== obs.shotGen || !obs.ws?.connected || !$('#obs-dialog').open) return;
     try {
       const scene = await obs.ws.programScene();
       if (scene !== obs.scene) {
@@ -7972,7 +8073,7 @@ function pollObsShot() {
     } catch (err) {
       console.warn('OBS-Bild:', err);
     }
-    obs.shotTimer = setTimeout(tick, 1000);
+    if (gen === obs.shotGen) obs.shotTimer = setTimeout(tick, 1000);
   };
   tick();
 }
