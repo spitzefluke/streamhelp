@@ -1,10 +1,12 @@
 // Admin-Bereich → Console → „Touch-Bildschirm“: Oberfläche des Touch-Displays einstellen und im Simulator
 // ausprobieren (js/console-touch.js). Gespeichert in core.console_config.display.touch über console_save –
 // die Tasten-Belegung (keys) und die übrigen Display-Werte bleiben dabei unverändert.
+// OBS und Ton im Simulator: über die Bridge am PC (console-bridge.html), wie auf dem echten Gerät.
 import { h } from './extras-core.js';
+import { linkTopic, openLink } from './console-link.js';
 import {
   TOUCH_COLORS, TOUCH_DEFAULT, TOUCH_IDLE, TOUCH_PAGES, TOUCH_SIZES, cleanTile, createTouchRunner, mountTouch,
-  normalizeTouch, touchActions, touchMaxTiles,
+  normalizeTouch, obsOnline, touchActions, touchMaxTiles,
 } from './console-touch.js';
 
 let ctx = null;    // { api, extras, toast, germanError, channel }
@@ -18,6 +20,8 @@ let timer = 0;
 let root = null;
 let form = null;
 let head = null;
+let link = null;   // Verbindung zur Bridge (js/console-link.js)
+let bridgeBox = null;
 
 const missing = (err) => /console_get|console_save|console_config/.test(err?.message ?? '');
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -29,6 +33,8 @@ export async function renderTouchAdmin(slot, deps) {
   clearInterval(timer);
   sim?.destroy();
   sim = null;
+  link?.close();
+  link = null;
   slot.replaceChildren(h('p', { class: 'muted' }, 'Lädt …'));
   try {
     raw = await ctx.api.consoleGet();
@@ -42,8 +48,11 @@ export async function renderTouchAdmin(slot, deps) {
   }
   saved = normalizeTouch(raw.display?.touch);
   draft = structuredClone(saved);
-  runner = createTouchRunner({ api: ctx.api, extras: ctx.extras, dry: () => !real });
+  link = openLink(ctx.api, await linkTopic(ctx.api, ctx.channel?.()?.id ?? null));
+  runner = createTouchRunner({ api: ctx.api, extras: ctx.extras, dry: () => !real, link });
   await runner.loadStatic();
+  bridgeBox = h('div', { class: 'tch-adm-bridge', 'aria-live': 'polite' });
+  link.onStatus(() => paintBridge());
 
   head = h('header', { class: 'tch-adm-head' });
   const host = h('div', { class: 'tch-adm-host' });
@@ -67,9 +76,19 @@ export async function renderTouchAdmin(slot, deps) {
   paintHead();
   paintForm();
   refresh();
+  paintBridge();
+  // OBS-Zustand: Bridge-Anzeige aktualisieren; Szenen/Quellen für die Kachel-Ziele erst übernehmen, wenn sich die Namen ändern
+  let names = '';
+  runner.onObs((o) => {
+    paintBridge();
+    const next = JSON.stringify([o.scenes ?? [], (o.inputs ?? []).map((i) => i.name)]);
+    if (next !== names) { names = next; if (!form.contains(document.activeElement)) paintForm(); }
+  });
   timer = setInterval(() => {
-    if (!root?.isConnected || root.closest('.adm-view')?.hidden) { clearInterval(timer); return; }
+    if (!root?.isConnected || root.closest('.adm-view')?.hidden) { clearInterval(timer); link?.close(); link = null; return; }
     refresh();
+    paintBridge();
+    runner.hello();
   }, 15000);
 }
 
@@ -141,9 +160,7 @@ function paintForm() {
       h('div', { class: 'tch-adm-row' },
         field('Größe', select('tch-size', d.size, Object.entries(TOUCH_SIZES).map(([id, s]) => [id, s.name]), (v) => { d.size = v; changed(); })),
         field('Ausrichtung', select('tch-orient', d.orient, [['land', 'Quer'], ['port', 'Hoch']], (v) => { d.orient = v; changed(); }))),
-      h('div', { class: 'tch-adm-row' },
-        field('Bildschirmschoner', select('tch-idle', d.idle, TOUCH_IDLE, (v) => { d.idle = Number(v); changed(); })),
-        field('Startseite', select('tch-start', d.start, TOUCH_PAGES.filter(([id]) => d.pages.includes(id)), (v) => { d.start = v; changed(); }))),
+      field('Startseite', select('tch-start', d.start, TOUCH_PAGES.filter(([id]) => d.pages.includes(id)), (v) => { d.start = v; changed(); })),
       field(`Helligkeit · ${d.bright} %`, h('input', {
         type: 'range', id: 'tch-bright', min: '20', max: '100', step: '5', value: String(d.bright),
         oninput: (e) => { d.bright = Number(e.target.value); e.target.previousElementSibling.textContent = `Helligkeit · ${d.bright} %`; changed(); },
@@ -151,7 +168,22 @@ function paintForm() {
       h('div', { class: 'field tch-adm-field' }, h('span', {}, 'Akzentfarbe'), swatches(d.accent, (v) => { d.accent = v; changed(true); })),
       h('label', { class: 'toggle tch-adm-toggle' },
         h('input', { type: 'checkbox', checked: d.hold, onchange: (e) => { d.hold = e.target.checked; changed(); } }),
-        h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }), 'Raid-Schutz nur mit langem Drücken umschalten')),
+        h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }), 'Raid-Schutz, Stream und Aufnahme nur mit langem Drücken'),
+      toggle('Klick-Ton beim Tippen', d.click, (v) => { d.click = v; changed(); }),
+      toggle('Vibration beim Tippen (wenn das Gerät es kann)', d.buzz, (v) => { d.buzz = v; changed(); })),
+    h('fieldset', { class: 'tch-adm-set' },
+      h('legend', {}, 'Bildschirmschoner'),
+      h('div', { class: 'tch-adm-row' },
+        field('Schlafen', select('tch-idle', d.idle, TOUCH_IDLE, (v) => { d.idle = Number(v); changed(); })),
+        field('Motiv', select('tch-saver', d.saver, [['scene', 'Nachtszene (animiert)'], ['clock', 'Nur Uhr']], (v) => { d.saver = v; changed(); }))),
+      toggle('Neuer Alert weckt kurz auf (groß auf dem Bildschirm)', d.alertWake, (v) => { d.alertWake = v; changed(); }),
+      h('p', { class: 'field-hint' }, 'Gegen Einbrennen wandern Uhr und Szene alle 40 Sekunden an eine neue Stelle.'),
+      toggle('Nachtmodus', d.night.on, (v) => { d.night.on = v; changed(true); }),
+      d.night.on ? h('div', { class: 'tch-adm-row' },
+        field('Von', h('input', { type: 'time', value: d.night.from, onchange: (e) => { d.night.from = e.target.value || '23:00'; changed(); } })),
+        field('Bis', h('input', { type: 'time', value: d.night.to, onchange: (e) => { d.night.to = e.target.value || '07:00'; changed(); } }))) : null,
+      d.night.on ? toggle('Nachts ganz schwarz (nur eine schwache Uhr)', d.night.black, (v) => { d.night.black = v; changed(); }) : null,
+      d.night.on ? h('p', { class: 'field-hint' }, 'Nachts: höchstens 40 % Helligkeit, Schlafen schon nach 1 Minute. Tippen weckt trotzdem.') : null),
     h('fieldset', { class: 'tch-adm-set' },
       h('legend', {}, 'Seiten'),
       h('p', { class: 'field-hint' }, 'Reihenfolge = Reiter unten und Wisch-Richtung. „Start“ ist immer dabei.'),
@@ -163,6 +195,12 @@ function paintForm() {
         h('button', { type: 'button', class: 'btn btn--ghost btn--sm', disabled: d.tiles.length >= touchMaxTiles, onclick: () => { d.tiles.push(cleanTile({ action: 'none', icon: '⭐', label: 'Neu' })); changed(true); } }, '＋ Kachel'),
         h('button', { type: 'button', class: 'btn btn--ghost btn--sm', onclick: fromKeys, title: 'Die 9 Tasten der Console als Kacheln übernehmen (höchstens 8)' }, '⌨️ Von den Tasten übernehmen'))),
   );
+}
+
+function toggle(label, checked, onchange) {
+  return h('label', { class: 'toggle tch-adm-toggle' },
+    h('input', { type: 'checkbox', checked, onchange: (e) => onchange(e.target.checked) }),
+    h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }), label);
 }
 
 function swatches(value, onpick) {
@@ -194,19 +232,29 @@ function pageRow(id) {
 }
 
 function tileRow(t, i) {
-  const acts = touchActions(runner.data.variants);
+  const acts = touchActions(runner.data.variants, runner.data.obs);
   const args = acts[t.action]?.args;
+  const listId = `tch-sugg-${i}`;
   const tiles = draft.tiles;
   const move = (dir) => { [tiles[i], tiles[i + dir]] = [tiles[i + dir], tiles[i]]; changed(true); };
   return h('li', { class: 'tch-adm-tile' },
     h('input', { type: 'text', class: 'tch-adm-icon', value: t.icon, maxlength: '8', 'aria-label': `Kachel ${i + 1}: Symbol`, oninput: (e) => { t.icon = e.target.value; changed(); } }),
     h('input', { type: 'text', class: 'tch-adm-label', value: t.label, maxlength: '24', placeholder: 'Beschriftung', 'aria-label': `Kachel ${i + 1}: Beschriftung`, oninput: (e) => { t.label = e.target.value; changed(); } }),
-    h('select', { 'aria-label': `Kachel ${i + 1}: Aktion`, onchange: (e) => { t.action = e.target.value; t.arg = acts[t.action]?.args?.[0]?.[0] ?? ''; changed(true); } },
+    h('select', { 'aria-label': `Kachel ${i + 1}: Aktion`, onchange: (e) => {
+      t.action = e.target.value;
+      const a = acts[t.action];
+      t.arg = Array.isArray(a?.args) ? a.args[0]?.[0] ?? '' : a?.args === 'text' ? a.suggest[0] ?? '' : '';
+      changed(true);
+    } },
       ...Object.entries(acts).map(([id, a]) => h('option', { value: id, selected: id === t.action }, a.name))),
-    args
-      ? h('select', { 'aria-label': `Kachel ${i + 1}: Ziel`, onchange: (e) => { t.arg = e.target.value; changed(); } },
-        ...args.map(([v, name]) => h('option', { value: v, selected: v === t.arg }, name)))
-      : h('span', { class: 'tch-adm-noarg' }, '—'),
+    args === 'text'
+      ? h('span', { class: 'tch-adm-arg' },
+        h('input', { type: 'text', value: t.arg, maxlength: '64', list: listId, placeholder: t.action === 'obs_scene' ? 'Name der Szene in OBS' : 'Name der Audioquelle in OBS', 'aria-label': `Kachel ${i + 1}: Ziel`, oninput: (e) => { t.arg = e.target.value; changed(); } }),
+        h('datalist', { id: listId }, ...acts[t.action].suggest.map((v) => h('option', { value: v }))))
+      : args
+        ? h('select', { 'aria-label': `Kachel ${i + 1}: Ziel`, onchange: (e) => { t.arg = e.target.value; changed(); } },
+          ...args.map(([v, name]) => h('option', { value: v, selected: v === t.arg }, name)))
+        : h('span', { class: 'tch-adm-noarg' }, '—'),
     h('input', { type: 'color', value: t.color || draft.accent, 'aria-label': `Kachel ${i + 1}: Farbe`, oninput: (e) => { t.color = e.target.value; changed(); } }),
     h('span', { class: 'tch-adm-move' },
       h('button', { type: 'button', class: 'icon-btn', 'aria-label': `Kachel ${i + 1} nach vorne`, disabled: i === 0, onclick: () => move(-1) }, '↑'),
@@ -222,20 +270,49 @@ function fromKeys() {
   changed(true);
 }
 
-// ---------- Auf dem Gerät ----------
+// ---------- Auf dem Gerät und am PC ----------
+function pageLink(file) {
+  const ch = ctx.channel?.();
+  const url = new URL(file, location.href);
+  if (ch?.login) url.searchParams.set('c', ch.login);
+  const href = url.href;
+  return h('div', { class: 'tch-adm-link' },
+    h('code', {}, href),
+    h('button', { type: 'button', class: 'btn btn--ghost btn--sm', onclick: async () => {
+      try { await navigator.clipboard.writeText(href); ctx.toast('Link kopiert.', 'ok'); } catch (err) { ctx.toast(`Kopieren ging nicht: ${err.message}`, 'error'); }
+    } }, 'Kopieren'),
+    h('a', { class: 'btn btn--ghost btn--sm', href, target: '_blank', rel: 'noopener' }, 'Öffnen ↗'));
+}
+
 function deviceCard() {
   const ch = ctx.channel?.();
-  const url = new URL('console-touch.html', location.href);
-  if (ch?.login) url.searchParams.set('c', ch.login);
-  const link = url.href;
   return h('section', { class: 'dash-card dash-card--wide tch-adm-device' },
-    h('h2', {}, 'Auf dem Gerät'),
-    h('p', { class: 'field-hint' }, 'Das Display öffnet diese Seite im Vollbild (Kiosk-Modus, z. B. Chromium mit --kiosk). Einmalig im Browser des Geräts: admin.html öffnen, anmelden und „Webseite als Admin“ wählen – danach startet die Oberfläche von selbst, hält den Bildschirm wach und holt neue Einstellungen jede Minute.'),
-    h('div', { class: 'tch-adm-link' },
-      h('code', {}, link),
-      h('button', { type: 'button', class: 'btn btn--ghost btn--sm', onclick: async () => {
-        try { await navigator.clipboard.writeText(link); ctx.toast('Link kopiert.', 'ok'); } catch (err) { ctx.toast(`Kopieren ging nicht: ${err.message}`, 'error'); }
-      } }, 'Kopieren'),
-      h('a', { class: 'btn btn--ghost btn--sm', href: link, target: '_blank', rel: 'noopener' }, 'Öffnen ↗')),
+    h('h2', {}, 'So hängt alles zusammen'),
+    h('ol', { class: 'tch-adm-flow', 'aria-label': 'Aufbau' },
+      h('li', {}, h('b', {}, '📱 Display'), h('span', {}, 'console-touch.html im Vollbild')),
+      h('li', {}, h('b', {}, '☁️ StreamHelp'), h('span', {}, 'privater Kanal, nur Admins')),
+      h('li', {}, h('b', {}, '🖥️ Bridge am PC'), h('span', {}, 'console-bridge.html, Tab oder OBS-Dock')),
+      h('li', {}, h('b', {}, '🎥 OBS'), h('span', {}, 'Szenen, Ton, Stream, Aufnahme'))),
+    h('p', { class: 'field-hint' }, 'Glücksrad, Sounds, Alerts, Raid-Schutz und Overlay-Szenen laufen direkt über StreamHelp. Alles, was OBS selbst betrifft (Szenen, Mikrofon & Lautstärken, Stream, Aufnahme, Replay), geht über die Bridge am PC – sie spricht mit OBS über den WebSocket-Server auf diesem PC.'),
+    h('h3', { class: 'tch-adm-sub' }, 'Display'),
+    h('p', { class: 'field-hint' }, 'Im Vollbild öffnen (Kiosk-Modus, z. B. Chromium mit --kiosk). Einmalig im Browser des Geräts: admin.html öffnen, anmelden und „Webseite als Admin“ wählen – danach startet die Oberfläche von selbst, hält den Bildschirm wach und holt neue Einstellungen jede Minute.'),
+    pageLink('console-touch.html'),
+    h('h3', { class: 'tch-adm-sub' }, 'Bridge am PC (für OBS und Ton)'),
+    h('p', { class: 'field-hint' }, 'Auf dem Streaming-PC öffnen – am besten als Dock in OBS (Docks → Benutzerdefinierte Browser-Docks). In OBS unter Werkzeuge → WebSocket-Servereinstellungen den Server aktivieren; das Passwort bleibt nur in diesem Browser. Einmalig dort ebenfalls als Admin anmelden. Braucht die Migration …_console_bridge.sql.'),
+    pageLink('console-bridge.html'),
+    bridgeBox,
     h('p', { class: 'field-hint' }, ch ? `Kanal: ${ch.display_name || ch.login} (oben rechts gewählt).` : 'Kanal: Standard-Kanal. Einen anderen Kanal oben rechts wählen.'));
+}
+
+// Zustand der Bridge (kommt alle paar Sekunden von console-bridge.html)
+function paintBridge() {
+  if (!bridgeBox) return;
+  const o = runner?.data.obs;
+  const on = obsOnline(o);
+  const dot = (ok, text) => h('span', { class: `tch-adm-dot${ok === true ? ' is-ok' : ok === false ? ' is-bad' : ''}` }, text);
+  bridgeBox.replaceChildren(
+    dot(link?.status === 'ok' ? true : link?.status === 'connecting' ? null : false, link?.status === 'ok' ? 'StreamHelp-Kanal verbunden' : link?.status === 'connecting' ? 'Verbinde …' : 'Kanal abgelehnt – Migration …_console_bridge.sql ausgeführt?'),
+    dot(on, on ? 'Bridge läuft' : 'Bridge nicht erreichbar'),
+    on ? dot(!!o.obs, o.obs ? `OBS verbunden · ${o.scenes.length} Szenen · ${o.inputs.length} Audioquellen${o.stream?.on ? ` · LIVE ${o.stream.time}` : ''}` : 'OBS am PC nicht verbunden') : null,
+  );
 }

@@ -5,7 +5,9 @@
 import { h } from './extras-core.js';
 import { BOARD } from './prank-fx.js';
 import { ALERT_KINDS, alertText } from './alerts.js';
-import { colorKeys, console3dActive, drawConsoleDisplay, mountConsole3d, setBoxMode, setConsoleBox, setConsoleLook, setConsolePorts, setConsoleSpin, showConsoleSide } from './dash-console-3d.js';
+import { colorKeys, console3dActive, exportConsolePng, mountConsole3d, paintConsoleScreen, setBoxMode, setConsoleBox, setConsoleGlow, setConsoleLook, setConsolePorts, setConsoleSpin, showConsoleSide, showConsoleView } from './dash-console-3d.js';
+import { drawTouchScreen } from './console-touch-draw.js';
+import { normalizeTouch } from './console-touch.js';
 import { kitBoxSpec, kitLook, kitPorts, kitRearOpts, normalizeKit, renderKit } from './dash-console-kit.js';
 import { renderRear } from './dash-console-rear.js';
 import { renderSpecCard } from './dash-console-spec.js';
@@ -190,22 +192,12 @@ function paintDisplay() {
   };
   const goal = c.display.goal;
   const pct = Math.min(100, Math.round((live.alertsToday / goal) * 100));
+  // 3D-Modell: das Display zeigt die Touch-Oberfläche (Einstellungen aus „Touch-Bildschirm“)
   if (console3dActive()) {
-    const data = (w) => {
-      if (w === 'alert') {
-        if (!live.alert) return { icon: '🔔', title: 'Letzter Alert', sub: 'noch keiner' };
-        const t = alertText(live.alert);
-        return { icon: t.icon, title: live.alert.user_name || t.title, sub: t.title };
-      }
-      if (w === 'spin') return live.spin ? { icon: '🎡', title: live.spin.result ?? 'Glücksrad', sub: live.spin.variant_name ?? 'Glücksrad' } : { icon: '🎡', title: 'Letzte Drehung', sub: 'noch keine' };
-      if (w === 'guard') return ctx.guardActive() ? { icon: '🛡️', title: 'Raid-Schutz an', sub: 'Aktionen pausiert' } : { icon: '🛡️', title: 'Raid-Schutz aus', sub: 'alles normal' };
-      return { icon: '🎬', title: 'Szene', sub: sceneName };
-    };
-    drawConsoleDisplay({
-      title: ctx.streamer() || 'Kanal', sub: sceneName,
-      cards: [idea ? { icon: '💡', title: idea.title || 'Content-Idee', sub: 'Vorschlag', idea: true } : data(c.display.cards[0]), data(c.display.cards[1])],
-      goalText: `Alerts heute ${live.alertsToday} / ${c.display.goal}`, pct: Math.min(100, Math.round((live.alertsToday / c.display.goal) * 100)),
-    });
+    paintConsoleScreen((g, W, H) => drawTouchScreen(g, W, H, {
+      cfg: c.display.touch, goal: c.display.goal, idea, page: idea ? 'ideas' : 'home',
+      live: { scene: live.scene, guard: ctx.guardActive(), alert: live.alert, alertsToday: live.alertsToday },
+    }));
   }
   box.replaceChildren(
     h('p', { class: 'cs-d-title' }, h('b', {}, ctx.streamer() || 'Kanal'), h('span', {}, ` · ${sceneName}`)),
@@ -378,11 +370,16 @@ function model3dCard() {
         h('label', { class: 'toggle' }, h('input', { type: 'checkbox', id: 'cs-3d-spin', onchange: (e) => setConsoleSpin(e.target.checked) }), h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }), 'Drehen'),
         h('select', { id: 'cs-3d-mode', class: 'cs-3d-mode', 'aria-label': 'Ansicht', onchange: (e) => setView(e.target.value) },
           h('option', { value: 'off' }, 'Gerät: vorne'),
+          h('option', { value: 'top' }, 'Gerät: von oben'),
+          h('option', { value: 'hero' }, 'Gerät: flach (Produktfoto)'),
+          h('option', { value: 'right' }, 'Gerät: rechte Seite'),
           h('option', { value: 'left' }, 'Gerät: linke Seite'),
           h('option', { value: 'back' }, 'Gerät: Rückseite'),
           h('option', { value: 'closed' }, 'Verpackung: zu'),
           h('option', { value: 'open' }, 'Verpackung: offen'),
           h('option', { value: 'cut' }, 'Verpackung: Innenansicht')),
+        h('label', { class: 'toggle' }, h('input', { type: 'checkbox', id: 'cs-3d-glow', checked: true, onchange: (e) => setConsoleGlow(e.target.checked) }), h('span', { class: 'toggle-ui', 'aria-hidden': 'true' }), 'Leuchten'),
+        h('button', { class: 'btn btn--outline btn--sm', type: 'button', id: 'cs-3d-png', onclick: savePng, title: 'Aktuelle Ansicht als PNG mit durchsichtigem Hintergrund' }, h('i', { class: 'ph ph-camera', 'aria-hidden': 'true' }), ' Bild (PNG)'),
         h('label', { class: 'btn btn--outline btn--sm', for: 'cs-3d-file' }, file, 'Modell wählen (.obj)'),
         h('button', { class: 'btn btn--primary btn--sm', type: 'button', id: 'cs-3d-save', hidden: true, onclick: (e) => uploadModel(e.currentTarget) }, 'Für Admins speichern'))),
     h('div', { class: 'cs-3d-host', id: 'cs-3d-host' }),
@@ -396,7 +393,21 @@ function setView(v) {
   if (['left', 'back'].includes(v)) {
     setBoxMode('off');
     showConsoleSide(v);
+  } else if (['top', 'hero', 'right'].includes(v)) {
+    setBoxMode('off');
+    showConsoleView(v);
   } else setBoxMode(v);
+}
+
+// Bild der 3D-Ansicht speichern (für Präsentationen, Hintergrund durchsichtig)
+function savePng() {
+  const url = exportConsolePng(2);
+  if (!url) { ctx.toast('Erst ein 3D-Modell laden.', 'info'); return; }
+  const a = h('a', { href: url, download: `streamhelp-console-${new Date().toISOString().slice(0, 10)}.png` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  ctx.toast('Bild gespeichert (PNG, doppelte Größe).', 'ok', 2500);
 }
 
 const set3dStatus = (text) => { const el = root?.querySelector('#cs-3d-status'); if (el) el.textContent = text; };
@@ -406,7 +417,8 @@ async function show3d(text, source) {
   if (!host) return;
   set3dStatus('Baut das Modell auf …');
   try {
-    await mountConsole3d(host, { objText: text, keys: (editing ? draft : cfg).keys, onKey: on3dKey });
+    await mountConsole3d(host, { objText: text, keys: (editing ? draft : cfg).keys, onKey: on3dKey, onScreen: on3dScreen });
+    setConsoleGlow(root.querySelector('#cs-3d-glow')?.checked ?? true);
     root.querySelector('#cs-3d-spin').checked = false;
     setConsolePorts(kitPorts(cfg.kit), kitRearOpts(cfg.kit));
     setConsoleLook(kitLook(cfg.kit));
@@ -456,6 +468,26 @@ async function uploadModel(btn) {
     ctx.toast(/bucket/i.test(err?.message ?? '') ? 'Erst die Migration …_console_kit.sql ausführen.' : ctx.germanError(err), 'error');
   } finally {
     btn.disabled = false;
+  }
+}
+
+// Klick aufs Display im 3D-Modell: Kachel der Touch-Oberfläche auslösen (wie auf dem Gerät)
+async function on3dScreen(i) {
+  if (idea) { idea = null; paintDisplay(); return; } // Ideen-Seite: zurück zum Start
+  const t = normalizeTouch(cfg.display.touch).tiles[i];
+  if (!t || t.action === 'none') return;
+  if (t.action === 'idea') { suggestIdea(); return; }
+  if (t.action === 'goto' || t.action.startsWith('obs_')) {
+    ctx.toast(t.action === 'goto' ? 'Seiten wechseln: im Touch-Simulator (Console → Touch-Bildschirm).' : 'OBS-Kacheln laufen über die Bridge am PC – im Touch-Simulator ausprobieren.', 'info');
+    return;
+  }
+  try {
+    const msg = await run({ action: t.action, arg: t.arg });
+    if (msg) ctx.toast(msg, 'ok', 2500);
+  } catch (err) {
+    ctx.toast(ctx.germanError(err), 'error');
+  } finally {
+    refresh();
   }
 }
 

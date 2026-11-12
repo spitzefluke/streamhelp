@@ -3088,6 +3088,13 @@ body.obs-page .obs-insp-head { padding-bottom: 8px; border-bottom: 1px solid var
 .cs-3d-host:empty::before { content: "🎛️"; font-size: 40px; opacity: .35; }
 .cs-3d-host canvas { display: block; width: 100% !important; cursor: grab; }
 .cs-3d-host canvas:active { cursor: grabbing; }
+.cs-3d-host { position: relative; }
+.cs-3d-host canvas:focus-visible { outline: 3px solid var(--acc, #9146ff); outline-offset: -3px; }
+.cs-3d-tip {
+  position: absolute; z-index: 2; pointer-events: none; padding: 5px 10px; border-radius: 10px; white-space: nowrap;
+  background: rgba(14, 12, 22, .92); color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 6px 20px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.cs-3d-tip[hidden] { display: none; }
 .cs-3d-status { margin: 0; }
 .ck-card { display: grid; gap: 14px; min-width: 0; }
 .ck-card select { max-width: 100%; }

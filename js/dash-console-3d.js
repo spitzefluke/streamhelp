@@ -1,13 +1,18 @@
 // Console (Entwurf) – 3D-Ansicht des Modells (nur Plattform-Admins, js/dash-console.js).
 // Das Modell (.obj) liegt im privaten Bucket console-private oder wird lokal gewählt; three.js
 // (js/vendor/three-console.min.js) lädt erst, wenn die Ansicht gebraucht wird.
-// Die 9 Tasten bekommen die Farben der Belegung, das Display zeigt die Live-Anzeige als Bild,
-// ein Klick auf eine Taste im Modell löst sie aus. Die Anschlüsse (links, hinten, vorn) folgen dem Technik-Baukasten;
+// Die 9 Tasten bekommen die Farben der Belegung, das Display zeigt die Touch-Oberfläche als Bild,
+// ein Klick auf eine Taste im Modell löst sie aus (Maus darüber: Leuchten + Name), ein Klick aufs Display trifft die
+// Kachel der Touch-Oberfläche. Studio-Licht mit weichen Schatten, leuchtende Tasten, Kamerafahrten, Bild-Export (PNG). Die Anschlüsse (links, hinten, vorn) folgen dem Technik-Baukasten;
 // sobald die Rückseiten-Abfrage beantwortet ist, ersetzt eine eigene Rückseite die Buchsen aus dem Modell.
 // Dazu eine Verpackung (zu, offen, Schnitt) mit Einleger, Kabelfach und Aufdruck aus Belegung und Baukasten.
 
 let T = null;    // three.js-Modul
-let view = null; // { renderer, scene, camera, controls, keys: Map<index, {cap, face}>, canvas, texture, host, onKey, side, ports, box }
+let view = null; // { renderer, scene, camera, controls, keys: Map<index, {cap, face, halo}>, canvas, texture, host, onKey, onScreen, side, ports, box }
+// three.js-Konstanten, die das schlanke Paket nicht exportiert (Werte aus three r160)
+const PCF_SOFT = 2;
+const ACES = 4;
+const ADDITIVE = 2;
 
 // Lage der Teile im Modell (Millimeter, z nach oben): 3 × 3 Tasten links, Ideen-Knopf, Display rechts
 const KEY_X = [-66, -37, -8];
@@ -19,7 +24,7 @@ const keyIndex = (c) => {
   return col < 0 || row < 0 ? -1 : row * 3 + col;
 };
 
-export async function mountConsole3d(host, { objText, keys, onKey }) {
+export async function mountConsole3d(host, { objText, keys, onKey, onScreen }) {
   T ??= await import('./vendor/three-console.min.js');
   disposeConsole3d();
   const width = host.clientWidth || 640;
@@ -28,17 +33,34 @@ export async function mountConsole3d(host, { objText, keys, onKey }) {
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   renderer.setSize(width, height);
   renderer.outputColorSpace = T.SRGBColorSpace;
-  host.replaceChildren(renderer.domElement);
+  renderer.toneMapping = ACES;
+  renderer.toneMappingExposure = 1.15;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCF_SOFT;
+  const tip = document.createElement('div');
+  tip.className = 'cs-3d-tip';
+  tip.hidden = true;
+  host.replaceChildren(renderer.domElement, tip);
   renderer.domElement.setAttribute('role', 'img');
-  renderer.domElement.setAttribute('aria-label', '3D-Modell der Console – ziehen zum Drehen, Mausrad zum Zoomen, Klick auf eine Taste löst sie aus');
+  renderer.domElement.setAttribute('tabindex', '0');
+  renderer.domElement.setAttribute('aria-label', '3D-Modell der Console – ziehen zum Drehen, Mausrad zum Zoomen, Klick auf eine Taste löst sie aus, Tasten 1 bis 9 auf der Tastatur ebenso');
 
+  // Studio-Licht: Hauptlicht mit weichem Schatten, kühles Fülllicht, Kante in Lila
   const scene = new T.Scene();
-  scene.add(new T.HemisphereLight(0xffffff, 0x2a2c33, 1.5));
-  const sun = new T.DirectionalLight(0xffffff, 2.4);
-  sun.position.set(-120, -160, 260);
+  scene.add(new T.HemisphereLight(0xf4f1ff, 0x1a1b22, 1.1));
+  const sun = new T.DirectionalLight(0xfff4e6, 2.8);
+  sun.position.set(-140, -170, 280);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -170, right: 170, top: 170, bottom: -170, near: 10, far: 900 });
+  sun.shadow.bias = -0.0004;
+  sun.shadow.radius = 4;
   scene.add(sun);
-  const rim = new T.DirectionalLight(0x9146ff, 0.9);
-  rim.position.set(180, 200, 60);
+  const fill = new T.DirectionalLight(0xbfd4ff, 0.7);
+  fill.position.set(220, -120, 120);
+  scene.add(fill);
+  const rim = new T.DirectionalLight(0x9146ff, 1.0);
+  rim.position.set(180, 220, 70);
   scene.add(rim);
 
   const obj = new T.OBJLoader().parse(objText);
@@ -51,6 +73,8 @@ export async function mountConsole3d(host, { objText, keys, onKey }) {
   const center = new T.Vector3();
   obj.traverse((m) => {
     if (!m.isMesh) return;
+    m.castShadow = true;
+    m.receiveShadow = true;
     m.geometry.computeBoundingBox();
     box.copy(m.geometry.boundingBox);
     box.getSize(size);
@@ -80,6 +104,13 @@ export async function mountConsole3d(host, { objText, keys, onKey }) {
     }
   });
   scene.add(obj);
+  // Weicher Kontaktschatten unter dem Gerät (das Paket hat kein Schatten-Material für den Boden)
+  const contact = new T.Mesh(
+    new T.PlaneGeometry((whole.max.x - whole.min.x) * 1.5, (whole.max.y - whole.min.y) * 1.7),
+    new T.MeshBasicMaterial({ map: glowTex('rgba(0,0,0,.75)', 'rgba(0,0,0,0)', 0.25), transparent: true, depthWrite: false, toneMapped: false }),
+  );
+  contact.position.set((whole.min.x + whole.max.x) / 2, (whole.min.y + whole.max.y) / 2 + 4, whole.min.z - 0.4);
+  scene.add(contact);
   // Abdeckplatte für die eigene Rückseite (deckt die Aussparungen der Modell-Buchsen ab)
   const baseBox = look.base[0] ? new T.Box3().setFromObject(look.base[0]) : whole;
   const lidTop = look.lid[0] ? new T.Box3().setFromObject(look.lid[0]).max.z : whole.max.z;
@@ -98,9 +129,16 @@ export async function mountConsole3d(host, { objText, keys, onKey }) {
     canvas.height = Math.round(screen.h * 10);
     texture = new T.CanvasTexture(canvas);
     texture.colorSpace = T.SRGBColorSpace;
-    const plane = new T.Mesh(new T.PlaneGeometry(screen.w * 0.94, screen.h * 0.94), new T.MeshBasicMaterial({ map: texture }));
+    const plane = new T.Mesh(new T.PlaneGeometry(screen.w * 0.94, screen.h * 0.94), new T.MeshBasicMaterial({ map: texture, toneMapped: false }));
     plane.position.set(screen.cx, screen.cy, screen.top + 0.15);
     scene.add(plane);
+    screen.plane = plane;
+    // Das Display glüht leicht auf den Deckel
+    const glow = new T.Mesh(new T.PlaneGeometry(screen.w * 1.7, screen.h * 1.6),
+      new T.MeshBasicMaterial({ map: glowTex('rgba(150,120,255,.16)', 'rgba(150,120,255,0)', 0.42), transparent: true, depthWrite: false, blending: ADDITIVE, toneMapped: false }));
+    glow.position.set(screen.cx, screen.cy, screen.top + 0.05);
+    scene.add(glow);
+    screen.glow = glow;
   }
 
   const camera = new T.PerspectiveCamera(32, width / height, 1, 5000);
@@ -113,7 +151,19 @@ export async function mountConsole3d(host, { objText, keys, onKey }) {
   controls.maxDistance = 700;
   controls.update();
 
-  view = { renderer, scene, camera, controls, keys: keyParts, canvas, texture, host, onKey, side: { x: whole.min.x, minX: whole.min.x, maxX: whole.max.x, minY: whole.min.y, maxY: whole.max.y, z0: whole.min.z, zc: (baseBox.min.z + baseBox.max.z) / 2, lidTop }, rearPlate, screen, ports: null, box: null, look, glow: null, capRough: 0.6 };
+  view = { renderer, scene, camera, controls, keys: keyParts, canvas, texture, host, onKey, onScreen, tip, keyInfo: [], hover: -1, presses: new Map(), fly: null, glowOn: true, areas: [], side: { x: whole.min.x, minX: whole.min.x, maxX: whole.max.x, minY: whole.min.y, maxY: whole.max.y, z0: whole.min.z, zc: (baseBox.min.z + baseBox.max.z) / 2, lidTop }, rearPlate, screen, ports: null, box: null, look, glow: null, capRough: 0.6 };
+  // Leuchten je Taste: additive Fläche unter der Kappe (wie RGB-Licht, das rundherum auf den Deckel fällt)
+  const haloTex = glowTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)', 0.0);
+  keyParts.forEach((parts) => {
+    const ref = parts.face ?? parts.cap;
+    if (!ref) return;
+    const b = new T.Box3().setFromObject(ref);
+    const halo = new T.Mesh(new T.PlaneGeometry(44, 44), new T.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false, blending: ADDITIVE, toneMapped: false, opacity: 0.4 }));
+    halo.position.set((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, lidTop + 0.25); // auf dem Deckel: leuchtet rund um die Kappe
+    halo.renderOrder = 2;
+    scene.add(halo);
+    parts.halo = halo;
+  });
   colorKeys(keys);
 
   // Klick (ohne Ziehen) auf eine Taste löst sie aus
@@ -127,30 +177,112 @@ export async function mountConsole3d(host, { objText, keys, onKey }) {
     const r = renderer.domElement.getBoundingClientRect();
     ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ptr, camera);
-    const hit = ray.intersectObjects([...keyParts.values()].flatMap((k) => [k.cap, k.face].filter(Boolean)))[0];
-    if (!hit) return;
-    const idx = [...keyParts.entries()].find(([, k]) => k.cap === hit.object || k.face === hit.object)?.[0];
-    if (idx !== undefined) {
-      pressAnim(idx);
-      view.onKey?.(idx);
+    const target = pick(e);
+    if (target?.key !== undefined) {
+      pressAnim(target.key);
+      view.onKey?.(target.key);
+    } else if (target?.uv) {
+      const a = view.areas.find((r) => target.uv.x >= r.x && target.uv.x <= r.x + r.w && target.uv.y >= r.y && target.uv.y <= r.y + r.h);
+      view.onScreen?.(a ? a.index : -1);
     }
+  });
+  // Was liegt unter dem Zeiger? Taste (Index) oder Display (Position 0…1, oben links = 0/0)
+  function pick(e) {
+    if (view.box && !['off', 'open'].includes(view.box.mode)) return null; // Tasten liegen in der geschlossenen Verpackung
+    const r = renderer.domElement.getBoundingClientRect();
+    ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ptr, camera);
+    const targets = [...keyParts.values()].flatMap((k) => [k.cap, k.face].filter(Boolean));
+    if (screen?.plane) targets.push(screen.plane);
+    const hit = ray.intersectObjects(targets)[0];
+    if (!hit) return null;
+    if (hit.object === screen?.plane) return { uv: { x: hit.uv.x, y: 1 - hit.uv.y } };
+    const key = [...keyParts.entries()].find(([, k]) => k.cap === hit.object || k.face === hit.object)?.[0];
+    return key === undefined ? null : { key };
+  }
+  // Maus darüber: Taste leuchtet heller, Name als Hinweis
+  let pending = null;
+  renderer.domElement.addEventListener('pointermove', (e) => { pending = e; });
+  renderer.domElement.addEventListener('pointerleave', () => { pending = null; setHover(-1); renderer.domElement.style.cursor = ''; });
+  function hoverStep() {
+    if (!pending) return;
+    const e = pending;
+    pending = null;
+    if (e.buttons) { setHover(-1); return; } // beim Drehen nicht
+    const t = pick(e);
+    setHover(t?.key ?? -1, e);
+    renderer.domElement.style.cursor = t ? 'pointer' : '';
+  }
+  // Tastatur: 1–9 drückt die Taste
+  renderer.domElement.addEventListener('keydown', (e) => {
+    const n = Number(e.key);
+    if (n >= 1 && n <= 9 && keyParts.has(n - 1)) { e.preventDefault(); pressAnim(n - 1); view.onKey?.(n - 1); }
   });
 
   renderer.setAnimationLoop(() => {
     if (!host.isConnected) { disposeConsole3d(); return; }
     stepBox();
+    stepFly();
+    stepPress();
+    hoverStep();
     controls.update();
     renderer.render(scene, camera);
   });
   return true;
 }
 
+// Radialer Verlauf als Textur (Lichtschein, Kontaktschatten); hard = Anteil, der voll deckt
+function glowTex(inner, outer, hard) {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, inner);
+  grad.addColorStop(Math.max(0.01, hard), inner);
+  grad.addColorStop(1, outer);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const t = new T.CanvasTexture(c);
+  t.colorSpace = T.SRGBColorSpace;
+  return t;
+}
+
+function setHover(i, e) {
+  if (!view) return;
+  if (view.hover !== i) {
+    const prev = view.keys.get(view.hover);
+    if (prev?.face) prev.face.material.emissiveIntensity = 1;
+    if (prev?.halo) prev.halo.material.opacity = view.glowOn ? 0.4 : 0;
+    view.hover = i;
+    const now = view.keys.get(i);
+    if (now?.face) now.face.material.emissiveIntensity = 1.9;
+    if (now?.halo) now.halo.material.opacity = view.glowOn ? 0.85 : 0.4;
+  }
+  const info = view.keyInfo[i];
+  if (i < 0 || !e || !info) { view.tip.hidden = true; return; }
+  const r = view.renderer.domElement.getBoundingClientRect();
+  view.tip.textContent = `${i + 1} · ${info}`;
+  view.tip.style.left = `${e.clientX - r.left + 14}px`;
+  view.tip.style.top = `${e.clientY - r.top + 14}px`;
+  view.tip.hidden = false;
+}
+
 export function colorKeys(keys) {
   if (!view || !T) return;
+  view.keyInfo = Array.from({ length: 9 }, (_, i) => {
+    const k = keys?.[i];
+    return !k || k.action === 'none' ? 'nicht belegt' : `${k.icon ? `${k.icon} ` : ''}${k.label || k.action}`;
+  });
   view.keys.forEach((parts, i) => {
     const k = keys?.[i];
     const c = new T.Color(k?.color || '#8e8e9a');
     const empty = !k || k.action === 'none';
+    if (parts.halo) {
+      parts.halo.material.color.copy(empty ? new T.Color(0) : c);
+      parts.halo.visible = !empty;
+      parts.halo.material.opacity = view.glowOn ? (view.hover === i ? 0.85 : 0.4) : 0;
+    }
     parts.cap?.material.color.copy(empty ? new T.Color(0x2a2c33) : c.clone().multiplyScalar(0.55));
     if (parts.cap) parts.cap.material.roughness = view.capRough;
     if (parts.face) {
@@ -160,66 +292,81 @@ export function colorKeys(keys) {
   });
 }
 
+// Tastendruck: schnell runter (80 ms), federnd zurück (320 ms), dabei kurz hell aufleuchten
 function pressAnim(i) {
-  const parts = view?.keys.get(i);
-  if (!parts) return;
-  for (const m of [parts.cap, parts.face].filter(Boolean)) m.position.z = -1.5;
-  setTimeout(() => { for (const m of [parts.cap, parts.face].filter(Boolean)) m.position.z = 0; }, 160);
+  if (!view?.keys.has(i)) return;
+  view.presses.set(i, performance.now());
+}
+function stepPress() {
+  const now = performance.now();
+  for (const [i, t0] of view.presses) {
+    const parts = view.keys.get(i);
+    const t = now - t0;
+    let z;
+    if (t < 80) z = -2.4 * (t / 80);
+    else if (t < 400) { const k = (t - 80) / 320; z = -2.4 * (1 - k) + Math.sin(k * Math.PI * 2) * 0.35 * (1 - k); }
+    else { z = 0; view.presses.delete(i); }
+    for (const m of [parts.cap, parts.face].filter(Boolean)) m.position.z = z;
+    const flash = t < 400 ? 1 - t / 400 : 0;
+    if (parts.face) parts.face.material.emissiveIntensity = (view.hover === i ? 1.9 : 1) + flash * 2.5;
+    if (parts.halo && view.glowOn) parts.halo.material.opacity = (view.hover === i ? 0.85 : 0.4) + flash * 0.5;
+  }
 }
 
-// Anzeige zeichnen: dieselben Inhalte wie die 2D-Anzeige
-export function drawConsoleDisplay({ title, sub, cards, goalText, pct }) {
+// Kamerafahrt statt Sprung (650 ms, weich)
+function flyTo(pos, target) {
+  if (!view) return;
+  setHover(-1); // Hinweis passt nach der Fahrt nicht mehr
+  view.fly = { from: view.camera.position.clone(), to: new T.Vector3(...pos), tFrom: view.controls.target.clone(), tTo: new T.Vector3(...target), start: performance.now() };
+}
+function stepFly() {
+  const f = view?.fly;
+  if (!f) return;
+  const k = Math.min(1, (performance.now() - f.start) / 650);
+  const e = k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2;
+  view.camera.position.lerpVectors(f.from, f.to, e);
+  view.controls.target.lerpVectors(f.tFrom, f.tTo, e);
+  if (k >= 1) view.fly = null;
+}
+
+// Feste Ansichten des Geräts (Millimeter, z nach oben)
+const VIEW_CAM = {
+  front: [[-150, -250, 230], [5, 0, 12]],
+  top: [[0, -1, 400], [0, 0, 10]],
+  hero: [[-250, -230, 70], [10, 0, 18]],
+  right: [[330, -120, 130], [5, 0, 15]],
+};
+export function showConsoleView(name) {
+  const cam = VIEW_CAM[name];
+  if (cam) flyTo(...cam);
+}
+
+export function setConsoleGlow(on) {
+  if (!view) return;
+  view.glowOn = !!on;
+  view.keys.forEach((parts, i) => { if (parts.halo) parts.halo.material.opacity = on ? (view.hover === i ? 0.85 : 0.4) : 0; });
+  if (view.screen?.glow) view.screen.glow.visible = !!on;
+}
+
+// Display: zeichnen lassen (draw(g, W, H) → Flächen der Kacheln für Klicks aufs Display)
+export function paintConsoleScreen(draw) {
   if (!view?.canvas) return;
   const g = view.canvas.getContext('2d');
-  const W = view.canvas.width;
-  const H = view.canvas.height;
-  g.fillStyle = '#0d0f14';
-  g.fillRect(0, 0, W, H);
-  g.textBaseline = 'middle';
-  const font = (px, weight = 400) => `${weight} ${px}px Inter, system-ui, sans-serif`;
-  const fit = (text, max) => {
-    let t = String(text ?? '');
-    while (t.length > 1 && g.measureText(t).width > max) t = t.slice(0, -1);
-    return t === String(text ?? '') ? t : `${t.slice(0, -1)}…`;
-  };
-  const pad = 30;
-  g.font = font(34, 700);
-  g.fillStyle = '#eef0f4';
-  g.fillText(fit(title, W - pad * 2), pad, 56);
-  g.font = font(26);
-  g.fillStyle = '#a7abb8';
-  g.fillText(fit(sub, W - pad * 2), pad, 96);
-  cards.forEach((c, i) => {
-    const y = 140 + i * 190;
-    g.fillStyle = c.idea ? '#2b2410' : '#1a1d25';
-    g.beginPath();
-    g.roundRect(pad, y, W - pad * 2, 160, 18);
-    g.fill();
-    g.font = font(54);
-    g.fillText(c.icon, pad + 24, y + 80);
-    g.font = font(30, 700);
-    g.fillStyle = '#eef0f4';
-    g.fillText(fit(c.title, W - pad * 2 - 130), pad + 110, y + 60);
-    g.font = font(24);
-    g.fillStyle = '#a7abb8';
-    g.fillText(fit(c.sub, W - pad * 2 - 130), pad + 110, y + 104);
-  });
-  const by = H - 110;
-  g.font = font(24);
-  g.fillStyle = '#a7abb8';
-  g.fillText(fit(goalText, W - pad * 2), pad, by);
-  g.fillStyle = '#262a35';
-  g.beginPath();
-  g.roundRect(pad, by + 30, W - pad * 2, 22, 11);
-  g.fill();
-  const grad = g.createLinearGradient(pad, 0, W - pad, 0);
-  grad.addColorStop(0, '#ff5a4e');
-  grad.addColorStop(1, '#ffb81c');
-  g.fillStyle = grad;
-  g.beginPath();
-  g.roundRect(pad, by + 30, Math.max(22, (W - pad * 2) * (pct / 100)), 22, 11);
-  g.fill();
+  view.areas = draw(g, view.canvas.width, view.canvas.height) ?? [];
   view.texture.needsUpdate = true;
+}
+
+// Bild der aktuellen Ansicht als PNG (Hintergrund durchsichtig), doppelt so groß wie angezeigt
+export function exportConsolePng(scale = 2) {
+  if (!view) return null;
+  const { renderer, scene, camera } = view;
+  const ratio = renderer.getPixelRatio();
+  renderer.setPixelRatio(Math.max(ratio, scale));
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png'); // direkt nach dem Zeichnen, sonst ist der Puffer leer
+  renderer.setPixelRatio(ratio);
+  renderer.render(scene, camera);
+  return url;
 }
 
 // Anschlüsse: [{ kind, label, side: 'left'|'back'|'front', recessed? }]
@@ -354,9 +501,7 @@ const SIDE_CAM = { front: [[-150, -250, 230], [5, 0, 12]], left: [[-300, -60, 11
 export function showConsoleSide(side) {
   if (!view) return;
   const [pos, target] = SIDE_CAM[side === true ? 'left' : side] ?? SIDE_CAM.front;
-  view.camera.position.set(...pos);
-  view.controls.target.set(...target);
-  view.controls.update();
+  flyTo(pos, target);
 }
 
 function disposeMesh(m) {
@@ -827,9 +972,7 @@ export function setBoxMode(mode) {
   view.box.mode = mode;
   applyBoxMode();
   const [pos, target] = BOX_CAM[mode];
-  view.camera.position.set(...pos);
-  view.controls.target.set(...target);
-  view.controls.update();
+  flyTo(pos, target);
 }
 
 export function setConsoleSpin(on) {
