@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZarCAVuYaXeVM/QfQ1s7IHoh5QQkGwjHI3hjDErSb/w=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-PGmx05yZHUK7yuYxkmr0PbkW0T3EsBA7dLXbIsx+kRE=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamHelp – OBS-Overlay, Chat-Bot &amp; Content-Ideen für Twitch</title>
@@ -62,12 +62,12 @@
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
     "imports": {
-      "./js/admin.js": "./js/admin.js?v=814d4cb5c3",
+      "./js/admin.js": "./js/admin.js?v=9f13290fca",
       "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
-      "./js/api.js": "./js/api.js?v=8c9c607e1b",
-      "./js/app.js": "./js/app.js?v=22a0d3e4c6",
+      "./js/api.js": "./js/api.js?v=0ff764b382",
+      "./js/app.js": "./js/app.js?v=98af8e0c80",
       "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
       "./js/avatar.js": "./js/avatar.js?v=136eccd608",
       "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
@@ -87,7 +87,7 @@
       "./js/dash-console-spec.js": "./js/dash-console-spec.js?v=0dae1af8e8",
       "./js/dash-console-survey.js": "./js/dash-console-survey.js?v=5ab919de44",
       "./js/dash-console-tips.js": "./js/dash-console-tips.js?v=ea2871823b",
-      "./js/dash-console.js": "./js/dash-console.js?v=5dcb0be18e",
+      "./js/dash-console.js": "./js/dash-console.js?v=826f10ed0c",
       "./js/dash-discord.js": "./js/dash-discord.js?v=9526da96a9",
       "./js/dash-money.js": "./js/dash-money.js?v=27c4d95119",
       "./js/dash-network.js": "./js/dash-network.js?v=fec34b21f7",
@@ -567,10 +567,6 @@
           <p class="sb-group">Auswertung &amp; Geld</p>
         <button class="sb-item" type="button" data-page="stats" data-for="team" title="Statistik"><i class="sb-ico ph ph-chart-line-up" aria-hidden="true"></i><span class="sb-label">Statistik</span><span class="sb-short" aria-hidden="true">Statistik</span></button>
         <button class="sb-item" type="button" data-page="money" data-for="team" title="Trinkgeld &amp; Sponsoren"><i class="sb-ico ph ph-hand-coins" aria-hidden="true"></i><span class="sb-label">Trinkgeld &amp; Sponsoren</span><span class="sb-short" aria-hidden="true">Geld</span></button>
-        </div>
-        <div class="sb-sec" data-for="siteadmin">
-          <p class="sb-group">Entwürfe</p>
-        <button class="sb-item" type="button" data-page="console" data-for="siteadmin" title="Console (Entwurf, nur Admins)"><i class="sb-ico ph ph-game-controller" aria-hidden="true"></i><span class="sb-label">Console</span><span class="sb-short" aria-hidden="true">Console</span></button>
         </div>
         <div class="sb-sec">
           <p class="sb-group">Kanal &amp; Konto</p>
@@ -1146,10 +1142,6 @@
           <div class="dash-cards rn-cards" id="referrals-slot"></div>
         </section>
 
-        <!-- Console (js/dash-console.js): Entwurf, nur Plattform-Admins -->
-        <section class="page" data-page="console" hidden>
-          <div class="dash-cards cs-cards" id="console-slot"></div>
-        </section>
 
         <!-- Discord (js/dash-discord.js): Webhook, Live-Meldung, Rückblick, Ankündigungen -->
         <section class="page" data-page="discord" hidden>

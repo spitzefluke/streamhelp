@@ -18,7 +18,7 @@ import {
 import {
   KINDS, challengeBurst, challengeSummary, currentStage, doneCount, heartsHtml, pipsHtml, stageDone, stageLabel,
 } from './challenge.js';
-import { EXTRA_KINDS, buildExtraTile, extraIcon, guardActive, guardSet, listRewards, loadExtras, obsStatus, openExtra, renderGuard, setupExtras } from './extras.js';
+import { EXTRA_KINDS, buildExtraTile, extraIcon, listRewards, loadExtras, obsStatus, openExtra, renderGuard, setupExtras } from './extras.js';
 import { autoOpenObsSetup, openObsSetup, setupObsSetup } from './obs-setup.js';
 import { guardFrame } from './frame-guard.js';
 import { installAlertPreset, openAlertDesigner, setupAlertDesigner, useAlertColor, useAlertMedia, useAlertPreset } from './alert-designer.js';
@@ -43,7 +43,6 @@ import { markStart, renderStart, showStartAgain } from './dash-start.js';
 import { renderProfile } from './dash-profile.js';
 import { renderArtist } from './dash-artist.js';
 import { renderDiscord } from './dash-discord.js';
-import { renderConsole } from './dash-console.js';
 import { renderRaids, renderReferrals } from './dash-network.js';
 import { renderMoney } from './dash-money.js';
 import { extractColors, inkOn } from './brand-colors.js';
@@ -408,7 +407,7 @@ const VIEW_KEY = 'sh_view';
 const PAGE_TITLES = {
   ideas: 'Content-Ideen', community: 'Vorschläge & Archiv', bot: 'Bot & Chat', points: 'Kanalpunkte',
   overlay: 'Overlay & OBS', record: 'Video aufnehmen', library: 'Design-Bibliothek', guard: 'Raid-Schutz', mods: 'Mods', twitch: 'Twitch-Verbindung',
-  security: 'Sicherheit', stats: 'Statistik', profile: 'Profil & Zeitplan', artist: 'Artist-Bereich', discord: 'Discord', console: 'Console (Entwurf)', raids: 'Raid-Netzwerk', referrals: 'Freunde werben', money: 'Trinkgeld & Sponsoren',
+  security: 'Sicherheit', stats: 'Statistik', profile: 'Profil & Zeitplan', artist: 'Artist-Bereich', discord: 'Discord', raids: 'Raid-Netzwerk', referrals: 'Freunde werben', money: 'Trinkgeld & Sponsoren',
 };
 
 function setupShell() {
@@ -743,12 +742,6 @@ const PAGE_ENTER = {
   artist: () => renderArtist($('#artist-slot'), { api: state.api, toast, germanError, openLibrary: () => setPage('library') }),
   discord: () => renderDiscord($('#discord-slot'), {
     api: state.api, toast, germanError, streamer: () => state.streamer.name, tiles: () => state.tiles ?? [],
-  }),
-  // Console (Entwurf): nur Plattform-Admins (Seitenleiste data-for="siteadmin", Datenbank prüft is_site_admin)
-  console: () => renderConsole($('#console-slot'), {
-    api: state.api, toast, germanError, setPage, guardActive, guardSet,
-    variants: () => state.variants, currentVariant, tiles: () => (state.tiles ?? []).filter((t) => !isArchived(t)),
-    streamer: () => state.streamer.name, openTile: (tile) => openTile(tile.id), me: () => state.profile?.username ?? '',
   }),
   raids: () => renderRaids($('#raids-slot'), { api: state.api, toast, germanError, confirm: (text) => Promise.resolve(confirm(text)) }),
   referrals: () => renderReferrals($('#referrals-slot'), { api: state.api, toast, germanError }),

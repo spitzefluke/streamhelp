@@ -32,8 +32,9 @@ const DEMO_GALLERY = (() => {
 
 export const isDemo = !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY;
 
-export function createApi() {
-  return isDemo ? createLocalApi() : createSupabaseApi();
+// memory: Sitzung nur im Arbeitsspeicher (admin.html → Console) – berührt die Anmeldung der Webseite nicht
+export function createApi({ memory = false } = {}) {
+  return isDemo ? createLocalApi() : createSupabaseApi({ memory });
 }
 
 // Supabase-Fehlermeldungen auf Deutsch
@@ -100,10 +101,13 @@ export function germanError(err) {
 // ------------------------------------------------------------
 // Supabase
 // ------------------------------------------------------------
-async function createSupabaseApi() {
+async function createSupabaseApi({ memory = false } = {}) {
   const { createClient } = await import('./supabase-js.js');
   // Jede Anfrage trägt den Kanal (Header x-channel, js/channel.js)
-  const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { global: { fetch: channelFetch } });
+  const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+    global: { fetch: channelFetch },
+    ...(memory ? { auth: { persistSession: false, detectSessionInUrl: false, storageKey: 'sh-admin-console' } } : {}),
+  });
   const unwrap = ({ data, error }) => { if (error) throw error; return data; };
 
   // Edge Function aufrufen. Kommt gar keine Antwort (Netzwerk, Kaltstart-Aussetzer, Werbeblocker),

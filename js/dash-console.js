@@ -1,4 +1,4 @@
-// Console (Entwurf) – Dashboard → „Console“, nur für Plattform-Admins (Migration …_console.sql).
+// Console (Entwurf) – admin.html → „Console“ (früher im Dashboard), nur für Plattform-Admins (Migration …_console.sql).
 // 9 Tasten lösen bestehende Aktionen aus (Szene, Glücksrad, Sound, Test-Alert, Raid-Schutz, Bereich öffnen),
 // der Ideen-Knopf schlägt Content-Ideen vor, die Anzeige zeigt Live-Daten. Belegung je Kanal in
 // core.console_config (console_get / console_save).
@@ -89,7 +89,7 @@ export async function renderConsole(slot, deps) {
   try {
     cfg = normalize(await ctx.api.consoleGet());
   } catch (err) {
-    slot.replaceChildren(h('section', { class: 'dash-card dash-card--wide' },
+    slot.replaceChildren(h('section', { class: 'dash-card dash-card--wide cs-error' },
       h('h2', {}, 'Console (Entwurf)'),
       h('p', { class: 'form-hint' }, missing(err)
         ? 'Die Console ist noch nicht eingerichtet: Migration supabase/migrations/20261221000000_console.sql im SQL Editor ausführen.'
@@ -107,7 +107,7 @@ export async function renderConsole(slot, deps) {
   loadSavedModel(true);
   // Display aktuell halten, solange die Seite offen ist
   timer = setInterval(() => {
-    if (!root?.isConnected || root.closest('.page')?.hidden) { clearInterval(timer); return; }
+    if (!root?.isConnected || root.closest('.page, .adm-view')?.hidden) { clearInterval(timer); return; }
     refresh();
   }, 15000);
 }
@@ -138,7 +138,7 @@ function paint() {
           h('h2', {}, 'StreamHelp Console ', h('span', { class: 'cs-badge' }, 'Entwurf · nur Admins')),
           h('p', { class: 'dash-status' }, editing
             ? 'Bearbeiten: Taste anklicken, unten belegen, dann speichern.'
-            : 'Capture Card mit Tastenpult. Die Tasten lösen die Aktion wirklich aus – im aktuellen Kanal.')),
+            : `Capture Card mit Tastenpult. Die Tasten lösen die Aktion wirklich aus – im Kanal ${ctx.streamer() || 'StreamHelp'}.`)),
         h('div', { class: 'cs-head-btns' }, editing
           ? [h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: cancelEdit }, 'Abbrechen'),
             h('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: (e) => save(e.currentTarget) }, 'Speichern')]
@@ -481,6 +481,7 @@ function paintKit() {
 
 function showRear() {
   const card = root?.querySelector('.cs-3d-card');
+  ctx.show3d?.(); // Admin-Bereich: Reiter „3D-Ansicht“ öffnen
   if (!console3dActive()) { ctx.toast('Erst ein Modell laden („Modell wählen (.obj)“).', 'info'); card?.scrollIntoView({ behavior: 'smooth' }); return; }
   setView('back');
   card?.scrollIntoView({ behavior: 'smooth' });

@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ZarCAVuYaXeVM/QfQ1s7IHoh5QQkGwjHI3hjDErSb/w=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-PGmx05yZHUK7yuYxkmr0PbkW0T3EsBA7dLXbIsx+kRE=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
@@ -12,17 +12,18 @@
   <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
+  <link rel="stylesheet" href="css/phosphor.css?v=5fd0d30b55">
   <link rel="stylesheet" href="css/style.css?v=5e80a45d85">
-  <link rel="stylesheet" href="css/admin.css?v=1fed08735f">
+  <link rel="stylesheet" href="css/admin.css?v=4cadc5f299">
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
     "imports": {
-      "./js/admin.js": "./js/admin.js?v=814d4cb5c3",
+      "./js/admin.js": "./js/admin.js?v=9f13290fca",
       "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
-      "./js/api.js": "./js/api.js?v=8c9c607e1b",
-      "./js/app.js": "./js/app.js?v=22a0d3e4c6",
+      "./js/api.js": "./js/api.js?v=0ff764b382",
+      "./js/app.js": "./js/app.js?v=98af8e0c80",
       "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
       "./js/avatar.js": "./js/avatar.js?v=136eccd608",
       "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
@@ -42,7 +43,7 @@
       "./js/dash-console-spec.js": "./js/dash-console-spec.js?v=0dae1af8e8",
       "./js/dash-console-survey.js": "./js/dash-console-survey.js?v=5ab919de44",
       "./js/dash-console-tips.js": "./js/dash-console-tips.js?v=ea2871823b",
-      "./js/dash-console.js": "./js/dash-console.js?v=5dcb0be18e",
+      "./js/dash-console.js": "./js/dash-console.js?v=826f10ed0c",
       "./js/dash-discord.js": "./js/dash-discord.js?v=9526da96a9",
       "./js/dash-money.js": "./js/dash-money.js?v=27c4d95119",
       "./js/dash-network.js": "./js/dash-network.js?v=fec34b21f7",
@@ -189,76 +190,122 @@
   </main>
 
   <!-- ============ DASHBOARD ============ -->
-  <div id="admin-app" class="app" hidden>
-    <header class="topbar">
-      <div class="brand">
-        <img src="assets/favicon.svg" alt="" width="30" height="30">
-        <span>StreamHelp-Admin</span>
+  <!-- Aufbau nach Design „Admin“ (claude.ai/design): Seitenleiste mit Bereichen, Kopfzeile, ein Bereich zur Zeit.
+       Umschalten per #bereich in der Adresse (js/admin.js, Abschnitt „Seitenleiste“). -->
+  <div id="admin-app" class="adm" hidden>
+    <aside class="adm-side" id="adm-side" aria-label="Bereiche">
+      <div class="adm-brand">
+        <img src="assets/favicon.svg" alt="" width="36" height="36">
+        <span class="adm-brand-text"><span class="adm-brand-name">Stream<b>Help</b></span><span class="adm-brand-tag">ADMIN · NUR TEAM</span></span>
+        <button class="adm-side-toggle" id="adm-side-toggle" type="button" aria-label="Seitenleiste umschalten" aria-expanded="true">‹</button>
       </div>
-      <div class="topbar-actions">
-        <span id="live" class="live-pill" role="status"><span class="live-dot" aria-hidden="true"></span><span class="live-text">Verbinde …</span></span>
-        <button id="site-btn" class="btn btn--primary btn--sm" type="button">Webseite als Admin öffnen</button>
-        <button id="logout-btn" class="btn btn--ghost btn--sm" type="button">Abmelden</button>
+      <nav class="adm-nav">
+        <div class="adm-nav-group">
+          <p class="adm-nav-head">Überblick</p>
+          <button class="adm-nav-item" type="button" data-go="overview" title="Übersicht"><span class="adm-nav-ico" aria-hidden="true">📊</span><span class="adm-nav-label">Übersicht</span><span class="adm-badge" data-badge="overview" hidden></span></button>
+        </div>
+        <div class="adm-nav-group">
+          <p class="adm-nav-head">Betrieb</p>
+          <button class="adm-nav-item" type="button" data-go="platform" title="Plattform steuern"><span class="adm-nav-ico" aria-hidden="true">🚨</span><span class="adm-nav-label">Plattform steuern</span><span class="adm-badge" data-badge="platform" hidden></span></button>
+          <button class="adm-nav-item" type="button" data-go="twitch" title="Twitch &amp; Bots"><span class="adm-nav-ico" aria-hidden="true">🤖</span><span class="adm-nav-label">Twitch &amp; Bots</span><span class="adm-badge" data-badge="twitch" hidden></span></button>
+        </div>
+        <div class="adm-nav-group">
+          <p class="adm-nav-head">Community</p>
+          <button class="adm-nav-item" type="button" data-go="channels" title="Streamer-Kanäle"><span class="adm-nav-ico" aria-hidden="true">📺</span><span class="adm-nav-label">Streamer-Kanäle</span><span class="adm-badge" data-badge="channels" hidden></span></button>
+          <button class="adm-nav-item" type="button" data-go="users" title="Nutzer"><span class="adm-nav-ico" aria-hidden="true">👥</span><span class="adm-nav-label">Nutzer</span><span class="adm-badge" data-badge="users" hidden></span></button>
+          <button class="adm-nav-item" type="button" data-go="inbox" title="Postfach"><span class="adm-nav-ico" aria-hidden="true">✉️</span><span class="adm-nav-label">Postfach</span><span class="adm-badge" data-badge="inbox" hidden></span></button>
+        </div>
+        <div class="adm-nav-group">
+          <p class="adm-nav-head">Einnahmen &amp; Inhalte</p>
+          <button class="adm-nav-item" type="button" data-go="money" title="Pro, Sponsoring, Spenden"><span class="adm-nav-ico" aria-hidden="true">💶</span><span class="adm-nav-label">Pro, Sponsoring, Spenden</span><span class="adm-badge" data-badge="money" hidden></span></button>
+          <button class="adm-nav-item" type="button" data-go="artists" title="Artists"><span class="adm-nav-ico" aria-hidden="true">🎨</span><span class="adm-nav-label">Artists</span><span class="adm-badge" data-badge="artists" hidden></span></button>
+        </div>
+        <div class="adm-nav-group">
+          <p class="adm-nav-head">Entwürfe</p>
+          <button class="adm-nav-item" type="button" data-go="console" title="Console"><span class="adm-nav-ico" aria-hidden="true">🎛️</span><span class="adm-nav-label">Console</span><span class="adm-badge" data-badge="console" hidden></span></button>
+        </div>
+        <div class="adm-nav-group">
+          <p class="adm-nav-head">System</p>
+          <button class="adm-nav-item" type="button" data-go="security" title="Sicherheit"><span class="adm-nav-ico" aria-hidden="true">🔐</span><span class="adm-nav-label">Sicherheit</span><span class="adm-badge" data-badge="security" hidden></span></button>
+        </div>
+      </nav>
+      <div class="adm-side-foot">
+        <button id="site-btn" class="adm-nav-item" type="button" title="Webseite als Admin öffnen"><span class="adm-nav-ico" aria-hidden="true">↗</span><span class="adm-nav-label">Webseite als Admin</span></button>
+        <button class="adm-nav-item" type="button" data-logout title="Abmelden"><span class="adm-nav-ico" aria-hidden="true">⏻</span><span class="adm-nav-label">Abmelden</span></button>
       </div>
-    </header>
+    </aside>
 
-    <main class="admin-main">
-      <section id="kpis" class="kpis" aria-label="Kennzahlen"></section>
+    <div class="adm-body">
+      <header class="adm-top">
+        <div class="adm-top-text">
+          <h1><span id="adm-title">Übersicht</span><span id="adm-title-badge" class="adm-title-badge" hidden>Entwurf · nur Admins</span></h1>
+          <p id="adm-sub">Live-Daten zu Nutzern, Glücksrad und Twitch-Verbindung</p>
+        </div>
+        <div class="adm-top-actions">
+          <span id="live" class="live-pill" role="status"><span class="live-dot" aria-hidden="true"></span><span class="live-text">Verbinde …</span></span>
+          <button id="logout-btn" class="btn btn--ghost btn--sm" type="button">Abmelden</button>
+        </div>
+      </header>
 
-      <div class="admin-grid">
-        <section class="panel panel--chart" aria-labelledby="chart-title">
-          <div class="panel-head">
-            <div>
-              <h2 id="chart-title">Drehungen pro Tag</h2>
-              <p class="panel-sub">Letzte 14 Tage</p>
+      <div id="adm-alert" class="adm-alert" role="status" hidden>
+        <b>Notfall-Schalter aktiv:</b><span id="adm-alert-text"></span>
+        <button class="btn btn--ghost btn--sm" type="button" data-go="platform">Zu „Plattform steuern“</button>
+      </div>
+
+      <main class="adm-main" id="adm-main">
+      <!-- ============ OVERVIEW ============ -->
+      <div class="adm-view" data-view="overview" hidden>
+        <section id="kpis" class="kpis" aria-label="Kennzahlen"></section>
+
+        <div class="adm-cols">
+          <section class="panel adm-todo-panel" aria-labelledby="todo-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="todo-title">Wartet auf dich</h2>
+                <p class="panel-sub">Alles, was eine Entscheidung braucht – ein Klick springt in den Bereich.</p>
+              </div>
             </div>
-            <ul class="legend" aria-label="Legende">
-              <li><span class="key key--twitch"></span>Kanalpunkte</li>
-              <li><span class="key key--web"></span>Webseite</li>
-            </ul>
-          </div>
-          <div id="chart" class="chart"></div>
-          <details class="table-view">
-            <summary>Als Tabelle anzeigen</summary>
-            <table id="chart-table"></table>
-          </details>
-        </section>
+            <ul id="todo" class="adm-todo"><li class="muted">Lädt …</li></ul>
+          </section>
 
-        <section class="panel" aria-labelledby="twitch-title">
-          <div class="panel-head">
-            <h2 id="twitch-title">Twitch</h2>
-            <button id="twitch-check" class="btn btn--ghost btn--sm" type="button">Live bei Twitch prüfen</button>
-          </div>
-          <dl id="twitch-panel" class="status-list"></dl>
-          <p id="twitch-check-result" class="check-result" role="status"></p>
+          <section class="panel" aria-labelledby="health-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="health-title">Plattform-Zustand</h2>
+                <p class="panel-sub">Notfall-Schalter auf einen Blick.</p>
+              </div>
+              <button class="btn btn--ghost btn--sm" type="button" data-go="platform">Steuern →</button>
+            </div>
+            <dl id="health" class="status-list adm-health"></dl>
+          </section>
+        </div>
 
-          <!-- Chat-Bots: nur hier verbindbar, nicht auf der Webseite. Zwei Plätze (…_bot_stats.sql),
-               jeder Kanal wählt im Dashboard, welcher bei ihm schreibt. -->
-          <div class="bot-panel" id="bot-panel">
-            <p class="bot-panel-text" id="bot-text">Chat-Bots werden geladen …</p>
-            <div class="bot-slots" id="bot-slots"></div>
-            <p id="bot-msg" class="check-result" role="status"></p>
-          </div>
-        </section>
-
-        <section class="panel" aria-labelledby="botlog-title">
-          <div class="panel-head">
-            <h2 id="botlog-title">Bot-Protokoll</h2>
-            <label class="inline-check"><input type="checkbox" id="botlog-problems"> nur Probleme</label>
-            <button id="botlog-load" class="btn btn--ghost btn--sm" type="button">Laden</button>
-          </div>
-          <p class="panel-sub" id="botlog-sum">Kommen die Nachrichten der Bots in allen Kanälen an?</p>
-          <div class="botlog-wrap"><table class="botlog-table" id="botlog-channels" hidden></table></div>
-          <ol class="botlog-feed" id="botlog-feed"></ol>
-        </section>
-
-        <section class="panel panel--feed" aria-labelledby="feed-title">
-          <div class="panel-head">
-            <h2 id="feed-title">Live-Feed</h2>
-            <p class="panel-sub">Letzte 40 Drehungen</p>
-          </div>
-          <ol id="feed" class="feed"></ol>
-        </section>
+        <div class="adm-cols">
+          <section class="panel panel--chart" aria-labelledby="chart-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="chart-title">Drehungen pro Tag</h2>
+                <p class="panel-sub">Letzte 14 Tage</p>
+              </div>
+              <ul class="legend" aria-label="Legende">
+                <li><span class="key key--twitch"></span>Kanalpunkte</li>
+                <li><span class="key key--web"></span>Webseite</li>
+              </ul>
+            </div>
+            <div id="chart" class="chart"></div>
+            <details class="table-view">
+              <summary>Als Tabelle anzeigen</summary>
+              <table id="chart-table"></table>
+            </details>
+          </section>
+          <section class="panel panel--feed" aria-labelledby="feed-title">
+            <div class="panel-head">
+              <h2 id="feed-title">Live-Feed</h2>
+              <p class="panel-sub">Letzte 40 Drehungen</p>
+            </div>
+            <ol id="feed" class="feed"></ol>
+          </section>
+        </div>
 
         <section class="panel" aria-labelledby="variants-title">
           <div class="panel-head">
@@ -269,7 +316,10 @@
           </div>
           <div id="variants" class="hbars"></div>
         </section>
+      </div>
 
+      <!-- ============ PLATFORM ============ -->
+      <div class="adm-view" data-view="platform" hidden>
         <!-- Plattform steuern (js/admin.js, Migration …_channel_moderation.sql) -->
         <section class="panel panel--wide" aria-labelledby="platform-title" id="platform-panel">
           <div class="panel-head">
@@ -328,7 +378,42 @@
             <ul id="pf-updates" class="pf-update-list"></ul>
           </div>
         </section>
+      </div>
 
+      <!-- ============ TWITCH ============ -->
+      <div class="adm-view" data-view="twitch" hidden>
+        <div class="adm-cols">
+          <section class="panel" aria-labelledby="twitch-title">
+            <div class="panel-head">
+              <h2 id="twitch-title">Twitch</h2>
+              <button id="twitch-check" class="btn btn--ghost btn--sm" type="button">Live bei Twitch prüfen</button>
+            </div>
+            <dl id="twitch-panel" class="status-list"></dl>
+            <p id="twitch-check-result" class="check-result" role="status"></p>
+
+            <!-- Chat-Bots: nur hier verbindbar, nicht auf der Webseite. Zwei Plätze (…_bot_stats.sql),
+                 jeder Kanal wählt im Dashboard, welcher bei ihm schreibt. -->
+            <div class="bot-panel" id="bot-panel">
+              <p class="bot-panel-text" id="bot-text">Chat-Bots werden geladen …</p>
+              <div class="bot-slots" id="bot-slots"></div>
+              <p id="bot-msg" class="check-result" role="status"></p>
+            </div>
+          </section>
+          <section class="panel" aria-labelledby="botlog-title">
+            <div class="panel-head">
+              <h2 id="botlog-title">Bot-Protokoll</h2>
+              <label class="inline-check"><input type="checkbox" id="botlog-problems"> nur Probleme</label>
+              <button id="botlog-load" class="btn btn--ghost btn--sm" type="button">Laden</button>
+            </div>
+            <p class="panel-sub" id="botlog-sum">Kommen die Nachrichten der Bots in allen Kanälen an?</p>
+            <div class="botlog-wrap"><table class="botlog-table" id="botlog-channels" hidden></table></div>
+            <ol class="botlog-feed" id="botlog-feed"></ol>
+          </section>
+        </div>
+      </div>
+
+      <!-- ============ CHANNELS ============ -->
+      <div class="adm-view" data-view="channels" hidden>
         <section class="panel panel--wide" aria-labelledby="channels-title" id="channels-panel">
           <div class="panel-head">
             <div>
@@ -337,6 +422,7 @@
             </div>
           </div>
           <p id="channels-note" class="check-result" role="status"></p>
+          <div class="ch-filters" id="ch-filters" role="group" aria-label="Kanäle filtern"></div>
           <!-- Mehrere Kanäle auf einmal: Timeout, Overlay aus, Verwarnung -->
           <div class="ch-bulk" id="ch-bulk">
             <span class="ch-bulk-count" id="ch-bulk-count">Keine Kanäle ausgewählt</span>
@@ -358,7 +444,42 @@
             </table>
           </div>
         </section>
+      </div>
 
+      <!-- ============ USERS ============ -->
+      <div class="adm-view" data-view="users" hidden>
+        <section class="panel panel--wide" aria-labelledby="users-title">
+          <div class="panel-head">
+            <h2 id="users-title">Nutzer <span id="users-count" class="count"></span></h2>
+            <input id="users-search" class="search" type="search" placeholder="Suchen …" aria-label="Nutzer suchen">
+          </div>
+          <div class="table-wrap">
+            <table class="users">
+              <thead>
+                <tr><th>Name</th><th>Angemeldet über</th><th>E-Mail</th><th>Registriert</th><th>Letzter Login</th><th>Bestätigt</th><th>Admin</th></tr>
+              </thead>
+              <tbody id="users"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ INBOX ============ -->
+      <div class="adm-view" data-view="inbox" hidden>
+        <section class="panel panel--wide" aria-labelledby="inbox-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="inbox-title">Postfach <span id="inbox-count" class="count"></span></h2>
+              <p class="panel-sub">Nachrichten aus dem Kontaktformular der Startseite. Antworten per E-Mail aus deinem eigenen Postfach.</p>
+            </div>
+            <label class="inbox-filter"><input type="checkbox" id="inbox-done"> Erledigte zeigen</label>
+          </div>
+          <ul id="inbox" class="inbox"><li class="muted">Lädt …</li></ul>
+        </section>
+      </div>
+
+      <!-- ============ MONEY ============ -->
+      <div class="adm-view" data-view="money" hidden>
         <section class="panel panel--wide" aria-labelledby="billing-title" id="billing-panel">
           <div class="panel-head">
             <div>
@@ -410,7 +531,10 @@
           <p id="spons-note" class="check-result" role="status"></p>
           <ul id="spons-list" class="ar-adm-list"><li class="muted">Lädt …</li></ul>
         </section>
+      </div>
 
+      <!-- ============ ARTISTS ============ -->
+      <div class="adm-view" data-view="artists" hidden>
         <section class="panel panel--wide" aria-labelledby="artists-title" id="artists-panel">
           <div class="panel-head">
             <div>
@@ -425,18 +549,10 @@
           <h3 class="ar-adm-h">Bewerbungen</h3>
           <ul id="artists-list" class="ar-adm-list"><li class="muted">Lädt …</li></ul>
         </section>
+      </div>
 
-        <section class="panel panel--wide" aria-labelledby="inbox-title">
-          <div class="panel-head">
-            <div>
-              <h2 id="inbox-title">Postfach <span id="inbox-count" class="count"></span></h2>
-              <p class="panel-sub">Nachrichten aus dem Kontaktformular der Startseite. Antworten per E-Mail aus deinem eigenen Postfach.</p>
-            </div>
-            <label class="inbox-filter"><input type="checkbox" id="inbox-done"> Erledigte zeigen</label>
-          </div>
-          <ul id="inbox" class="inbox"><li class="muted">Lädt …</li></ul>
-        </section>
-
+      <!-- ============ SECURITY ============ -->
+      <div class="adm-view" data-view="security" hidden>
         <section class="panel panel--wide" aria-labelledby="security-title">
           <div class="panel-head">
             <div>
@@ -457,23 +573,29 @@
           </div>
           <ul id="providers" class="providers"></ul>
         </section>
-
-        <section class="panel panel--wide" aria-labelledby="users-title">
-          <div class="panel-head">
-            <h2 id="users-title">Nutzer <span id="users-count" class="count"></span></h2>
-            <input id="users-search" class="search" type="search" placeholder="Suchen …" aria-label="Nutzer suchen">
-          </div>
-          <div class="table-wrap">
-            <table class="users">
-              <thead>
-                <tr><th>Name</th><th>Angemeldet über</th><th>E-Mail</th><th>Registriert</th><th>Letzter Login</th><th>Bestätigt</th><th>Admin</th></tr>
-              </thead>
-              <tbody id="users"></tbody>
-            </table>
-          </div>
-        </section>
       </div>
-    </main>
+
+      <!-- ============ CONSOLE ============ -->
+      <!-- Console (js/dash-console.js, Migration …_console.sql): früher im Dashboard, jetzt nur hier. Läuft mit einer
+           eigenen Sitzung als interner Admin-Account (nur im Arbeitsspeicher) – js/admin.js, Abschnitt „Console“. -->
+      <div class="adm-view" data-view="console" hidden>
+        <div class="adm-cs-bar">
+          <div class="adm-tabs" role="tablist" aria-label="Console-Bereiche">
+            <button type="button" role="tab" class="adm-tab" data-cs-tab="keys" aria-selected="true">🎛️ Belegung</button>
+            <button type="button" role="tab" class="adm-tab" data-cs-tab="view3d" aria-selected="false">🧊 3D-Ansicht</button>
+            <button type="button" role="tab" class="adm-tab" data-cs-tab="kit" aria-selected="false">🔧 Technik-Baukasten</button>
+            <button type="button" role="tab" class="adm-tab" data-cs-tab="release" aria-selected="false">✅ Release-Check</button>
+          </div>
+          <label class="adm-cs-channel">Kanal
+            <select id="cs-channel" aria-label="Kanal, in dem die Tasten auslösen"><option value="">Standard-Kanal</option></select>
+          </label>
+        </div>
+        <p class="field-hint">Früher im Dashboard unter „Console“ – jetzt nur noch hier im Admin-Bereich. Die Tasten lösen wirklich aus, im gewählten Kanal.</p>
+        <div class="dash-cards cs-cards adm-console" id="console-slot" data-tab="keys"><p class="muted">Lädt …</p></div>
+      </div>
+
+      </main>
+    </div>
   </div>
 
   <div id="chart-tip" class="chart-tip" role="tooltip" hidden></div>

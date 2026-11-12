@@ -1,6 +1,9 @@
 // StreamHelp-Admin: Login mit Admin-Passwort, danach Live-Daten (alle 5 s aktualisiert).
 import { CONFIG } from './config.js';
-import { isDemo } from './api.js';
+import { createApi, germanError, isDemo } from './api.js';
+import { renderConsole } from './dash-console.js';
+import { createExtrasApi } from './extras-api.js';
+import { setChannel } from './channel.js';
 import { DEFAULT_VARIANTS } from './defaults.js';
 import { guardFrame } from './frame-guard.js';
 import { botHint } from './bot-reasons.js';
@@ -293,6 +296,7 @@ function init() {
   $('#spons-all').addEventListener('change', renderSponsoring);
   $('#inbox').addEventListener('click', inboxClick);
   $('#logout-btn').addEventListener('click', () => logout());
+  setupShell();
   $('#twitch-check').addEventListener('click', checkTwitch);
   $('#site-btn').addEventListener('click', openSiteAsAdmin);
   $('#bot-slots').addEventListener('click', (e) => {
@@ -355,6 +359,7 @@ async function onLogin(e) {
 
 function logout(message) {
   clearTimeout(state.timer);
+  csState.api = null; // Sitzung der Console lag nur im Arbeitsspeicher
   state.token = null;
   state.data = null;
   state.seenSpins = null;
@@ -440,6 +445,8 @@ async function checkSecurity() {
   btn.disabled = true;
   try {
     const { checks } = await call('security_report');
+    state.security = checks;
+    queueShell();
     list.replaceChildren(...checks.map((c) => {
       const [cls, label] = CHECK_LEVEL[c.level] ?? ['', c.level];
       const li = document.createElement('li');
@@ -480,6 +487,7 @@ async function loadInbox() {
 }
 
 function renderInbox() {
+  queueShell();
   const list = $('#inbox');
   const all = state.inbox ?? [];
   const open = all.filter((m) => m.status !== 'done');
@@ -548,6 +556,7 @@ function showApp() {
   $('#admin-login').hidden = true;
   $('#admin-mfa').hidden = true;
   $('#admin-app').hidden = false;
+  showView(viewFromHash(), false);
   loadInbox();
   refresh();
   loadChannels();
@@ -641,6 +650,7 @@ function renderSponsCheck() {
 }
 
 function renderSponsoring() {
+  queueShell();
   const list = state.spons ?? [];
   const pending = list.filter((o) => o.status === 'pending');
   $('#spons-count').textContent = list.length ? `(${pending.length ? `${pending.length} warten · ` : ''}${list.length} insgesamt)` : '';
@@ -746,6 +756,7 @@ function artistMedia(path, alt) {
 }
 
 function renderArtists() {
+  queueShell();
   const data = state.artists ?? { artists: [], assets: [] };
   const pending = data.artists.filter((a) => a.status === 'pending');
   const assets = data.assets ?? [];
@@ -864,15 +875,19 @@ async function loadChannels() {
 }
 
 function renderChannels() {
+  queueShell();
   const list = state.channels ?? [];
   const pending = list.filter((c) => c.status === 'pending').length;
   $('#channels-count').textContent = list.length ? `(${nf.format(list.length)}${pending ? ` · ${pending} warten` : ''})` : '';
   const tbody = $('#channels');
-  if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="muted">Noch keine Kanäle.</td></tr>';
+  paintChannelFilters(list);
+  const shown = list.filter(CH_FILTERS[state.chFilter]?.[1] ?? (() => true));
+  if (!shown.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">${list.length ? 'Keine Kanäle in diesem Filter.' : 'Noch keine Kanäle.'}</td></tr>`;
+    paintBulk();
     return;
   }
-  tbody.innerHTML = list.map((c) => {
+  tbody.innerHTML = shown.map((c) => {
     const [cls, label] = CHANNEL_STATUS[c.status] ?? ['', c.status];
     const actions = [];
     if (c.status !== 'active') actions.push(`<button class="btn btn--primary btn--sm" type="button" data-channel="${escapeAttr(c.id)}" data-status="active">Freischalten</button>`);
@@ -885,7 +900,7 @@ function renderChannels() {
     if (c.pro_until) mods.push(`<span class="chip chip--ok ch-mod">⭐ Pro bis ${escapeHtml(fmtDate(c.pro_until))}</span>`);
     if (c.warning) mods.push(`<span class="chip chip--warn ch-mod" title="${escapeAttr(c.warning)}">⚠️ Verwarnt${c.warning_seen_at && c.warning_seen_at >= c.warning_at ? ' · gelesen' : ' · ungelesen'}</span>`);
     return `
-    <tr>
+    <tr${state.picked?.has(c.id) ? ' class="is-picked"' : ''}>
       <td><input type="checkbox" data-pick="${escapeAttr(c.id)}" aria-label="${escapeAttr(c.display_name || c.login || 'Kanal')} auswählen"${state.picked?.has(c.id) ? ' checked' : ''}></td>
       <td><span class="u-name"><span class="avatar" aria-hidden="true">${escapeHtml((c.display_name || c.login || '?').slice(0, 1).toUpperCase())}</span>
         <span>${escapeHtml(c.display_name || c.login || '–')}${c.is_default ? ' <span class="chip">Standard</span>' : ''}<br>
@@ -902,6 +917,7 @@ function renderChannels() {
   tbody.querySelectorAll('input[data-pick]').forEach((box) => box.addEventListener('change', () => {
     state.picked ??= new Set();
     if (box.checked) state.picked.add(box.dataset.pick); else state.picked.delete(box.dataset.pick);
+    box.closest('tr')?.classList.toggle('is-picked', box.checked);
     paintBulk();
   }));
   paintBulk();
@@ -972,6 +988,7 @@ async function loadPlatform() {
 }
 
 function renderPlatform() {
+  queueShell();
   const p = state.platformState;
   if (!p) return;
   const until = (iso) => (iso ? `bis ${fmtUntil(iso)}` : 'bis zum Aufheben');
@@ -1127,6 +1144,7 @@ function updateLiveLabel() {
 // Darstellung
 // ============================================================
 function render(data) {
+  queueShell();
   renderKpis(data);
   renderChart(data.spins_14d ?? []);
   renderVariants(data.spins_14d ?? [], data.variants ?? []);
@@ -1646,4 +1664,276 @@ $('#charity-form')?.addEventListener('submit', async (e) => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// ============================================================
+// Seitenleiste & Bereiche (Design „Admin“): ein Bereich zur Zeit, Umschalten per #bereich in der Adresse.
+// Badges, „Wartet auf dich“, „Plattform-Zustand“ und das Notfall-Band lesen nur aus `state` –
+// queueShell() fasst mehrere Aufrufe pro Durchlauf zusammen.
+// ============================================================
+const VIEWS = {
+  overview: ['Übersicht', 'Live-Daten zu Nutzern, Glücksrad und Twitch-Verbindung'],
+  platform: ['Plattform steuern', 'Notfall-Schalter für alle Kanäle, Wartung, Updates und Neuigkeiten'],
+  twitch: ['Twitch & Bots', 'Verbindung, Chat-Bots und Zustellung'],
+  channels: ['Streamer-Kanäle', 'Neue Streamer melden sich mit Twitch an und warten, bis du sie freischaltest'],
+  users: ['Nutzer', 'Alle registrierten Konten'],
+  inbox: ['Postfach', 'Kontaktformular der Startseite'],
+  money: ['Pro, Sponsoring, Spenden', 'Start-Checks – Freischalten Schritt für Schritt in STARTKLAR.md'],
+  artists: ['Artists', 'Bewerbungen freischalten und Uploads prüfen'],
+  security: ['Sicherheit', 'Datenbank-Check und Anmelde-Möglichkeiten'],
+  console: ['StreamHelp Console', 'Tasten belegen, 3D-Modell, Technik-Baukasten und Release-Check'],
+};
+
+const viewFromHash = () => {
+  const id = location.hash.slice(1);
+  return VIEWS[id] ? id : 'overview';
+};
+
+function showView(id, scroll = true) {
+  if (!VIEWS[id]) id = 'overview';
+  state.view = id;
+  document.querySelectorAll('.adm-view').forEach((v) => { v.hidden = v.dataset.view !== id; });
+  document.querySelectorAll('.adm-nav [data-go]').forEach((b) => {
+    const on = b.dataset.go === id;
+    b.classList.toggle('is-active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  const [title, sub] = VIEWS[id];
+  $('#adm-title').textContent = title;
+  $('#adm-sub').textContent = sub;
+  $('#adm-title-badge').hidden = id !== 'console';
+  if (id === 'console') openConsole();
+  document.title = `${title} · StreamHelp-Admin`;
+  if (location.hash.slice(1) !== id) history.replaceState(null, '', `#${id}`);
+  if (scroll) window.scrollTo(0, 0);
+}
+
+function setupShell() {
+  const SIDEBAR_KEY = 'zd_admin_sidebar'; // init() läuft vor den Konstanten am Dateiende
+  const app = $('#admin-app');
+  document.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-go]');
+    if (go && app.contains(go)) { e.preventDefault(); showView(go.dataset.go); return; }
+    if (e.target.closest('[data-logout]')) logout();
+  });
+  window.addEventListener('hashchange', () => { if (!app.hidden) showView(viewFromHash(), false); });
+  const toggle = $('#adm-side-toggle');
+  const setCollapsed = (on) => {
+    app.classList.toggle('is-collapsed', on);
+    toggle.textContent = on ? '›' : '‹';
+    toggle.setAttribute('aria-expanded', String(!on));
+  };
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(SIDEBAR_KEY) === '1'; } catch { /* privat */ }
+  setCollapsed(collapsed);
+  toggle.addEventListener('click', () => {
+    const on = !app.classList.contains('is-collapsed');
+    setCollapsed(on);
+    try { localStorage.setItem(SIDEBAR_KEY, on ? '1' : '0'); } catch { /* privat */ }
+  });
+}
+
+// ---------- Streamer-Kanäle filtern ----------
+const isModerated = (c) => !!(c.blocked_until || c.overlay_off_until || c.warning);
+const CH_FILTERS = {
+  all: ['Alle', () => true],
+  pending: ['Wartet', (c) => c.status === 'pending'],
+  active: ['Aktiv', (c) => c.status === 'active'],
+  moderated: ['Timeout & Verwarnung', isModerated],
+  blocked: ['Gesperrt', (c) => c.status === 'blocked'],
+};
+function paintChannelFilters(list) {
+  state.chFilter ??= 'all';
+  const wrap = $('#ch-filters');
+  wrap.innerHTML = Object.entries(CH_FILTERS).map(([id, [label, fn]]) => {
+    const n = list.filter(fn).length;
+    if (!n && id !== 'all' && id !== state.chFilter) return '';
+    return `<button type="button" class="ch-filter${state.chFilter === id ? ' is-on' : ''}" data-ch-filter="${id}" aria-pressed="${state.chFilter === id}">${label}<span>${nf.format(n)}</span></button>`;
+  }).join('');
+}
+$('#ch-filters')?.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ch-filter]');
+  if (!b) return;
+  state.chFilter = b.dataset.chFilter;
+  renderChannels();
+});
+
+// ---------- Badges, „Wartet auf dich“, Plattform-Zustand, Notfall-Band ----------
+let shellQueued = false;
+function queueShell() {
+  if (shellQueued) return;
+  shellQueued = true;
+  queueMicrotask(() => { shellQueued = false; paintShell(); });
+}
+
+function shellCounts() {
+  const channels = state.channels ?? [];
+  const artists = state.artists ?? { artists: [], assets: [] };
+  const sec = state.security ?? [];
+  return {
+    channels: channels.filter((c) => c.status === 'pending').length,
+    inbox: (state.inbox ?? []).filter((m) => m.status !== 'done').length,
+    artists: (artists.artists ?? []).filter((a) => a.status === 'pending').length + (artists.assets ?? []).length,
+    money: (state.spons ?? []).filter((o) => o.status === 'pending').length,
+    security: sec.filter((c) => c.level === 'error' || c.level === 'warn').length,
+    securityBad: sec.some((c) => c.level === 'error'),
+  };
+}
+
+function activeSwitches() {
+  const p = state.platformState;
+  if (!p) return [];
+  return [p.overlays_off && 'Overlays pausiert', p.bots_off && 'Chat-Bot stumm', p.maint_on && 'Wartung läuft'].filter(Boolean);
+}
+
+function paintShell() {
+  const n = shellCounts();
+  const sw = activeSwitches();
+  const badges = { ...n, platform: sw.length };
+  document.querySelectorAll('.adm-badge[data-badge]').forEach((el) => {
+    const key = el.dataset.badge;
+    const v = badges[key];
+    el.hidden = !v;
+    el.textContent = v ? (v > 99 ? '99+' : String(v)) : '';
+    el.classList.toggle('is-hot', key === 'channels' || key === 'platform' || (key === 'security' && n.securityBad));
+  });
+
+  // Notfall-Band
+  $('#adm-alert').hidden = !sw.length;
+  $('#adm-alert-text').textContent = sw.join(' · ');
+
+  // Wartet auf dich
+  const plural = (k, one, many) => `${nf.format(k)} ${k === 1 ? one : many}`;
+  const channels = state.channels ?? [];
+  const pendingCh = channels.filter((c) => c.status === 'pending');
+  const inbox = (state.inbox ?? []).filter((m) => m.status !== 'done');
+  const artists = state.artists ?? { artists: [], assets: [] };
+  const todo = [];
+  if (sw.length) todo.push(['🚨', 'Notfall-Schalter aktiv', sw.join(' · '), 'platform']);
+  if (n.channels) todo.push(['📺', plural(n.channels, 'Kanal wartet auf Freischaltung', 'Kanäle warten auf Freischaltung'), pendingCh.slice(0, 4).map((c) => c.display_name || c.login).join(', '), 'channels', 'pending']);
+  if (n.inbox) todo.push(['✉️', plural(n.inbox, 'neue Nachricht', 'neue Nachrichten'), inbox.slice(0, 3).map((m) => m.name || m.email || '').filter(Boolean).join(', ') || 'Kontaktformular', 'inbox']);
+  if (n.artists) {
+    const apps = (artists.artists ?? []).filter((a) => a.status === 'pending').length;
+    const ups = (artists.assets ?? []).length;
+    todo.push(['🎨', 'Artists prüfen', [apps && plural(apps, 'Bewerbung', 'Bewerbungen'), ups && plural(ups, 'Upload', 'Uploads')].filter(Boolean).join(' · '), 'artists']);
+  }
+  if (n.money) todo.push(['💶', plural(n.money, 'Sponsoring-Angebot wartet', 'Sponsoring-Angebote warten'), 'Prüfen und freigeben', 'money']);
+  if (n.security) todo.push(['🔐', plural(n.security, 'Sicherheits-Hinweis', 'Sicherheits-Hinweise'), (state.security ?? []).filter((c) => c.level === 'error' || c.level === 'warn').map((c) => c.title).join(' · '), 'security']);
+  const health = state.data?.twitch_health;
+  const twProblems = (health?.problems ?? []).filter((p) => p.level === 'error');
+  if (twProblems.length) todo.push(['🤖', plural(twProblems.length, 'Twitch-Problem', 'Twitch-Probleme'), twProblems.map((p) => p.text).join(' · '), 'twitch']);
+
+  const ul = $('#todo');
+  if (!todo.length) {
+    ul.innerHTML = '<li class="adm-todo-done">✓ Alles erledigt – gerade wartet nichts auf dich.</li>';
+  } else {
+    ul.innerHTML = todo.map(([icon, title, sub, go, filter]) => `
+      <li class="adm-todo-item">
+        <span class="adm-todo-ico" aria-hidden="true">${icon}</span>
+        <span><b>${escapeHtml(title)}</b><small>${escapeHtml(sub || '')}</small></span>
+        <button class="btn btn--ghost btn--sm" type="button" data-go="${go}"${filter ? ` data-filter="${filter}"` : ''}>Öffnen →</button>
+      </li>`).join('');
+    ul.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { state.chFilter = b.dataset.filter; renderChannels(); }));
+  }
+
+  // Plattform-Zustand
+  const p = state.platformState;
+  const until = (iso) => (iso ? `bis ${fmtUntil(iso)}` : 'bis zum Aufheben');
+  const row = (label, bad, chip, text) => `<div><dt>${label}</dt><dd><span class="chip chip--${bad ? 'bad' : 'ok'}">${escapeHtml(chip)}</span>${escapeHtml(text)}</dd></div>`;
+  const rows = [];
+  if (p) {
+    rows.push(row('Overlays', p.overlays_off, p.overlays_off ? 'pausiert' : 'laufen', p.overlays_off ? `${until(p.overlays_until)}${p.overlays_reason ? ` – ${p.overlays_reason}` : ''}` : 'normal'));
+    rows.push(row('Chat-Bot', p.bots_off, p.bots_off ? 'stumm' : 'aktiv', p.bots_off ? `${until(p.bots_until)}${p.bots_reason ? ` – ${p.bots_reason}` : ''}` : 'normal'));
+    rows.push(row('Wartung', p.maint_on, p.maint_on ? 'läuft' : 'keine', p.maint_on ? `${until(p.maint_until)}${p.maint_message ? ` – ${p.maint_message}` : ''}` : (p.reload_at ? `zuletzt ausgerollt: ${fmtUntil(p.reload_at)}` : '')));
+  } else {
+    rows.push('<div><dt>Schalter</dt><dd class="muted">Lädt …</dd></div>');
+  }
+  if (state.data) {
+    const t = state.data.twitch;
+    rows.push(row('Twitch', !t || twProblems.length, !t ? 'nicht verbunden' : twProblems.length ? `${twProblems.length} ${twProblems.length === 1 ? 'Problem' : 'Probleme'}` : 'verbunden',
+      t ? (t.display_name ?? t.broadcaster_login ?? '') : ''));
+  }
+  $('#health').innerHTML = rows.join('');
+  paintConsoleChannels();
+}
+
+// ============================================================
+// Console (Entwurf, früher im Dashboard): js/dash-console.js mit einer eigenen Supabase-Sitzung als interner
+// Admin-Account. Wie „Webseite als Admin“ per Einmal-Code (site_session), aber nur im Arbeitsspeicher –
+// die Anmeldung der Webseite in anderen Tabs bleibt unberührt. Neu laden oder Abmelden beendet sie.
+// ============================================================
+const csState = { api: null, pending: null, extras: null, guard: null, variants: [], tiles: [], channel: null, tab: 'keys' };
+
+async function consoleApi() {
+  if (csState.api) return csState.api;
+  csState.pending ??= (async () => {
+    const api = await createApi({ memory: true });
+    const { token_hash } = await call('site_session');
+    await api.adminSiteLogin(token_hash);
+    return api;
+  })();
+  try {
+    csState.api = await csState.pending;
+    csState.extras = createExtrasApi(csState.api);
+    return csState.api;
+  } finally {
+    csState.pending = null;
+  }
+}
+
+const guardOn = () => { const g = csState.guard; return !!g?.viewer_pause && (!g.until || Date.parse(g.until) > Date.now()); };
+
+function setConsoleTab(tab) {
+  csState.tab = tab;
+  $('#console-slot').dataset.tab = tab;
+  document.querySelectorAll('[data-cs-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.csTab === tab)));
+}
+
+function paintConsoleChannels() {
+  const sel = $('#cs-channel');
+  const active = (state.channels ?? []).filter((c) => c.status === 'active' && !c.is_default);
+  const keep = sel.value;
+  sel.replaceChildren(new Option('Standard-Kanal', ''), ...active.map((c) => new Option(c.display_name || c.login, c.id)));
+  sel.value = active.some((c) => c.id === keep) ? keep : '';
+}
+
+async function openConsole() {
+  const slot = $('#console-slot');
+  paintConsoleChannels();
+  let api;
+  try {
+    api = await consoleApi();
+  } catch (err) {
+    if (err.status === 401) { logout(err.message); return; }
+    slot.replaceChildren(mkEl('p', 'muted', `Console nicht verfügbar: ${germanError(err)}`));
+    return;
+  }
+  if (state.view !== 'console') return;
+  const ch = csState.channel;
+  setChannel(ch ? { id: ch.id, login: ch.login, display_name: ch.display_name } : null);
+  [csState.variants, csState.tiles, csState.guard] = await Promise.all([
+    api.getVariants().catch(() => []),
+    api.getTiles().catch(() => []),
+    csState.extras.guard.get().catch(() => null),
+  ]);
+  const pageName = { ideas: 'Content-Ideen', bot: 'Bot & Chat', overlay: 'Overlay & OBS', guard: 'Raid-Schutz', raids: 'Raid-Netzwerk', stats: 'Statistik' };
+  renderConsole(slot, {
+    api, toast, germanError,
+    streamer: () => (ch ? ch.display_name || ch.login : 'StreamHelp'),
+    me: () => 'StreamHelp-Admin',
+    variants: () => csState.variants,
+    currentVariant: () => csState.variants[0],
+    tiles: () => csState.tiles,
+    openTile: (tile) => toast(`💡 ${tile.title} – öffnen im Streamer-Dashboard.`, 'info'),
+    setPage: (p) => toast(`„${pageName[p] ?? p}“ öffnet sich im Streamer-Dashboard – nicht hier im Admin-Bereich.`, 'info'),
+    guardActive: guardOn,
+    guardSet: async (on) => { csState.guard = await csState.extras.guard.set(on, 0); return guardOn(); },
+    show3d: () => setConsoleTab('view3d'),
+  });
+}
+
+document.querySelectorAll('[data-cs-tab]').forEach((b) => b.addEventListener('click', () => setConsoleTab(b.dataset.csTab)));
+$('#cs-channel')?.addEventListener('change', (e) => {
+  csState.channel = (state.channels ?? []).find((c) => c.id === e.target.value) ?? null;
+  openConsole();
 });
