@@ -1,11 +1,14 @@
 // Emote-Ersteller (emotes.html) – ein Extra von StreamHelp MAX. Läuft komplett im Browser: Bild laden,
-// zuschneiden, drehen, spiegeln, Hintergrund entfernen (automatisch, per Farbe oder mit dem Radierer), Rand,
-// Schatten und Text dazu, Vorschau im Chat mit Prüfung der Twitch-Vorgaben, Download als ZIP.
+// zuschneiden, drehen, spiegeln, Hintergrund entfernen (automatisch, per Farbe oder mit dem Radierer), Farben,
+// Rand, Schatten und Text dazu, animieren (js/emote-anim.js, GIF über js/gif-encode.js), Vorschau im Chat mit
+// Prüfung der Twitch-Vorgaben, Download als ZIP.
 // Formate: Emote (112, 56, 28 px, je höchstens 1 MB) und Abzeichen (72, 36, 18 px, je höchstens 25 KB).
 // Hochgeladen wird nichts. Ab dem Start von MAX (js/launch.js: max) nur mit MAX; bis dahin für alle zum Ausprobieren.
 import { setupConsent } from './consent.js';
 import { h } from './extras-core.js';
 import { MAX_ENFORCED } from './pro.js';
+import { ANIMS, EXTRAS, SPEEDS, FRAME_CS, renderFrame, animFrames } from './emote-anim.js';
+import { encodeGif } from './gif-encode.js';
 
 setupConsent(); // Cookie-Fenster (js/consent.js)
 
@@ -18,6 +21,8 @@ const FORMATS = {
   emote: { sizes: [112, 56, 28], limit: 1024 * 1024, label: 'Emote', big: 448 },
   badge: { sizes: [72, 36, 18], limit: 25 * 1024, label: 'Abzeichen', big: 0 },
 };
+// GIF: halbdurchsichtige Kanten mit der Chatfarbe mischen
+const MATTES = { dark: [24, 24, 27], light: [255, 255, 255], none: null };
 const FONTS = {
   bold: ['700', 'Inter'],
   poster: ['400', 'Anton'],
@@ -26,14 +31,19 @@ const FONTS = {
 };
 
 // Einstellungen, die „Rückgängig“ zurückholt (alles außer Bild und Dateiname)
-const KEYS = ['zoom', 'x', 'y', 'rot', 'flip', 'key', 'seeds', 'tol', 'connected', 'clean', 'border', 'borderColor', 'shadow',
-  'text', 'textColor', 'textStroke', 'textSize', 'textPos', 'font', 'format'];
+const KEYS = ['zoom', 'x', 'y', 'rot', 'flip', 'key', 'seeds', 'tol', 'connected', 'clean', 'bright', 'contrast', 'sat',
+  'border', 'borderColor', 'shadow', 'text', 'textColor', 'textStroke', 'textSize', 'textPos', 'font', 'format',
+  'anim', 'speed', 'strength', 'extras', 'matte'];
+// bleiben beim Laden eines neuen Bildes erhalten
+const KEEP = ['format', 'font', 'textColor', 'textStroke', 'anim', 'speed', 'strength', 'extras', 'matte'];
 const DEFAULTS = {
   zoom: 1, x: 0, y: 0, rot: 0, flip: false,
   key: null, seeds: [], tol: 30, connected: true, clean: 0,
+  bright: 0, contrast: 0, sat: 0,
   border: 0, borderColor: '#ffffff', shadow: false,
   text: '', textColor: '#ffffff', textStroke: '#000000', textSize: 30, textPos: 'bottom', font: 'bold',
   format: 'emote',
+  anim: 'none', speed: 'normal', strength: 100, extras: 'none', matte: 'dark',
 };
 const st = { ...DEFAULTS, seeds: [], name: 'emote' };
 
@@ -98,7 +108,7 @@ function load(file) {
     orig = cutCtx.getImageData(0, 0, W, H);
     cutData = new ImageData(new Uint8ClampedArray(orig.data), W, H);
     paint = new Uint8Array(W * H);
-    Object.assign(st, { ...DEFAULTS, seeds: [], format: st.format, font: st.font, textColor: st.textColor, textStroke: st.textStroke });
+    Object.assign(st, { ...DEFAULTS, seeds: [], ...Object.fromEntries(KEEP.map((k) => [k, st[k]])) });
     st.name = (file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '') || 'emote').slice(0, 20);
     $('#em-name').value = st.name;
     hist.list = [];
@@ -164,6 +174,26 @@ function computeKey() {
   }
   keyA = st.clean ? erode(a, st.clean) : a;
   applyAlpha(0, 0, W, H);
+}
+
+// Helligkeit, Kontrast, Sättigung (−100 … 100) auf die Farben des Ausschnitts
+function computeColor() {
+  if (!orig) return;
+  const o = orig.data;
+  const d = cutData.data;
+  const lut = new Uint8ClampedArray(256);
+  const c = (100 + st.contrast) / 100;
+  for (let v = 0; v < 256; v++) lut[v] = (v - 128) * c + 128 + st.bright * 1.28;
+  const sat = (100 + st.sat) / 100;
+  for (let p = 0; p < d.length; p += 4) {
+    const r = lut[o[p]]; const g = lut[o[p + 1]]; const b = lut[o[p + 2]];
+    if (sat === 1) { d[p] = r; d[p + 1] = g; d[p + 2] = b; continue; }
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    d[p] = l + (r - l) * sat;
+    d[p + 1] = l + (g - l) * sat;
+    d[p + 2] = l + (b - l) * sat;
+  }
+  cutCtx.putImageData(cutData, 0, 0);
 }
 
 // Kante säubern: Alpha um r Pixel nach innen ziehen (Minimum-Filter, erst waagrecht, dann senkrecht)
@@ -363,6 +393,7 @@ function draw() {
   raf = requestAnimationFrame(() => {
     raf = 0;
     result = render();
+    animSrc = null;
     ctx.clearRect(0, 0, WORK, WORK);
     ctx.drawImage(result, 0, 0);
     if (hover && mode !== 'move') {
@@ -385,47 +416,62 @@ function draw() {
 // Vorschau der Größen, Chat und Prüfung – kurz nach der letzten Änderung (spart Rechenzeit beim Ziehen)
 let previewTimer = 0;
 let previewUrls = [];
+let previewRun = 0;
 function schedulePreview() {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => { updatePreview().catch((e) => say(`Vorschau fehlgeschlagen: ${e.message}`)); }, 140);
+  previewTimer = setTimeout(() => { updatePreview().catch((e) => say(`Vorschau fehlgeschlagen: ${e.message}`)); }, animated() ? 350 : 140);
 }
 
 const toBlob = (c) => new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error('PNG ließ sich nicht erzeugen'))), 'image/png'));
 const kb = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1048576).toFixed(1).replace('.0', '').replace('.', ',')} MB`);
+const animated = () => st.format === 'emote' && (st.anim !== 'none' || st.extras !== 'none');
+const animOpts = () => ({ anim: st.anim, strength: st.strength, extras: st.extras, speed: st.speed });
 
+// Dateien für Vorschau und Download: main = die Twitch-Größen, extra = Zusatzdateien
 async function buildFiles() {
   const f = FORMATS[st.format];
-  const sizes = f.big ? [...f.sizes, f.big] : f.sizes;
-  const out = [];
-  for (const s of sizes) {
-    const c = scaled(result, s);
-    out.push({ size: s, canvas: c, blob: await toBlob(c), big: s === f.big });
+  const main = [];
+  const extra = [];
+  if (animated()) {
+    // animiert: GIF je Größe, dazu die stehende Fassung als PNG
+    for (const s of f.sizes) {
+      const still = scaled(result, s);
+      const frames = animFrames(scaled(result, Math.min(WORK, s * 2)), s, animOpts());
+      main.push({ size: s, canvas: still, blob: encodeGif(frames, { delayCs: FRAME_CS, matte: MATTES[st.matte] }), ext: 'gif', frames: frames.length });
+      extra.push({ size: s, canvas: still, blob: await toBlob(still), ext: 'png', suffix: '_statisch' });
+    }
+  } else {
+    for (const s of f.sizes) {
+      const c = scaled(result, s);
+      main.push({ size: s, canvas: c, blob: await toBlob(c), ext: 'png' });
+    }
+    if (f.big) extra.push({ size: f.big, canvas: result, blob: await toBlob(result), ext: 'png', suffix: '_gross' });
   }
-  return out;
+  return { main, extra };
 }
 
 async function updatePreview() {
   if (!result) return;
+  const run = ++previewRun;
   const f = FORMATS[st.format];
-  const files = await buildFiles();
+  const { main } = await buildFiles();
+  if (run !== previewRun) return; // inzwischen neuer Stand
   previewUrls.forEach((u) => URL.revokeObjectURL(u));
-  previewUrls = files.map((x) => URL.createObjectURL(x.blob));
-  const small = files.filter((x) => !x.big);
-  $('#em-sizes').replaceChildren(...small.map((x) => {
-    const url = previewUrls[files.indexOf(x)];
+  previewUrls = main.map((x) => URL.createObjectURL(x.blob));
+  $('#em-sizes').replaceChildren(...main.map((x, i) => {
     const over = x.blob.size > f.limit;
     return h('figure', {},
-      h('img', { src: url, alt: `${f.label} ${x.size} Pixel`, width: x.size, height: x.size }),
-      h('figcaption', {}, `${x.size} px · `, h('span', { class: over ? 'em-bad' : '' }, kb(x.blob.size))),
-      h('a', { class: 'em-link', href: url, download: `${st.name}_${x.size}.png` }, 'einzeln'));
+      h('img', { src: previewUrls[i], alt: `${f.label} ${x.size} Pixel`, width: x.size, height: x.size }),
+      h('figcaption', {}, `${x.size} px · ${x.ext === 'gif' ? 'GIF · ' : ''}`, h('span', { class: over ? 'em-bad' : '' }, kb(x.blob.size))),
+      h('a', { class: 'em-link', href: previewUrls[i], download: `${st.name}_${x.size}.${x.ext}` }, 'einzeln'));
   }));
   // Chat-Vorschau: Emote in der Nachricht (28 px), Abzeichen vor dem Namen (18 px)
-  const tiny = previewUrls[files.indexOf(small[small.length - 1])];
+  const tiny = previewUrls[main.length - 1];
   const line = (cls) => (st.format === 'badge'
     ? h('p', { class: `em-chat ${cls}` }, h('img', { src: tiny, alt: '', width: 18, height: 18 }), h('b', {}, 'Zuschauer:'), ' hallo zusammen!')
     : h('p', { class: `em-chat ${cls}` }, h('b', {}, 'Zuschauer:'), ' das war krass ', h('img', { src: tiny, alt: '', width: 28, height: 28 }), h('img', { src: tiny, alt: '', width: 28, height: 28 }), ' gg'));
   $('#em-chats').replaceChildren(line('is-dark'), line('is-light'));
-  checks(small, f);
+  checks(main, f);
 }
 
 // Prüfung der Twitch-Vorgaben und Tipps
@@ -433,8 +479,9 @@ function checks(files, f) {
   const items = [];
   const ok = (text) => items.push(['ok', text]);
   const warn = (text) => items.push(['warn', text]);
+  const info = (text) => items.push(['info', text]);
   const biggest = files.reduce((m, x) => Math.max(m, x.blob.size), 0);
-  if (biggest > f.limit) warn(`Datei zu groß: ${kb(biggest)} – Twitch erlaubt je Größe höchstens ${kb(f.limit)}.`);
+  if (biggest > f.limit) warn(`Datei zu groß: ${kb(biggest)} – Twitch erlaubt je Größe höchstens ${kb(f.limit)}.${files[0].ext === 'gif' ? ' Weniger Bilder („schnell“), kein Konfetti oder weniger Farbverläufe helfen.' : ''}`);
   else ok(`Dateigrößen passen (größte ${kb(biggest)} von ${kb(f.limit)}).`);
   const c = files[0].canvas;
   const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -456,8 +503,13 @@ function checks(files, f) {
   }
   const text = st.text.trim();
   if (text && (text.length > 5 || st.textSize < 36)) warn(`Text ist bei ${f.sizes[2]} px kaum lesbar – kurz halten (bis 4 Zeichen) und groß machen.`);
-  $('#em-checks').replaceChildren(...items.map(([kind, text]) => h('li', { class: `is-${kind}` },
-    h('i', { class: `ph ${kind === 'ok' ? 'ph-check-circle' : 'ph-warning'}`, 'aria-hidden': 'true' }), h('span', {}, text))));
+  if (files[0].ext === 'gif') {
+    ok(`${files[0].frames} Bilder je Durchlauf (Twitch erlaubt höchstens 60), läuft in Endlosschleife.`);
+    info('Animierte Emotes können Affiliates und Partner hochladen. Die stehende PNG-Fassung liegt mit in der ZIP-Datei.');
+  }
+  const icon = { ok: 'ph-check-circle', warn: 'ph-warning', info: 'ph-info' };
+  $('#em-checks').replaceChildren(...items.map(([kind, t]) => h('li', { class: `is-${kind}` },
+    h('i', { class: `ph ${icon[kind]}`, 'aria-hidden': 'true' }), h('span', {}, t))));
 }
 
 // ---------- ZIP (ohne Kompression – PNG ist schon gepackt) ----------
@@ -525,23 +577,25 @@ async function downloadZip() {
   if (!orig) return;
   result = render();
   const f = FORMATS[st.format];
-  const files = await buildFiles();
-  const over = files.filter((x) => !x.big && x.blob.size > f.limit);
-  const entries = await Promise.all(files.map(async (x) => ({
-    name: `${st.name}_${x.size}${x.big ? '_gross' : ''}.png`,
+  const { main, extra } = await buildFiles();
+  const over = main.filter((x) => x.blob.size > f.limit);
+  const entries = await Promise.all([...main, ...extra].map(async (x) => ({
+    name: `${st.name}_${x.size}${x.suffix ?? ''}.${x.ext}`,
     data: new Uint8Array(await x.blob.arrayBuffer()),
   })));
-  const a = h('a', { href: URL.createObjectURL(makeZip(entries)), download: `${st.name}_${st.format === 'badge' ? 'abzeichen' : 'emote'}.zip` });
+  const a = h('a', { href: URL.createObjectURL(makeZip(entries)), download: `${st.name}_${st.format === 'badge' ? 'abzeichen' : animated() ? 'animiert' : 'emote'}.zip` });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  const list = files.map((x) => x.size).join(', ');
+  const list = main.map((x) => x.size).join(', ');
   say(over.length
     ? `Gespeichert (${list} px) – Achtung: ${over.map((x) => x.size).join(', ')} px ist größer als ${kb(f.limit)}, Twitch nimmt das so nicht an.`
     : st.format === 'badge'
       ? `Gespeichert: ZIP mit ${list} px. Hochladen: Creator-Dashboard → Viewer-Belohnungen → Abonnements → Abzeichen.`
-      : `Gespeichert: ZIP mit ${list} px. Hochladen: Creator-Dashboard → Viewer-Belohnungen → Emotes – die 448-px-Datei passt für „Automatische Größenanpassung“.`);
+      : animated()
+        ? `Gespeichert: ZIP mit animierten GIFs (${list} px) und der stehenden Fassung als PNG. Hochladen: Creator-Dashboard → Viewer-Belohnungen → Emotes → animiertes Emote.`
+        : `Gespeichert: ZIP mit ${list} px und 448 px. Hochladen: Creator-Dashboard → Viewer-Belohnungen → Emotes – die 448-px-Datei passt für „Automatische Größenanpassung“.`);
 }
 
 // ---------- Rückgängig ----------
@@ -565,6 +619,7 @@ function travel(step) {
   const e = hist.list[k];
   Object.assign(st, JSON.parse(e.s));
   paint = e.paint;
+  computeColor();
   computeKey();
   syncControls();
   syncUndo();
@@ -580,8 +635,11 @@ const CONTROLS = [
   ['#em-zoom', 'zoom', Number], ['#em-rot', 'rot', Number], ['#em-tol', 'tol', Number], ['#em-clean', 'clean', Number],
   ['#em-border', 'border', Number], ['#em-border-color', 'borderColor'], ['#em-text', 'text'], ['#em-font', 'font'],
   ['#em-text-color', 'textColor'], ['#em-text-stroke', 'textStroke'], ['#em-text-size', 'textSize', Number], ['#em-text-pos', 'textPos'],
+  ['#em-bright', 'bright', Number], ['#em-contrast', 'contrast', Number], ['#em-sat', 'sat', Number],
+  ['#em-strength', 'strength', Number], ['#em-extras', 'extras'], ['#em-matte', 'matte'],
 ];
 const NEEDS_KEY = new Set(['tol', 'clean']);
+const NEEDS_COLOR = new Set(['bright', 'contrast', 'sat']);
 
 function syncControls() {
   for (const [id, key] of CONTROLS) $(id).value = String(st[key]);
@@ -594,7 +652,16 @@ function syncControls() {
   $('#em-key-swatch').title = st.key ? 'entfernte Farbe' : 'keine Farbe gewählt';
   $('#em-rot-val').textContent = `${st.rot}°`;
   $('#em-zoom-val').textContent = `${Math.round(st.zoom * 100)} %`;
-  $('#em-download-label').textContent = st.format === 'badge' ? 'Abzeichen als ZIP speichern (72, 36, 18 px)' : 'Emote als ZIP speichern (112, 56, 28 + 448 px)';
+  $('#em-download-label').textContent = st.format === 'badge' ? 'Abzeichen als ZIP speichern (72, 36, 18 px)'
+    : animated() ? 'Animiertes Emote als ZIP speichern (GIF 112, 56, 28 px)' : 'Emote als ZIP speichern (112, 56, 28 + 448 px)';
+  // Animation: Abzeichen dürfen bei Twitch nicht animiert sein
+  const badge = st.format === 'badge';
+  $('#em-anim-badge').hidden = !badge;
+  $('#em-anim-body').hidden = badge;
+  document.querySelectorAll('[data-em-anim]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.emAnim === st.anim)));
+  document.querySelectorAll('[name="em-speed"]').forEach((r) => { r.checked = r.value === st.speed; });
+  $('#em-anim-tag').textContent = animated() ? 'GIF' : 'aus';
+  $('#em-anim-tag').classList.toggle('is-on', animated());
 }
 
 function setMode(next) {
@@ -662,14 +729,23 @@ function setup() {
     const el = $(id);
     el.addEventListener('input', () => {
       st[key] = conv(el.value);
+      if (NEEDS_COLOR.has(key)) computeColor();
       if (NEEDS_KEY.has(key)) computeKey();
       if (key === 'zoom') $('#em-zoom-val').textContent = `${Math.round(st.zoom * 100)} %`;
       if (key === 'rot') $('#em-rot-val').textContent = `${st.rot}°`;
       if (key === 'font' || key === 'text') ensureFont().then(draw, () => draw());
       draw();
     });
-    el.addEventListener('change', commit);
+    el.addEventListener('change', () => { if (key === 'extras') syncControls(); commit(); });
   }
+  $('#em-color-reset').addEventListener('click', () => {
+    Object.assign(st, { bright: 0, contrast: 0, sat: 0 });
+    computeColor();
+    syncControls();
+    commit();
+    draw();
+  });
+  setupAnim();
   $('#em-connected').addEventListener('change', (e) => { st.connected = e.target.checked; computeKey(); commit(); draw(); });
   $('#em-shadow').addEventListener('change', (e) => { st.shadow = e.target.checked; commit(); draw(); });
   document.querySelectorAll('[name="em-format"]').forEach((r) => r.addEventListener('change', () => {
@@ -797,6 +873,56 @@ function setup() {
 
   $('#em-download').addEventListener('click', () => { downloadZip().catch((e) => say(`Speichern fehlgeschlagen: ${e.message}`)); });
 }
+
+// ---------- Animation ----------
+// Live-Vorschau im Schritt „Animation“ und kleine Vorschauen je Effekt (laufen nur, solange sichtbar)
+let animSrc = null;
+let loopOn = false;
+let lastFrame = 0;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const minis = [];
+const live = $('#em-live');
+const liveCtx = live.getContext('2d');
+
+function setupAnim() {
+  const grid = $('#em-anims');
+  for (const [id, label] of ANIMS) {
+    const c = h('canvas', { width: 56, height: 56, 'aria-hidden': 'true' });
+    minis.push([id, c.getContext('2d')]);
+    grid.append(h('button', { type: 'button', 'data-em-anim': id, 'aria-pressed': String(id === st.anim) }, c, h('span', {}, label)));
+  }
+  grid.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-em-anim]');
+    if (!b) return;
+    st.anim = b.dataset.emAnim;
+    syncControls();
+    commit();
+    draw();
+  });
+  $('#em-extras').replaceChildren(...EXTRAS.map(([id, label]) => h('option', { value: id }, label)));
+  document.querySelectorAll('[name="em-speed"]').forEach((r) => r.addEventListener('change', () => { st.speed = r.value; commit(); draw(); }));
+  const io = new IntersectionObserver(([en]) => {
+    loopOn = en.isIntersecting;
+    if (loopOn) requestAnimationFrame(animLoop);
+  });
+  io.observe($('#em-anim-step'));
+}
+
+function animLoop(now) {
+  if (!loopOn || document.hidden) { loopOn = loopOn && !document.hidden; return; }
+  requestAnimationFrame(animLoop);
+  if (!result || now - lastFrame < 1000 / 25) return;
+  lastFrame = now;
+  if (!animSrc) animSrc = scaled(result, 224);
+  const dur = (SPEEDS[st.speed] ?? SPEEDS.normal) * FRAME_CS * 10;
+  const t = (now % dur) / dur;
+  renderFrame(liveCtx, live.width, animSrc, st.format === 'badge' ? { anim: 'none' } : animOpts(), t);
+  for (const [id, g] of minis) renderFrame(g, 56, animSrc, { anim: id, strength: st.strength }, reduced ? 0.3 : t);
+}
+document.addEventListener('visibilitychange', () => {
+  const r = $('#em-anim-step').getBoundingClientRect();
+  if (!document.hidden && !loopOn && r.height && r.top < innerHeight && r.bottom > 0) { loopOn = true; requestAnimationFrame(animLoop); }
+});
 
 // Schrift vor dem Zeichnen laden (sonst erscheint beim ersten Mal die Ersatzschrift)
 function ensureFont() {

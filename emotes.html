@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bssy9nFTCRkqSlbMjlpLVpAOhs3wb7qBnyJuyUUDkRw=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-kSbqv13K5YrWJfaWMf5kcsIOwZQOLhLDiQLF37Oa9Us=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Emote-Ersteller · StreamHelp</title>
@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="css/phosphor.css?v=d0f44e4156">
   <link rel="stylesheet" href="css/profile.css?v=473cb2f696">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
-  <link rel="stylesheet" href="css/emotes.css?v=c74a3b631e">
+  <link rel="stylesheet" href="css/emotes.css?v=227c6712e6">
   <!-- Emote-Ersteller (js/emotes-page.js) – Extra von StreamHelp MAX, läuft nur im Browser -->
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
@@ -72,7 +72,8 @@
       "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
       "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
       "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
-      "./js/emotes-page.js": "./js/emotes-page.js?v=3ccdbcb863",
+      "./js/emote-anim.js": "./js/emote-anim.js?v=0cb2cae0f7",
+      "./js/emotes-page.js": "./js/emotes-page.js?v=39e8857ee5",
       "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
       "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
       "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
@@ -94,6 +95,7 @@
       "./js/extras.js": "./js/extras.js?v=c66aa479c2",
       "./js/frame-guard.js": "./js/frame-guard.js?v=3a391987bd",
       "./js/games.js": "./js/games.js?v=1dbc5571d9",
+      "./js/gif-encode.js": "./js/gif-encode.js?v=129bc2a120",
       "./js/help.js": "./js/help.js?v=a68e78522c",
       "./js/i18n-en.js": "./js/i18n-en.js?v=c99b1f5e79",
       "./js/i18n-es.js": "./js/i18n-es.js?v=6e3fcce73b",
@@ -170,7 +172,7 @@
     <section class="em-intro">
       <p class="em-kicker">StreamHelp MAX <span class="em-chip">MAX</span></p>
       <h1>Emote-Ersteller</h1>
-      <p class="em-lead">Aus einem Bild ein Twitch-Emote oder Abo-Abzeichen machen: zuschneiden, Hintergrund automatisch entfernen, nachradieren, Rand, Schatten und Text dazu – fertig in allen Twitch-Größen als ZIP. Alles passiert in deinem Browser, hochgeladen wird nichts.</p>
+      <p class="em-lead">Aus einem Bild ein Twitch-Emote oder Abo-Abzeichen machen: zuschneiden, Hintergrund automatisch entfernen, nachradieren, Rand, Schatten und Text dazu, auf Wunsch animiert als GIF – fertig in allen Twitch-Größen als ZIP. Alles passiert in deinem Browser, hochgeladen wird nichts.</p>
       <p class="em-free" id="em-free" hidden>🎁 Bis zum Start von MAX kannst du den Emote-Ersteller kostenlos ausprobieren.</p>
     </section>
 
@@ -213,6 +215,13 @@
       </div>
 
       <div class="em-steps" id="em-steps" hidden>
+        <div class="em-kind">
+          <span>Was machst du?</span>
+          <div class="em-seg em-format" role="radiogroup" aria-label="Format">
+            <label><input type="radio" name="em-format" value="emote" checked> Emote <small>112 · 56 · 28 px</small></label>
+            <label><input type="radio" name="em-format" value="badge"> Abo-Abzeichen <small>72 · 36 · 18 px</small></label>
+          </div>
+        </div>
         <fieldset>
           <legend>1 · Zuschnitt</legend>
           <label><span class="em-lab">Zoom <output id="em-zoom-val">100 %</output></span><input type="range" id="em-zoom" min="0.2" max="8" step="0.01" value="1"></label>
@@ -238,7 +247,13 @@
           <p class="em-hint">Eingeschlossene Stellen (z. B. zwischen Arm und Körper): noch einmal „Farbe wählen“ und hineintippen. Den Rest erledigen <b>Radieren</b> und <b>Zurückholen</b> über der Vorschau.</p>
         </fieldset>
         <fieldset>
-          <legend>3 · Rand &amp; Schatten</legend>
+          <legend>3 · Farben, Rand &amp; Schatten</legend>
+          <div class="em-row em-row--3">
+            <label>Helligkeit <input type="range" id="em-bright" min="-100" max="100" value="0"></label>
+            <label>Kontrast <input type="range" id="em-contrast" min="-100" max="100" value="0"></label>
+            <label>Sättigung <input type="range" id="em-sat" min="-100" max="100" value="0"></label>
+          </div>
+          <p class="em-hint">Kräftige Farben und etwas mehr Kontrast machen Emotes in 28 px besser erkennbar. <button type="button" class="em-link" id="em-color-reset">Farben zurücksetzen</button></p>
           <div class="em-row">
             <label>Breite <input type="range" id="em-border" min="0" max="24" value="0"></label>
             <label class="em-color">Farbe <input type="color" id="em-border-color" value="#ffffff"></label>
@@ -259,12 +274,35 @@
           <label>Größe <input type="range" id="em-text-size" min="12" max="60" value="30"></label>
         </fieldset>
 
-        <fieldset>
-          <legend>5 · Vorschau &amp; Prüfung</legend>
-          <div class="em-seg em-format" role="radiogroup" aria-label="Format">
-            <label><input type="radio" name="em-format" value="emote" checked> Emote <small>112 · 56 · 28 px</small></label>
-            <label><input type="radio" name="em-format" value="badge"> Abo-Abzeichen <small>72 · 36 · 18 px</small></label>
+        <fieldset id="em-anim-step">
+          <legend>5 · Animation <span class="em-tag" id="em-anim-tag">aus</span></legend>
+          <p class="em-hint" id="em-anim-badge" hidden>Abo-Abzeichen können bei Twitch nicht animiert sein – wähle oben „Emote“, um zu animieren.</p>
+          <div class="em-anim" id="em-anim-body">
+            <div class="em-anim-live">
+              <canvas id="em-live" width="224" height="224" aria-label="Live-Vorschau der Animation"></canvas>
+              <span>Live-Vorschau</span>
+            </div>
+            <div class="em-anim-set">
+              <div class="em-anims" id="em-anims" role="group" aria-label="Bewegung"></div>
+              <div class="em-row">
+                <div class="em-seg" role="radiogroup" aria-label="Tempo">
+                  <label><input type="radio" name="em-speed" value="slow"> langsam</label>
+                  <label><input type="radio" name="em-speed" value="normal" checked> normal</label>
+                  <label><input type="radio" name="em-speed" value="fast"> schnell</label>
+                </div>
+                <label>Stärke <input type="range" id="em-strength" min="20" max="150" value="100"></label>
+              </div>
+              <div class="em-row">
+                <label>Extras <select id="em-extras"></select></label>
+                <label>Kanten im GIF <select id="em-matte"><option value="dark">für dunklen Chat</option><option value="light">für hellen Chat</option><option value="none">ungemischt</option></select></label>
+              </div>
+              <p class="em-hint">Gespeichert wird ein GIF in Endlosschleife – so verlangt es Twitch (höchstens 60 Bilder, 1 MB). GIF kennt keine halbdurchsichtigen Kanten, deshalb werden sie mit der Chatfarbe gemischt.</p>
+            </div>
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>6 · Vorschau &amp; Prüfung</legend>
           <div class="em-sizes" id="em-sizes"></div>
           <div class="em-chats" id="em-chats"></div>
           <ul class="em-checks" id="em-checks" aria-live="polite"></ul>
