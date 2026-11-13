@@ -588,6 +588,7 @@ async function loadBillingCheck() {
     [c ? c.stripe_webhook : null, 'Supabase-Secret STRIPE_WEBHOOK_SECRET gesetzt (Webhook auf …/functions/v1/billing)'],
     [c ? c.mail : null, 'Supabase-Secrets BREVO_API_KEY und MAIL_FROM gesetzt (Bestätigungs-Mails)'],
     [c ? c.admin_mail : null, 'Supabase-Secret ADMIN_EMAIL gesetzt (Kündigungen, die von Hand geprüft werden)'],
+    [c ? c.support_mail : null, 'Supabase-Secret SUPPORT_EMAIL gesetzt (Antwort-Adresse der Mails, z. B. support@streamhelp.de)'],
     [c ? c.site_url : null, 'Supabase-Secret SITE_URL gesetzt'],
     [c ? c.open : null, 'Supabase-Secret BILLING_OPEN=1 gesetzt (Bestellen und Kündigen freigeschaltet)'],
     [LAUNCH.pro, 'Webseite: node tools/launch.mjs --pro ausgeführt (js/launch.js, Hinweise „Noch nicht in Kraft“ entfernt)'],
