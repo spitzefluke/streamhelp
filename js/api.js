@@ -302,6 +302,32 @@ async function createSupabaseApi({ memory = false } = {}) {
     async consoleModelUpload(file) {
       unwrap(await sb.storage.from('console-private').upload('model.obj', file, { contentType: 'text/plain', upsert: true, cacheControl: '60' }));
     },
+    // Emote-Editor: Projekte im Konto (Migration …_emote_projects.sql). Liste mit Vorschaubild in core.emote_projects,
+    // das Projekt selbst als JSON im privaten Bucket emote-projects unter <Benutzer-ID>/<Projekt-ID>.json
+    async emoteProjects() { return unwrap(await sb.rpc('emote_projects_list')) ?? []; },
+    async emoteProjectSave({ id, name, fmt, thumb, doc }) {
+      const user = await this.getUser();
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      const body = new Blob([JSON.stringify(doc)], { type: 'application/json' });
+      if (body.size > 10 * 1024 * 1024) throw new Error('Das Emote ist zu groß fürs Konto (höchstens 10 MB) – kleinere Bilder verwenden.');
+      const row = unwrap(await sb.rpc('emote_project_save', { p_id: id, p_name: name, p_fmt: fmt, p_thumb: thumb }));
+      unwrap(await sb.storage.from('emote-projects').upload(`${user.id}/${id}.json`, body, { contentType: 'application/json', upsert: true, cacheControl: '0' }));
+      return row;
+    },
+    async emoteProjectLoad(id) {
+      const user = await this.getUser();
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      const { data, error } = await sb.storage.from('emote-projects').download(`${user.id}/${id}.json`);
+      if (error) throw error;
+      return JSON.parse(await data.text());
+    },
+    async emoteProjectDelete(id) {
+      const user = await this.getUser();
+      if (!user) throw new Error('Bitte zuerst anmelden.');
+      unwrap(await sb.rpc('emote_project_delete', { p_id: id }));
+      const { error } = await sb.storage.from('emote-projects').remove([`${user.id}/${id}.json`]);
+      if (error) throw error;
+    },
     async discordGet() { return unwrap(await sb.rpc('discord_get')); },
     async discordSave(p) {
       return unwrap(await sb.rpc('discord_save', {
@@ -1162,6 +1188,8 @@ function createLocalApi() {
   }
 
   let demoConsoleModel = null; // 3D-Modell der Console (nur im Arbeitsspeicher)
+
+  const demoEmoteProjects = new Map(); // Emote-Editor: Projekte „im Konto“ (Demo)
   async function requireAdmin() {
     const u = store.get('users', {})[current?.email];
     if (!u?.is_admin) throw new Error('Nur Admins dürfen das.');
@@ -1705,6 +1733,24 @@ function createLocalApi() {
       return this.consoleGet();
     },
     // 3D-Modell im Demo-Modus: nur bis zum Neuladen (zu groß für localStorage)
+    // Emote-Editor im Demo-Modus: Konto-Projekte nur im Speicher dieser Seite (gehen beim Neuladen verloren)
+    async emoteProjects() {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      return [...demoEmoteProjects.values()].map((p) => p.row).sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+    },
+    async emoteProjectSave({ id, name, fmt, thumb, doc }) {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      if (!demoEmoteProjects.has(id) && demoEmoteProjects.size >= 50) throw new Error('Im Konto sind höchstens 50 Emotes möglich – lösche zuerst ein altes.');
+      const row = { id, name: String(name || 'emote').slice(0, 40), fmt, thumb: thumb || '', updated_at: new Date().toISOString() };
+      demoEmoteProjects.set(id, { row, doc: JSON.parse(JSON.stringify(doc)) });
+      return row;
+    },
+    async emoteProjectLoad(id) {
+      const p = demoEmoteProjects.get(id);
+      if (!p) throw new Error('Dieses Emote gibt es im Konto nicht mehr.');
+      return JSON.parse(JSON.stringify(p.doc));
+    },
+    async emoteProjectDelete(id) { demoEmoteProjects.delete(id); },
     async consoleModelGet() { await requireAdmin(); return demoConsoleModel; },
     async consoleModelUpload(file) {
       await requireAdmin();

@@ -174,3 +174,9 @@
 .ph.ph-chat-circle:before { content: "\e168"; }
 .ph.ph-seal:before { content: "\e604"; }
 .ph.ph-seal-check:before { content: "\e606"; }
+.ph.ph-folder-open:before { content: "\e256"; }
+.ph.ph-cloud:before { content: "\e1aa"; }
+.ph.ph-cloud-arrow-up:before { content: "\e1ae"; }
+.ph.ph-cloud-check:before { content: "\e1b0"; }
+.ph.ph-file-arrow-up:before { content: "\e61e"; }
+.ph.ph-file-arrow-down:before { content: "\e232"; }

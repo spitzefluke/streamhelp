@@ -234,6 +234,44 @@ input[type=checkbox] { accent-color: var(--color-accent); width: 16px; height: 1
 .ee-head { position: absolute; top: 22px; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: var(--color-accent); box-shadow: 0 0 10px var(--color-accent); pointer-events: none; }
 .ee-head::before { content: ""; position: absolute; top: -6px; left: -5px; width: 12px; height: 12px; border-radius: 3px; background: var(--color-accent); }
 
+/* — Speichern — */
+.ee-libbtn { min-height: 30px; padding: 4px 10px; font-size: 13px; flex: none; }
+.ee-savestate { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 200px; padding: 4px 8px; border: 0; border-radius: var(--radius-md); background: none;
+  color: var(--color-neutral-400); font: 400 12px var(--font-body); white-space: nowrap; cursor: pointer; flex: 0 1 auto; }
+.ee-savestate:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); }
+.ee-savestate span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ee-savestate span span { overflow: hidden; text-overflow: ellipsis; }
+.ee-savestate .ph { font-size: 14px; flex: none; }
+.ee-savestate[data-state="saving"] .ph { animation: ee-spin 1s linear infinite; }
+.ee-savestate[data-state="saved"] .ph, .ee-savestate[data-state="cloud"] .ph { color: var(--color-accent-300); }
+.ee-savestate[data-state="error"] { color: #ffb3a8; }
+@keyframes ee-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ee-savestate[data-state="saving"] .ph { animation: none; } }
+.ee-cloudbtn.is-on { color: var(--color-accent); border-color: var(--color-accent); }
+.tag-neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
+.tag .ph { font-size: 12px; margin-right: 3px; }
+.ee-libdlg { width: min(760px, 100%); }
+.ee-libhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ee-libsec { display: grid; gap: var(--space-3); }
+.ee-libsec h2 { margin: 0; font-weight: 400; display: flex; align-items: center; gap: 4px; }
+.ee-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.ee-card { position: relative; display: grid; gap: 6px; padding: 8px; border-radius: var(--radius-md); border: 1px solid var(--color-divider); background: var(--color-bg); }
+.ee-card.is-cur { border-color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent); }
+.ee-card-open { display: grid; gap: 4px; justify-items: center; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: center; cursor: pointer; }
+.ee-card-open img, .ee-card-empty { width: 96px; height: 96px; border-radius: var(--radius-sm);
+  background: repeating-conic-gradient(var(--color-neutral-800) 0 25%, var(--color-neutral-900) 0 50%) 0 0 / 16px 16px; }
+.ee-card-empty { display: grid; place-items: center; color: var(--color-neutral-600); font-size: 24px; }
+.ee-card-name { max-width: 100%; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ee-card-date { font-size: 11px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums; }
+.ee-card-open:hover .ee-card-name { color: var(--color-accent-200); }
+.ee-card-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.ee-card-tags .tag { padding: 1px 7px; font-size: 10px; }
+.ee-card-acts { display: flex; justify-content: center; gap: 4px; }
+.ee-lib-empty { grid-column: 1 / -1; padding: var(--space-4); border: 1px dashed var(--color-divider); border-radius: var(--radius-md); font-size: 13px; color: var(--color-neutral-400); }
+.ee-libacts { justify-content: flex-start; }
+@media (max-width: 1240px) { .ee-headbar .tag-accent { display: none; } .ee-savestate { max-width: 150px; } }
+@media (max-width: 1100px) and (min-width: 1001px) { .ee-libbtn span { display: none; } }
+
 /* — Export — */
 .ee-exsizes { display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: flex-end; padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-bg); }
 .ee-exsize { padding: 6px; border: 1px solid transparent; border-radius: var(--radius-md); background: none; color: var(--color-neutral-400); font: 500 11px var(--font-body); cursor: pointer; }

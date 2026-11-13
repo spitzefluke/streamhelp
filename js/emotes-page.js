@@ -1,13 +1,15 @@
 // Emote-Editor (emotes.html) – ein Extra von StreamHelp MAX, nach dem Entwurf „Emote Editor“ aus Claude Design.
 // Ebenen (Bild, Text, Form, Effekt) frei anordnen, jede Ebene einzeln animieren (fertige Bewegungen oder eigene
 // Keyframes), Zeitleiste mit Abspielen und Springen, Export als PNG oder animiertes GIF (js/gif-encode.js) in den
-// Twitch-Größen. Läuft komplett im Browser, hochgeladen wird nichts.
+// Twitch-Größen. Läuft im Browser; Emotes werden lokal gespeichert (js/emote-store.js, automatisch) und auf Wunsch
+// zusätzlich im Konto (Migration …_emote_projects.sql) – oder als Datei (.emote.json) weitergegeben.
 // Ab dem Start von MAX (js/launch.js: max) nur mit MAX; bis dahin für alle zum Ausprobieren.
 import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { setupConsent } from './consent.js';
 import { h } from './extras-core.js';
 import { MAX_ENFORCED } from './pro.js';
-import { ANIM_GROUPS, ANIM_LABEL, EXTRAS, EXTRA_LABEL, ROOM, SPEEDS, pose, interpKeys, heartPath, polyStar, drawExtras } from './emote-anim.js';
+import { localList, localGet, localPut, localDelete, lastId, setLastId } from './emote-store.js';
+import { EASES, ANIM_GROUPS, ANIM_LABEL, EXTRAS, EXTRA_LABEL, ROOM, SPEEDS, pose, interpKeys, heartPath, polyStar, drawExtras } from './emote-anim.js';
 
 setupConsent(); // Cookie-Fenster (js/consent.js)
 
@@ -64,6 +66,8 @@ let t = 0;                 // Abspielposition 0 … 1
 const imgs = {};           // Ebenen-ID → Bild (freigestellt oder Original)
 const orig = {};           // Ebenen-ID → Originalbild
 const imgKey = {};         // Ebenen-ID → Stand der Freistellung („an:Toleranz“)
+const srcs = {};           // Bild-ID (L.src) → Originalbild – mehrere Ebenen (Duplikate) können eines teilen
+const srcBlob = {};        // Bild-ID → gespeicherte Datei (WebP/PNG), damit nicht bei jedem Sichern neu kodiert wird
 let hist = [];
 let fut = [];
 let lastPush = 0;
@@ -90,12 +94,13 @@ function restore(ls) {
   st.layers = ls;
   if (!ls.some((l) => l.id === st.sel)) st.sel = ls[ls.length - 1]?.id ?? null;
   syncImages();
+  scheduleSave();
   refresh();
 }
 function undo() { if (!hist.length) return; fut.push(JSON.stringify(st.layers)); restore(JSON.parse(hist.pop())); }
 function redo() { if (!fut.length) return; hist.push(JSON.stringify(st.layers)); restore(JSON.parse(fut.pop())); }
 
-function setLayers(ls) { st.layers = ls; dirty = true; }
+function setLayers(ls) { st.layers = ls; dirty = true; scheduleSave(); }
 function patchLayer(id, patch) { setLayers(st.layers.map((l) => (l.id === id ? { ...l, ...patch } : l))); }
 function update(patch, merge = true) {
   const id = st.sel;
@@ -158,7 +163,9 @@ function loadFile(f) {
     const g = c.getContext('2d');
     g.imageSmoothingQuality = 'high';
     g.drawImage(img, 0, 0, c.width, c.height);
-    const L = mk('image');
+    const src = `I${nid()}`;
+    srcs[src] = c;
+    const L = mk('image', { src });
     imgs[L.id] = c;
     orig[L.id] = c;
     imgKey[L.id] = 'aus';
@@ -228,6 +235,7 @@ function cutout(src, tol) {
   return c;
 }
 function applyCutout(L) {
+  if (!orig[L.id] && srcs[L.src]) orig[L.id] = srcs[L.src];
   const want = L.bgRemoved ? `an:${L.tol}` : 'aus';
   if (imgKey[L.id] === want || !orig[L.id]) return;
   imgs[L.id] = L.bgRemoved ? cutout(orig[L.id], L.tol) : orig[L.id];
@@ -958,17 +966,488 @@ function closeExport() {
   lastFocus?.focus?.();
 }
 
+// ---------- Speichern: lokal (automatisch), im Konto, als Datei ----------
+const proj = { id: null, cloud: false, changed: false, ready: false, savedAt: 0, cloudAt: 0, state: 'new', error: '' };
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
+  return (c === 'x' ? r : (r % 4) + 8).toString(16);
+}));
+let apiP = null;
+// API nur bei Bedarf laden (Konto-Funktionen); ohne Anmeldung bleibt alles lokal
+function getApi() {
+  if (!apiP) apiP = import('./api.js').then((m) => m.createApi());
+  apiP.catch(() => { apiP = null; });
+  return apiP;
+}
+async function accountUser() {
+  try { const api = await getApi(); return (await api.getUser()) ? api : null; } catch { return null; }
+}
+const cloudMissing = (e) => /could not find|does not exist|schema cache|bucket not found/i.test(String(e?.message ?? e));
+const errText = (e) => (cloudMissing(e) ? 'Speichern im Konto ist noch nicht eingerichtet.' : String(e?.message ?? e ?? 'Unbekannter Fehler'));
+
+function setSaveState(state, error = '') {
+  proj.state = state;
+  proj.error = error;
+  const el = $('#ee-savestate');
+  if (!el) return;
+  const time = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  const map = {
+    new: ['ph-file', 'Neu – noch nicht gespeichert'],
+    dirty: ['ph-pencil-simple', 'Ungespeicherte Änderungen'],
+    saving: ['ph-circle-notch', 'Speichert …'],
+    saved: ['ph-check', `Gespeichert ${time(proj.savedAt)}`],
+    cloud: ['ph-cloud-check', `Im Konto ${time(proj.cloudAt)}`],
+    error: ['ph-warning', error || 'Speichern fehlgeschlagen'],
+  };
+  const [icon, text] = map[state] ?? map.new;
+  el.replaceChildren(h('i', { class: `ph ${icon}`, 'aria-hidden': 'true' }), h('span', {}, text));
+  el.dataset.state = state;
+  el.title = state === 'error' ? text : 'Wird automatisch im Browser gesichert (Strg+S speichert sofort)';
+  const cb = $('#ee-cloud');
+  cb.classList.toggle('is-on', proj.cloud);
+  cb.setAttribute('aria-pressed', String(proj.cloud));
+  cb.title = proj.cloud ? 'Wird auch im Konto gesichert – klicken zum Beenden' : 'Auch im Konto sichern (auf jedem Gerät da)';
+  cb.replaceChildren(h('i', { class: `ph ${proj.cloud ? 'ph-cloud-check' : 'ph-cloud-arrow-up'}`, 'aria-hidden': 'true' }));
+}
+
+let saveTimer = 0;
+let cloudTimer = 0;
+function scheduleSave() {
+  if (!proj.ready) return;
+  proj.changed = true;
+  if (proj.state !== 'saving') setSaveState('dirty');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveLocal().catch(() => {}); }, 1200);
+  if (proj.cloud) {
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(() => { saveCloud().catch(() => {}); }, 8000);
+  }
+}
+function flushSave() {
+  if (!proj.ready || !proj.changed) return;
+  clearTimeout(saveTimer);
+  saveLocal().catch(() => {});
+}
+
+// Originalbild als Datei (WebP, sonst PNG) – einmal je Bild
+async function blobOf(src) {
+  if (srcBlob[src]) return srcBlob[src];
+  const c = srcs[src];
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/webp', 0.92));
+  srcBlob[src] = blob && blob.type === 'image/webp' ? blob : await new Promise((ok) => c.toBlob(ok, 'image/png'));
+  return srcBlob[src];
+}
+const blobToData = (b) => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => fail(r.error); r.readAsDataURL(b); });
+// Stand sofort festhalten (synchron) – danach darf der Editor schon weiterarbeiten oder ein anderes Emote öffnen
+function snapDoc() {
+  return { v: 1, app: 'streamhelp-emote', name: st.name || 'emote', fmt: st.fmt, speed: st.speed, matte: st.matte, layers: JSON.parse(JSON.stringify(st.layers)) };
+}
+async function withImages(doc, asData) {
+  const images = {};
+  for (const L of doc.layers) {
+    if (L.type !== 'image' || !L.src || !srcs[L.src] || images[L.src]) continue;
+    const b = await blobOf(L.src);
+    images[L.src] = asData ? await blobToData(b) : b;
+  }
+  return { ...doc, images };
+}
+function thumbData() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  render(c.getContext('2d'), 96, isBadge() ? 0.3 : 0);
+  const png = c.toDataURL('image/png');
+  return png.length <= 55000 ? png : c.toDataURL('image/webp', 0.8);
+}
+
+let localBusy = null;
+async function saveLocal() {
+  if (!proj.id) proj.id = newId();
+  const snap = { id: proj.id, cloud: proj.cloud, thumb: thumbData(), doc: snapDoc() };
+  proj.changed = false;
+  setSaveState('saving');
+  const prev = localBusy;
+  const run = (async () => {
+    if (prev) await prev.catch(() => {});
+    const doc = await withImages(snap.doc, false);
+    const updated = Date.now();
+    await localPut({ id: snap.id, name: doc.name, fmt: doc.fmt, updated, thumb: snap.thumb, cloud: snap.cloud, doc });
+    return updated;
+  })();
+  localBusy = run;
+  try {
+    const updated = await run;
+    if (snap.id === proj.id) {
+      setLastId(snap.id);
+      proj.savedAt = updated;
+      if (proj.state === 'saving') setSaveState(proj.cloud && proj.cloudAt >= proj.savedAt ? 'cloud' : 'saved');
+    }
+  } catch (e) {
+    if (snap.id === proj.id) { proj.changed = true; setSaveState('error', `Nicht gespeichert: ${errText(e)}`); }
+    throw e;
+  } finally {
+    if (localBusy === run) localBusy = null;
+  }
+}
+async function saveCloud() {
+  clearTimeout(cloudTimer);
+  const api = await accountUser();
+  if (!api) throw new Error('Bitte zuerst anmelden.');
+  if (!proj.id) proj.id = newId();
+  const id = proj.id;
+  const thumb = thumbData();
+  const snap = snapDoc();
+  setSaveState('saving');
+  try {
+    await api.emoteProjectSave({ id, name: snap.name, fmt: snap.fmt, thumb, doc: await withImages(snap, true) });
+    if (id === proj.id) { proj.cloudAt = Date.now(); setSaveState('cloud'); }
+  } catch (e) {
+    if (id === proj.id) setSaveState('error', `Konto: ${errText(e)}`);
+    throw e;
+  }
+}
+// Strg+S und Speichern-Knopf: sofort lokal, bei Konto-Emotes auch ins Konto
+async function saveAll(loud) {
+  try {
+    proj.ready = true;
+    clearTimeout(saveTimer);
+    await saveLocal();
+    if (proj.cloud) await saveCloud();
+    if (loud) note(proj.cloud ? 'Gespeichert – im Browser und im Konto.' : 'Gespeichert im Browser. Mit der Wolke oben sicherst du es auch im Konto.');
+  } catch (e) { note(`Nicht gespeichert: ${errText(e)}`); }
+}
+async function toggleCloud() {
+  if (proj.cloud) {
+    proj.cloud = false;
+    setSaveState(proj.savedAt ? 'saved' : 'new');
+    if (proj.savedAt) saveAll(false);
+    note('Wird nur noch im Browser gesichert. Die Kopie im Konto bleibt, bis du sie unter „Meine Emotes“ löschst.');
+    return;
+  }
+  const api = await accountUser();
+  if (!api) { note('Zum Sichern im Konto bitte zuerst anmelden (Startseite → Anmelden).'); return; }
+  proj.cloud = true;
+  await saveAll(false);
+  if (proj.state === 'cloud') { note('Wird jetzt auch im Konto gesichert – auf jedem Gerät unter „Meine Emotes“.'); return; }
+  // Konto ging nicht: wieder nur lokal (Fehler bleibt sichtbar)
+  const err = proj.error;
+  proj.cloud = false;
+  proj.changed = true;
+  await saveLocal().catch(() => {});
+  setSaveState('error', err);
+}
+
+// ---------- Projekte öffnen (eigene Daten, Datei oder Konto – alles wird geprüft) ----------
+const COLOR = /^#[0-9a-f]{6}$/i;
+const SAFE_ID = /^[\w-]{1,48}$/;
+const clampNum = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+const RANGES = { x: [-0.5, 1.5], y: [-0.5, 1.5], scale: [5, 400], rot: [-360, 360], opacity: [0, 100], outline: [0, 24], strokeW: [0, 24], strength: [20, 150], offset: [0, 95], tol: [0, 100] };
+function cleanLayer(raw, seen) {
+  if (!raw || typeof raw !== 'object' || !['shape', 'text', 'image', 'effect'].includes(raw.type)) return null;
+  const L = mk(raw.type);
+  for (const [k, def] of Object.entries(L)) {
+    if (k === 'id' || k === 'keys' || !(k in raw)) continue;
+    const v = raw[k];
+    if (typeof def === 'number') L[k] = clampNum(v, ...(RANGES[k] ?? [-1e4, 1e4]), def);
+    else if (typeof def === 'boolean') L[k] = v === true;
+    else if (typeof def === 'string' && typeof v === 'string') L[k] = v.slice(0, 40);
+  }
+  for (const k of ['fill', 'stroke', 'outlineColor']) if (k in L && !COLOR.test(L[k])) L[k] = mk(raw.type)[k];
+  if (L.type === 'shape' && !SHAPE_LABEL[L.shape]) L.shape = 'circle';
+  if (L.type === 'text') { L.text = L.text.slice(0, 14); if (!FONT_CSS[L.font]) L.font = 'bold'; }
+  if (L.type === 'effect' && !EXTRA_LABEL[L.effect]) L.effect = 'sparkle';
+  if (!ANIM_LABEL[L.anim]) L.anim = 'none';
+  if (!EASES[L.ease]) L.ease = 'smooth';
+  L.keys = Array.isArray(raw.keys) ? raw.keys.slice(0, 60).filter((k) => k && typeof k === 'object').map((k) => ({
+    t: clampNum(k.t, 0, 0.999, 0), dx: clampNum(k.dx, -50, 50, 0), dy: clampNum(k.dy, -50, 50, 0), rot: clampNum(k.rot, -180, 180, 0), s: clampNum(k.s, 10, 200, 100),
+  })) : [];
+  L.id = typeof raw.id === 'string' && SAFE_ID.test(raw.id) && !seen.has(raw.id) ? raw.id : nid();
+  seen.add(L.id);
+  if (L.type === 'image') { if (typeof raw.src !== 'string' || !SAFE_ID.test(raw.src)) return null; L.src = raw.src; }
+  return L;
+}
+const IMG_DATA = /^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$/;
+function toCanvas(v) {
+  return new Promise((ok, fail) => {
+    let url;
+    if (v instanceof Blob && v.type.startsWith('image/')) url = URL.createObjectURL(v);
+    else if (typeof v === 'string' && v.length < 16 * 1024 * 1024 && IMG_DATA.test(v)) url = v;
+    else { fail(new Error('Ein Bild im Emote ist beschädigt.')); return; }
+    const img = new Image();
+    img.onload = () => {
+      if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+      const k = Math.min(1, 896 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * k));
+      c.height = Math.max(1, Math.round(img.naturalHeight * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      ok(c);
+    };
+    img.onerror = () => { if (url.startsWith('blob:')) URL.revokeObjectURL(url); fail(new Error('Ein Bild im Emote ließ sich nicht öffnen.')); };
+    img.src = url;
+  });
+}
+async function loadDoc(doc, meta) {
+  if (!doc || typeof doc !== 'object' || doc.v !== 1 || !Array.isArray(doc.layers)) throw new Error('Das ist keine Emote-Datei aus dem StreamHelp-Editor.');
+  if (doc.layers.length > 40) throw new Error('Zu viele Ebenen in dieser Datei.');
+  const seen = new Set();
+  const layers = doc.layers.map((l) => cleanLayer(l, seen)).filter(Boolean);
+  const images = doc.images && typeof doc.images === 'object' ? doc.images : {};
+  const loaded = {};
+  for (const L of layers) {
+    if (L.type !== 'image' || loaded[L.src]) continue;
+    if (!Object.hasOwn(images, L.src)) continue;
+    loaded[L.src] = await toCanvas(images[L.src]);
+  }
+  proj.ready = false;
+  clearTimeout(saveTimer);
+  clearTimeout(cloudTimer);
+  for (const [k, c] of Object.entries(loaded)) {
+    srcs[k] = c;
+    const v = images[k];
+    if (v instanceof Blob) srcBlob[k] = v; else delete srcBlob[k];
+  }
+  const kept = layers.filter((L) => L.type !== 'image' || srcs[L.src]);
+  for (const L of kept) { delete orig[L.id]; delete imgs[L.id]; delete imgKey[L.id]; }
+  st.layers = kept;
+  st.name = (typeof doc.name === 'string' ? doc.name : 'emote').replace(/[^\w\-äöüß]/gi, '').slice(0, 20) || 'emote';
+  st.fmt = doc.fmt === 'badge' ? 'badge' : 'emote';
+  st.speed = SPEEDS[doc.speed] ? doc.speed : 'normal';
+  st.matte = doc.matte === 'light' ? 'light' : 'dark';
+  st.sel = kept[kept.length - 1]?.id ?? null;
+  st.tab = 'props';
+  st.ct = 0;
+  t = 0;
+  hist = [];
+  fut = [];
+  lastPush = 0;
+  syncImages();
+  proj.id = meta.id;
+  proj.cloud = !!meta.cloud;
+  proj.savedAt = meta.updated ?? 0;
+  proj.cloudAt = meta.cloud ? (meta.updated ?? 0) : 0;
+  proj.changed = false;
+  proj.ready = true;
+  if (meta.id) setLastId(meta.id);
+  setSaveState(meta.id ? (meta.cloud ? 'cloud' : 'saved') : 'new');
+  if (kept.length < layers.length) note('Ein Bild fehlte in der Datei – diese Ebene wurde weggelassen.');
+  refresh();
+}
+function startNew(tp = TEMPLATES[TEMPLATES.length - 1]) {
+  flushSave();
+  proj.ready = false;
+  const l = tp.make();
+  st.layers = l;
+  st.sel = l[l.length - 1]?.id ?? null;
+  st.tab = 'props';
+  st.name = tp.name;
+  st.ct = 0;
+  t = 0;
+  hist = [];
+  fut = [];
+  if (!reduced) st.playing = true;
+  Object.assign(proj, { id: null, cloud: false, changed: false, savedAt: 0, cloudAt: 0, ready: true });
+  setSaveState('new');
+  refresh();
+}
+async function openStart() {
+  proj.ready = true;
+  setSaveState('new');
+  const id = lastId();
+  if (!id) return;
+  try {
+    const rec = await localGet(id);
+    if (rec?.doc) await loadDoc(rec.doc, rec);
+  } catch (e) {
+    proj.ready = true;
+    note(`Das zuletzt bearbeitete Emote ließ sich nicht öffnen: ${errText(e)}`);
+  }
+}
+
+// ---------- „Meine Emotes“ ----------
+let libFocus = null;
+const dateText = (v) => new Date(v).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+function card(item, where) {
+  const cur = item.id === proj.id;
+  const img = item.thumb && /^data:image\/(png|webp);base64,/.test(item.thumb) ? h('img', { src: item.thumb, alt: '', width: 96, height: 96 }) : h('span', { class: 'ee-card-empty' }, h('i', { class: 'ph ph-image', 'aria-hidden': 'true' }));
+  const tags = [
+    item.fmt === 'badge' ? h('span', { class: 'tag tag-neutral' }, 'Abzeichen') : null,
+    where === 'local' && item.cloud ? h('span', { class: 'tag tag-outline' }, h('i', { class: 'ph ph-cloud-check', 'aria-hidden': 'true' }), 'im Konto') : null,
+    cur ? h('span', { class: 'tag tag-accent' }, 'offen') : null,
+  ].filter(Boolean);
+  const act = (a, icon, label, extra = {}) => h('button', { type: 'button', class: 'btn btn-secondary btn-icon ee-sm', title: label, 'aria-label': `${label}: ${item.name}`, 'data-lib': a, 'data-id': item.id, 'data-where': where, ...extra }, h('i', { class: `ph ${icon}`, 'aria-hidden': 'true' }));
+  return h('li', { class: `ee-card${cur ? ' is-cur' : ''}` },
+    h('button', { type: 'button', class: 'ee-card-open', 'data-lib': 'open', 'data-id': item.id, 'data-where': where, title: 'Öffnen' }, img,
+      h('span', { class: 'ee-card-name' }, item.name), h('span', { class: 'ee-card-date' }, dateText(where === 'local' ? item.updated : item.updated_at))),
+    tags.length ? h('div', { class: 'ee-card-tags' }, ...tags) : null,
+    h('div', { class: 'ee-card-acts' },
+      where === 'local' ? act('rename', 'ph-pencil-simple', 'Umbenennen') : null,
+      where === 'local' ? act('dup', 'ph-copy', 'Duplizieren') : null,
+      where === 'local' && !item.cloud ? act('upload', 'ph-cloud-arrow-up', 'Ins Konto') : null,
+      act('del', 'ph-trash', where === 'local' ? 'Im Browser löschen' : 'Aus dem Konto löschen')));
+}
+async function renderLib() {
+  const localBox = $('#ee-lib-local');
+  const cloudBox = $('#ee-lib-cloud');
+  try {
+    const items = await localList();
+    localBox.replaceChildren(...(items.length ? items.map((i) => card(i, 'local')) : [h('li', { class: 'ee-lib-empty' }, 'Noch nichts gespeichert. Sobald du etwas änderst, sichert der Editor das Emote hier automatisch.')]));
+  } catch (e) {
+    localBox.replaceChildren(h('li', { class: 'ee-lib-empty' }, `Im Browser kann gerade nicht gespeichert werden: ${errText(e)}`));
+  }
+  cloudBox.replaceChildren(h('li', { class: 'ee-lib-empty' }, 'Lädt …'));
+  const api = await accountUser();
+  if (!api) {
+    cloudBox.replaceChildren(h('li', { class: 'ee-lib-empty' }, 'Melde dich an, um Emotes im Konto zu sichern – dann sind sie auf jedem Gerät da. ', h('a', { href: './#login' }, 'Anmelden')));
+    return;
+  }
+  try {
+    const items = await api.emoteProjects();
+    cloudBox.replaceChildren(...(items.length ? items.map((i) => card(i, 'cloud')) : [h('li', { class: 'ee-lib-empty' }, 'Noch nichts im Konto. Mit der Wolke oben (oder „Ins Konto“ bei einem Emote) sicherst du es dort.')]));
+  } catch (e) {
+    cloudBox.replaceChildren(h('li', { class: 'ee-lib-empty' }, errText(e)));
+  }
+}
+function openLib() {
+  libFocus = document.activeElement;
+  flushSave();
+  $('#ee-lib').hidden = false;
+  renderLib();
+  $('#ee-lib-close').focus();
+}
+function closeLib() {
+  $('#ee-lib').hidden = true;
+  libFocus?.focus?.();
+}
+async function libAction(btn) {
+  const { lib: a, id, where } = btn.dataset;
+  try {
+    if (a === 'open') {
+      if (id === proj.id) { closeLib(); return; }
+      flushSave();
+      if (localBusy) await localBusy;
+      if (where === 'local') {
+        const rec = await localGet(id);
+        if (!rec) throw new Error('Dieses Emote gibt es im Browser nicht mehr.');
+        await loadDoc(rec.doc, rec);
+      } else {
+        const api = await accountUser();
+        if (!api) throw new Error('Bitte zuerst anmelden.');
+        const doc = await api.emoteProjectLoad(id);
+        await loadDoc(doc, { id, cloud: true, updated: Date.now() });
+        await saveAll(false); // lokale Kopie anlegen
+      }
+      closeLib();
+      return;
+    }
+    if (a === 'rename') {
+      const rec = await localGet(id);
+      if (!rec) return;
+      const name = (prompt('Neuer Name für das Emote:', rec.name) ?? '').replace(/[^\w\-äöüß]/gi, '').slice(0, 20);
+      if (!name) return;
+      if (id === proj.id) { st.name = name; renderHead(); await saveAll(false); } else {
+        rec.name = name;
+        rec.doc.name = name;
+        rec.updated = Date.now();
+        await localPut(rec);
+        if (rec.cloud) {
+          const api = await accountUser();
+          if (api) {
+            const doc = { ...rec.doc, images: Object.fromEntries(await Promise.all(Object.entries(rec.doc.images ?? {}).map(async ([k, b]) => [k, b instanceof Blob ? await blobToData(b) : b]))) };
+            await api.emoteProjectSave({ id, name, fmt: rec.fmt, thumb: rec.thumb, doc });
+          }
+        }
+      }
+    } else if (a === 'dup') {
+      const rec = await localGet(id);
+      if (!rec) return;
+      const copy = { ...rec, id: newId(), name: `${rec.name}`.slice(0, 16) + '-2', updated: Date.now(), cloud: false };
+      copy.doc = { ...rec.doc, name: copy.name };
+      await localPut(copy);
+    } else if (a === 'upload') {
+      if (id === proj.id) { await toggleCloud(); } else {
+        const api = await accountUser();
+        if (!api) throw new Error('Bitte zuerst anmelden.');
+        const rec = await localGet(id);
+        if (!rec) return;
+        const doc = { ...rec.doc, images: Object.fromEntries(await Promise.all(Object.entries(rec.doc.images ?? {}).map(async ([k, b]) => [k, b instanceof Blob ? await blobToData(b) : b]))) };
+        await api.emoteProjectSave({ id, name: rec.name, fmt: rec.fmt, thumb: rec.thumb, doc });
+        rec.cloud = true;
+        await localPut(rec);
+      }
+    } else if (a === 'del') {
+      const name = btn.closest('.ee-card')?.querySelector('.ee-card-name')?.textContent ?? 'dieses Emote';
+      if (where === 'local') {
+        if (!confirm(`„${name}“ im Browser löschen?${id === proj.id ? ' Es ist gerade geöffnet – danach beginnt ein neues Emote.' : ''}`)) return;
+        await localDelete(id);
+        if (id === proj.id) { setLastId(null); startNew(); }
+      } else {
+        if (!confirm(`„${name}“ aus dem Konto löschen? Eine Kopie im Browser bleibt erhalten.`)) return;
+        const api = await accountUser();
+        if (!api) throw new Error('Bitte zuerst anmelden.');
+        await api.emoteProjectDelete(id);
+        const rec = await localGet(id);
+        if (rec) { rec.cloud = false; await localPut(rec); }
+        if (id === proj.id) { proj.cloud = false; setSaveState(proj.savedAt ? 'saved' : 'new'); }
+      }
+    }
+    await renderLib();
+  } catch (e) {
+    note(errText(e));
+    $('#ee-lib-msg').textContent = errText(e);
+    $('#ee-lib-msg').hidden = false;
+  }
+}
+async function exportFile() {
+  try {
+    const doc = await withImages(snapDoc(), true);
+    download(new Blob([JSON.stringify(doc)], { type: 'application/json' }), `${st.name || 'emote'}.emote.json`);
+    note('Als Datei gespeichert – mit „Datei öffnen“ kannst du sie später (auch auf einem anderen Gerät) wieder laden.');
+  } catch (e) { note(`Datei ließ sich nicht erstellen: ${errText(e)}`); }
+}
+async function importFile(f) {
+  if (!f) return;
+  try {
+    if (f.size > 20 * 1024 * 1024) throw new Error('Die Datei ist zu groß (höchstens 20 MB).');
+    let doc;
+    try { doc = JSON.parse(await f.text()); } catch { throw new Error('Das ist keine Emote-Datei aus dem StreamHelp-Editor.'); }
+    flushSave();
+    await loadDoc(doc, { id: null, cloud: false });
+    await saveAll(false); // als neues Emote im Browser ablegen
+    closeLib();
+    note(`„${st.name}“ geöffnet und im Browser gespeichert.`);
+  } catch (e) {
+    $('#ee-lib-msg').textContent = errText(e);
+    $('#ee-lib-msg').hidden = false;
+  }
+}
+function setupSaving() {
+  $('#ee-store').addEventListener('click', () => saveAll(true));
+  $('#ee-cloud').addEventListener('click', () => { toggleCloud().catch((e) => note(errText(e))); });
+  $('#ee-lib-open').addEventListener('click', openLib);
+  $('#ee-lib-close').addEventListener('click', closeLib);
+  $('#ee-lib').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) { closeLib(); return; }
+    const b = e.target.closest('[data-lib]');
+    if (b) { $('#ee-lib-msg').hidden = true; libAction(b); }
+  });
+  $('#ee-lib-new').addEventListener('click', () => { startNew(); closeLib(); });
+  $('#ee-lib-export').addEventListener('click', exportFile);
+  const imp = $('#ee-lib-file');
+  $('#ee-lib-import').addEventListener('click', () => imp.click());
+  imp.addEventListener('change', () => { importFile(imp.files?.[0]); imp.value = ''; });
+}
+
 // ---------- Bedienung ----------
 function setup() {
   accent = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim() || accent;
   // Schriften vorab laden, sonst zeichnet die Fläche beim ersten Mal die Ersatzschrift
   if (document.fonts) Promise.all(FONTS.map(([, , css]) => document.fonts.load(css.replace('{s}', 40), 'GG HYPE gn8'))).then(() => { dirty = true; }, () => { dirty = true; });
 
-  $('#ee-name').addEventListener('input', (e) => { st.name = e.target.value.replace(/[^\w\-äöüß]/gi, '').slice(0, 20); });
+  $('#ee-name').addEventListener('input', (e) => { st.name = e.target.value.replace(/[^\w\-äöüß]/gi, '').slice(0, 20); scheduleSave(); });
   $('#ee-name').addEventListener('change', (e) => { e.target.value = st.name; });
-  document.querySelectorAll('[name="ee-fmt"]').forEach((r) => r.addEventListener('change', () => { st.fmt = r.value; refresh(); }));
+  document.querySelectorAll('[name="ee-fmt"]').forEach((r) => r.addEventListener('change', () => { st.fmt = r.value; scheduleSave(); refresh(); }));
   document.querySelectorAll('[name="ee-bg"]').forEach((r) => r.addEventListener('change', () => { st.bg = r.value; renderStage(); renderExport(); dirty = true; }));
-  document.querySelectorAll('[name="ee-speed"]').forEach((r) => r.addEventListener('change', () => { st.speed = r.value; t = snapT(t); refresh(); }));
+  document.querySelectorAll('[name="ee-speed"]').forEach((r) => r.addEventListener('change', () => { st.speed = r.value; t = snapT(t); scheduleSave(); refresh(); }));
   $('#ee-undo').addEventListener('click', undo);
   $('#ee-redo').addEventListener('click', redo);
   $('#ee-export').addEventListener('click', openExport);
@@ -987,14 +1466,7 @@ function setup() {
     const b = e.target.closest('[data-tpl]');
     if (!b) return;
     const tp = TEMPLATES[Number(b.dataset.tpl)];
-    pushHist(false);
-    const l = tp.make();
-    setLayers(l);
-    st.sel = l[l.length - 1]?.id ?? null;
-    st.tab = 'props';
-    st.name = tp.name;
-    if (!reduced) st.playing = true;
-    refresh();
+    startNew(tp);
   });
 
   // Ebenen-Liste und Spuren der Zeitleiste
@@ -1093,7 +1565,7 @@ function setup() {
   $('#ee-close').addEventListener('click', closeExport);
   $('#ee-save').addEventListener('click', () => saveSizes(FORMATS[st.fmt].sizes));
   $('#ee-ex-sizes').addEventListener('click', (e) => { const b = e.target.closest('[data-save]'); if (b && !st.busy) saveSizes([Number(b.dataset.save)]); });
-  document.querySelectorAll('[name="ee-matte"]').forEach((r) => r.addEventListener('change', () => { st.matte = r.value; }));
+  document.querySelectorAll('[name="ee-matte"]').forEach((r) => r.addEventListener('change', () => { st.matte = r.value; scheduleSave(); }));
 
   // Tastatur
   window.addEventListener('keydown', (e) => {
@@ -1102,6 +1574,11 @@ function setup() {
       if (e.key === 'Escape') { e.preventDefault(); closeExport(); }
       return;
     }
+    if (!$('#ee-lib').hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); closeLib(); }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveAll(true); return; }
     const tag = (e.target.tagName || '').toLowerCase();
     if ((tag === 'input' && !['range', 'checkbox', 'radio'].includes(e.target.type)) || tag === 'textarea' || tag === 'select') return;
     const mod = e.ctrlKey || e.metaKey;
@@ -1109,6 +1586,7 @@ function setup() {
     if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (mod && k === 'y') { e.preventDefault(); redo(); return; }
     if (mod && k === 'd') { e.preventDefault(); duplicate(); return; }
+    if (mod && k === 'o') { e.preventDefault(); openLib(); return; }
     if (mod || e.altKey) return;
     if (tag === 'input' || tag === 'button') { if (k === ' ' || k.startsWith('arrow')) return; } // Regler und Knöpfe behalten ihre Tasten
     if (k === ' ') { e.preventDefault(); togglePlay(); }
@@ -1127,7 +1605,9 @@ function setup() {
       update({ x: L.x + d[0], y: L.y + d[1] });
     }
   });
-  document.addEventListener('visibilitychange', () => { last = 0; });
+  document.addEventListener('visibilitychange', () => { last = 0; if (document.hidden) flushSave(); });
+  window.addEventListener('pagehide', flushSave);
+  setupSaving();
 }
 
 // ---------- Zugang ----------
@@ -1152,6 +1632,7 @@ async function gate() {
   $('#ee').hidden = !ok;
   $('#ee-free').hidden = MAX_ENFORCED;
   if (!ok) return;
+  await openStart();
   refresh();
   requestAnimationFrame(tick);
 }
