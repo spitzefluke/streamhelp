@@ -1,4 +1,4 @@
-// Bedienungshilfen: runder Knopf unten links (oder „Bedienungshilfen“ in der Fußzeile, data-a11y-open, oder
+// Bedienungshilfen: runder Knopf unten rechts (oder „Bedienungshilfen“ in der Fußzeile, data-a11y-open, oder
 // Alt + Umschalt + A) öffnet ein Fenster mit Schriftgröße, hohem Kontrast, Graustufen, Animationen aus,
 // unterstrichenen Links, gut lesbarer Schrift, mehr Zeilenabstand, großem Mauszeiger und deutlicher Fokus-Markierung.
 // Dazu ein „Zum Inhalt springen“-Link für Tastatur und Screenreader.
@@ -104,7 +104,7 @@ html.a11y-fab-hidden .a11y-fab { display: none; }
 .a11y-skip { position: fixed; left: 12px; top: -80px; z-index: 2147483600; padding: 10px 16px; border-radius: 10px;
   background: #ffd400; color: #000; font: 600 15px/1.2 system-ui, sans-serif; text-decoration: none; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
 .a11y-skip:focus { top: 12px; outline: 3px solid #000; outline-offset: 2px; }
-.a11y-fab { position: fixed; left: 14px; bottom: 14px; z-index: 2147482000; width: 46px; height: 46px; padding: 0; border: 2px solid #fff;
+.a11y-fab { position: fixed; right: 14px; bottom: 14px; z-index: 2147482000; width: 46px; height: 46px; padding: 0; border: 2px solid #fff;
   border-radius: 50%; background: #1d4ed8; color: #fff; display: grid; place-items: center; cursor: pointer;
   box-shadow: 0 4px 16px rgba(0,0,0,.45); transition: transform .15s ease; }
 .a11y-fab:hover { transform: scale(1.06); }
@@ -112,7 +112,7 @@ html.a11y-fab-hidden .a11y-fab { display: none; }
 .a11y-fab svg { width: 28px; height: 28px; }
 @media print { .a11y-fab, .a11y-skip { display: none !important; } }
 
-.a11y-dlg { position: fixed; inset: auto auto 72px 14px; margin: 0; width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 96px);
+.a11y-dlg { position: fixed; inset: auto 14px 72px auto; margin: 0; width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 96px);
   overflow-y: auto; padding: 0; border: 1px solid #3a4152; border-radius: 16px; background: #10141d; color: #eef1f7;
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 18px 60px rgba(0,0,0,.6); text-align: left; }
 .a11y-dlg::backdrop { background: rgba(0,0,0,.35); }
