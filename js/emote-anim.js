@@ -1,6 +1,7 @@
 // Animationen und Effekte des Emote-Editors (js/emotes-page.js) – nach dem Entwurf „Emote Editor“ aus Claude Design.
 // Bewegungen (pose), eigene Keyframe-Animationen (interpKeys) und Effekt-Ebenen (drawExtras). Alles hängt nur von
 // t ∈ [0, 1) ab – so schließt die Schleife nahtlos. Twitch: animierte Emotes als GIF, höchstens 60 Bilder und 1 MB.
+// „Tippen“ und „Welle“ (Gruppe „Nur für Text“) zeichnet der Editor selbst Buchstabe für Buchstabe.
 
 const TAU = Math.PI * 2;
 const easeOut = (x) => 1 - (1 - x) ** 3;
@@ -10,15 +11,17 @@ const backOut = (x) => { const c = 1.70158; return 1 + (c + 1) * (x - 1) ** 3 + 
 const rnd = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
 
 export const ANIM_GROUPS = [
-  ['Bewegung', [['shake', 'Wackeln'], ['bounce', 'Hüpfen'], ['spin', 'Drehen'], ['wobble', 'Gummi'], ['float', 'Schweben'], ['flip', 'Wenden'], ['jitter', 'Zittern'], ['sway', 'Schaukeln', 1], ['swing', 'Pendel', 1], ['orbit', 'Kreisen', 1], ['dance', 'Tanzen', 1], ['nod', 'Nicken', 1], ['squish', 'Quetschen', 1]]],
-  ['Rein & raus', [['slide', 'Rutschen'], ['peek', 'Gucken'], ['pop', 'Ploppen', 1], ['drop', 'Fallen', 1], ['zoom', 'Ranzoomen', 1]]],
-  ['Betonung', [['pulse', 'Pulsieren'], ['heart', 'Herzschlag'], ['rave', 'Disco'], ['tada', 'Tada', 1], ['blink', 'Blinken', 1], ['glitch', 'Glitch', 1]]],
+  ['Bewegung', [['shake', 'Wackeln'], ['bounce', 'Hüpfen'], ['spin', 'Drehen'], ['wobble', 'Gummi'], ['float', 'Schweben'], ['flip', 'Wenden'], ['jitter', 'Zittern'], ['sway', 'Schaukeln'], ['swing', 'Pendel'], ['orbit', 'Kreisen'], ['dance', 'Tanzen'], ['nod', 'Nicken'], ['squish', 'Quetschen'], ['shakex', 'Kopfschütteln'], ['wave', 'Winken'], ['excite', 'Aufgeregt'], ['figure8', 'Achterbahn', 1], ['wiggle', 'Zappeln', 1], ['skate', 'Gleiten', 1], ['zigzag', 'Zickzack', 1], ['bob', 'Wippen', 1]]],
+  ['Sprünge & Tricks', [['hop', 'Seitenhüpfer', 1], ['jump', 'Großer Sprung', 1], ['tumble', 'Purzelbaum', 1], ['pirouette', 'Pirouette', 1], ['headbang', 'Headbangen', 1], ['quake', 'Erdbeben', 1]]],
+  ['Rein & raus', [['slide', 'Rutschen'], ['peek', 'Gucken'], ['pop', 'Ploppen'], ['drop', 'Fallen'], ['zoom', 'Ranzoomen'], ['roll', 'Rollen'], ['rocket', 'Abheben'], ['fade', 'Einblenden']]],
+  ['Betonung', [['pulse', 'Pulsieren'], ['heart', 'Herzschlag'], ['rave', 'Disco'], ['tada', 'Tada'], ['blink', 'Blinken'], ['glitch', 'Glitch'], ['breathe', 'Atmen'], ['stretch', 'Strecken'], ['rainbow', 'Regenbogen']]],
+  ['Nur für Text', [['type', 'Tippen'], ['wavetext', 'Welle']]],
 ];
 export const ANIM_LABEL = { none: 'Keine Animation', custom: 'Eigene Animation' };
 ANIM_GROUPS.forEach(([, items]) => items.forEach(([k, l]) => { ANIM_LABEL[k] = l; }));
-export const EXTRAS = [['hearts', 'Herzen'], ['sparkle', 'Funkeln'], ['tears', 'Tränen'], ['zzz', 'Zzz'], ['confetti', 'Konfetti'], ['notes', 'Musik'], ['fire', 'Feuer'], ['speed', 'Speed', 1], ['bang', 'Ausruf', 1], ['question', 'Fragen', 1], ['snow', 'Schnee', 1], ['dizzy', 'Schwindlig', 1]];
+export const EXTRAS = [['hearts', 'Herzen'], ['sparkle', 'Funkeln'], ['tears', 'Tränen'], ['zzz', 'Zzz'], ['confetti', 'Konfetti'], ['notes', 'Musik'], ['fire', 'Feuer'], ['speed', 'Speed'], ['bang', 'Ausruf'], ['question', 'Fragen'], ['snow', 'Schnee'], ['dizzy', 'Schwindlig'], ['anger', 'Wut', 1], ['sweat', 'Schwitzen', 1], ['bubbles', 'Blasen', 1], ['lightning', 'Blitze', 1], ['coins', 'Münzen', 1], ['rings', 'Schockwelle', 1]];
 export const EXTRA_LABEL = Object.fromEntries(EXTRAS.map(([k, l]) => [k, l]));
-export const ROOM = { shake: 0.9, bounce: 0.8, spin: 0.9, wobble: 0.9, float: 0.86, jitter: 0.9, rave: 0.94, sway: 0.9, swing: 0.8, orbit: 0.84, dance: 0.86, glitch: 0.92, tada: 0.9, nod: 0.92 };
+export const ROOM = { shake: 0.9, bounce: 0.8, spin: 0.9, wobble: 0.9, float: 0.86, jitter: 0.9, rave: 0.94, sway: 0.9, swing: 0.8, orbit: 0.84, dance: 0.86, glitch: 0.92, tada: 0.9, nod: 0.92, shakex: 0.88, wave: 0.8, excite: 0.9, breathe: 0.92, stretch: 0.78, hop: 0.82, figure8: 0.84, wiggle: 0.9, headbang: 0.85, pirouette: 0.92, skate: 0.84, zigzag: 0.86, jump: 0.74, quake: 0.86, tumble: 0.8, bob: 0.94 };
 export const SPEEDS = { slow: 40, normal: 30, fast: 20 };
 
 export function pose(anim, t, k = 1) {
@@ -52,6 +55,36 @@ export function pose(anim, t, k = 1) {
     case 'glitch': { const f = Math.floor(t * 30); if (rnd(f) > 0.6) { p.dx = (rnd(f + 3) - 0.5) * 0.16 * k; p.hue = (rnd(f + 5) - 0.5) * 240; p.sx = 1 + (rnd(f + 9) - 0.5) * 0.1 * k; } break; }
     case 'zoom': if (t < 0.3) { const e = easeOut(t / 0.3); p.sx = p.sy = 2.2 - 1.2 * e; p.alpha = e; } else if (t > 0.88) { const e = (t - 0.88) / 0.12; p.alpha = 1 - e; p.sx = p.sy = 1 - 0.3 * e; } break;
     case 'dance': p.dx = Math.sin(TAU * t * 2) * 0.06 * k; p.rot = Math.sin(TAU * t * 2) * 0.15 * k; p.dy = -Math.abs(Math.sin(TAU * t * 2)) * 0.06 * k; break;
+    case 'shakex': p.dx = Math.sin(TAU * t * 3) * 0.06 * k * (0.6 + 0.4 * Math.cos(TAU * t)); p.rot = Math.sin(TAU * t * 3) * 0.04 * k; break;
+    case 'wave': { const r = Math.sin(TAU * t * 2) * 0.3 * k; p.rot = r; p.dx = 0.42 * Math.sin(r); p.dy = 0.42 * (1 - Math.cos(r)); break; }
+    case 'excite': { const u = Math.abs(Math.sin(TAU * t * 4)); p.dy = -u * 0.06 * k; p.sx = 1 + (1 - u) * 0.05 * k; p.sy = 1 - (1 - u) * 0.05 * k; break; }
+    case 'roll': if (t < 0.3) { const e = easeOut(t / 0.3); p.dx = -(1 - e) * 1.2; p.rot = -(1 - e) * TAU; } else if (t > 0.8) { const e = easeIn((t - 0.8) / 0.2); p.dx = e * 1.2; p.rot = e * TAU; } break;
+    case 'rocket': if (t < 0.35) p.dy = (1 - easeOut(t / 0.35)) * 1.1; else if (t < 0.7) p.dx = Math.sin(TAU * t * 9) * 0.012 * k; else { const e = easeIn((t - 0.7) / 0.3); p.dy = -e * 1.25; p.sy = 1 + e * 0.25 * k; p.sx = 1 - e * 0.1 * k; } break;
+    case 'fade': p.alpha = Math.max(0, Math.min(1, t / 0.2, (1 - t) / 0.2)); p.sx = p.sy = 0.94 + 0.06 * p.alpha; break;
+    case 'breathe': { const u = 0.5 - 0.5 * Math.cos(TAU * t); p.sx = 1 + 0.05 * k * u; p.sy = 1 + 0.08 * k * u; p.dy = -0.02 * k * u; break; }
+    case 'stretch': { const u = Math.max(0, Math.sin(TAU * t)); p.sy = 1 + 0.3 * k * u; p.sx = 1 - 0.12 * k * u; p.dy = -(p.sy - 1) * 0.4; break; }
+    case 'rainbow': p.hue = 360 * t; break;
+    case 'hop': { const a = Math.abs(Math.sin(TAU * t)); const sq = Math.max(0, 1 - a * 6); p.dx = -Math.cos(TAU * t) * 0.08 * k; p.dy = -a * 0.12 * k + sq * 0.03 * k; p.rot = Math.sin(TAU * t) * 0.12 * k; p.sy = 1 - sq * 0.12 * k; p.sx = 1 + sq * 0.08 * k; break; }
+    case 'figure8': p.dx = Math.sin(TAU * t) * 0.09 * k; p.dy = Math.sin(2 * TAU * t) * 0.05 * k; p.rot = Math.cos(TAU * t) * 0.1 * k; break;
+    case 'wiggle': p.rot = Math.sin(TAU * t * 6) * 0.12 * k; p.sx = 1 + Math.sin(TAU * t * 6 + 1) * 0.03 * k; break;
+    case 'skate': p.dx = Math.sin(TAU * t) * 0.12 * k; p.rot = Math.cos(TAU * t) * 0.15 * k; p.dy = -Math.abs(Math.cos(TAU * t)) * 0.02 * k; break;
+    case 'zigzag': { const w = (t * 2) % 1; p.dx = (1 - 4 * Math.abs(w - 0.5)) * 0.1 * k; p.dy = (1 - 4 * Math.abs(((t * 4) % 1) - 0.5)) * 0.05 * k; break; }
+    case 'bob': p.dy = Math.sin(TAU * t * 2) * 0.03 * k; p.sy = 1 + Math.sin(TAU * t * 2 + Math.PI / 2) * 0.03 * k; p.sx = 2 - p.sy; break;
+    case 'jump':
+      if (t < 0.2) { const e = Math.sin((Math.PI * t) / 0.2); p.sy = 1 - 0.2 * k * e; p.sx = 1 + 0.12 * k * e; p.dy = (1 - p.sy) * 0.45; }
+      else if (t < 0.6) { const u = (t - 0.2) / 0.4; p.dy = -Math.sin(Math.PI * u) * 0.3 * k; p.sy = 1 + 0.1 * k * (1 - Math.sin(Math.PI * u)); p.sx = 2 - p.sy; }
+      else if (t < 0.75) { const e = Math.sin((Math.PI * (t - 0.6)) / 0.15); p.sy = 1 - 0.18 * k * e; p.sx = 1 + 0.1 * k * e; p.dy = (1 - p.sy) * 0.45; }
+      break;
+    case 'tumble':
+      if (t < 0.7) { const e = t / 0.7; p.dy = -Math.sin(Math.PI * e) * 0.25 * k; p.rot = easeInOut(e) * TAU; }
+      else if (t < 0.85) { const e = Math.sin((Math.PI * (t - 0.7)) / 0.15); p.sy = 1 - 0.16 * k * e; p.sx = 1 + 0.1 * k * e; p.dy = (1 - p.sy) * 0.45; }
+      break;
+    case 'pirouette':
+      if (t < 0.6) { const e = easeInOut(t / 0.6); p.rot = e * TAU; p.sx = 1 - Math.sin(Math.PI * e) * 0.15 * k; }
+      else { const u = (t - 0.6) / 0.4; p.rot = Math.sin(u * TAU * 2) * 0.05 * k * (1 - u); }
+      break;
+    case 'headbang': { const u = Math.max(0, Math.sin(TAU * t * 4)); p.rot = Math.sqrt(u) * 0.28 * k; p.dy = u * 0.06 * k; break; }
+    case 'quake': { const f = Math.floor(t * 60); const amp = 0.4 + 0.6 * Math.abs(Math.sin(TAU * t)); p.dx = (rnd(f) - 0.5) * 0.12 * k * amp; p.dy = (rnd(f + 2) - 0.5) * 0.12 * k * amp; p.rot = (rnd(f + 4) - 0.5) * 0.1 * k * amp; break; }
     default: break;
   }
   return p;
@@ -96,6 +129,12 @@ export function drawExtras(g, S, kind, t) {
   else if (kind === 'bang') each(2, (i, u) => { const s = u < 0.2 ? backOut(u / 0.2) : u > 0.8 ? 1 - (u - 0.8) / 0.2 : 1; if (s <= 0.02) return; mark('!', (0.8 + i * 0.1) * S, (0.2 + i * 0.06) * S, S * 0.26 * s, '#ff4d4d', '#3a0000', '900'); });
   else if (kind === 'question') each(3, (i, u) => { g.globalAlpha = Math.sin(Math.PI * u); mark('?', (0.2 + i * 0.3 + Math.sin(TAU * u) * 0.03) * S, (0.32 - u * 0.24) * S, S * (0.14 + 0.04 * u), '#ffd34d', '#3a2a00', '900'); });
   else if (kind === 'snow') each(16, (i, u) => { g.globalAlpha = 0.9; g.beginPath(); g.arc(rnd(i) * S + Math.sin(TAU * (u + i * 0.1)) * S * 0.04, (-0.05 + u * 1.1) * S, S * (0.012 + 0.014 * rnd(i + 4)), 0, TAU); g.fillStyle = '#ffffff'; g.fill(); g.lineWidth = line * 0.6; g.strokeStyle = '#8fb3d9'; g.stroke(); });
+  else if (kind === 'anger') { const r = S * 0.07 * (0.85 + 0.2 * Math.abs(Math.sin(TAU * t * 2))); g.translate(S * 0.8, S * 0.2); for (let q = 0; q < 4; q++) { g.rotate(TAU / 4); g.beginPath(); g.arc(r * 0.95, r * 0.95, r * 0.75, Math.PI, Math.PI * 1.5); g.lineWidth = line * 5; g.strokeStyle = '#3a0000'; g.stroke(); g.lineWidth = line * 2.8; g.strokeStyle = '#ff3b3b'; g.stroke(); } }
+  else if (kind === 'sweat') each(2, (i, u) => { g.globalAlpha = Math.min(1, (1 - u) * 2.5, u * 8); dropPath(g, (i ? 0.2 : 0.8) * S, (0.16 + u * 0.3) * S, S * 0.07); g.fillStyle = '#8fd8ff'; g.strokeStyle = '#1b5a8a'; g.lineWidth = line; g.fill(); g.stroke(); });
+  else if (kind === 'bubbles') each(8, (i, u) => { const r = S * (0.025 + 0.03 * rnd(i + 3)); const x = (0.1 + 0.8 * rnd(i)) * S + Math.sin(TAU * (u * 2 + i)) * S * 0.03; const y = (1.05 - u * 1.15) * S; g.globalAlpha = Math.min(1, (1 - u) * 4); g.beginPath(); g.arc(x, y, r, 0, TAU); g.fillStyle = 'rgba(191,232,255,0.2)'; g.fill(); g.lineWidth = line; g.strokeStyle = '#bfe8ff'; g.stroke(); g.beginPath(); g.arc(x - r * 0.35, y - r * 0.35, r * 0.25, 0, TAU); g.fillStyle = '#ffffff'; g.fill(); });
+  else if (kind === 'lightning') each(2, (i, u) => { if ((u * 2) % 1 > 0.18) return; const B = [[0, 0], [-0.07, 0.17], [-0.01, 0.17], [-0.06, 0.33], [0.08, 0.12], [0.02, 0.12], [0.06, 0]]; g.translate((0.18 + 0.64 * i) * S, 0.03 * S); g.beginPath(); B.forEach(([x, y]) => g.lineTo(x * S, y * S)); g.closePath(); g.fillStyle = '#ffe14d'; g.strokeStyle = '#5a3d00'; g.lineWidth = line; g.fill(); g.stroke(); });
+  else if (kind === 'coins') each(7, (i, u) => { const sx = Math.abs(Math.cos(TAU * (u * 2 + i * 0.3))) + 0.08; const r = S * 0.05; g.translate((0.08 + 0.84 * rnd(i + 11)) * S, (-0.08 + u * 1.16) * S); g.beginPath(); g.ellipse(0, 0, r * sx, r, 0, 0, TAU); g.fillStyle = '#ffc93c'; g.strokeStyle = '#7a5200'; g.lineWidth = line; g.fill(); g.stroke(); g.beginPath(); g.ellipse(0, 0, r * sx * 0.6, r * 0.6, 0, 0, TAU); g.stroke(); });
+  else if (kind === 'rings') each(3, (i, u) => { g.globalAlpha = 1 - u; g.beginPath(); g.arc(S / 2, S / 2, Math.max(0.1, u * 0.55 * S), 0, TAU); g.lineWidth = line * (1 + 2.5 * (1 - u)); g.strokeStyle = '#ffffff'; g.stroke(); });
   else if (kind === 'dizzy') each(3, (i, u) => { const x = 0.5 * S + Math.cos(TAU * u) * 0.3 * S; const y = 0.16 * S + Math.sin(TAU * u) * 0.07 * S; g.globalAlpha = 0.65 + 0.35 * Math.sin(TAU * u); g.translate(x, y); polyStar(g, 5, S * 0.06, S * 0.028); g.fillStyle = '#fff6b8'; g.strokeStyle = '#c78a00'; g.lineWidth = line; g.fill(); g.stroke(); });
   g.restore();
 }

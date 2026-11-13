@@ -180,3 +180,8 @@
 .ph.ph-cloud-check:before { content: "\e1b0"; }
 .ph.ph-file-arrow-up:before { content: "\e61e"; }
 .ph.ph-file-arrow-down:before { content: "\e232"; }
+.ph.ph-keyboard:before { content: "\e2d8"; }
+.ph.ph-crosshair-simple:before { content: "\e1d8"; }
+.ph.ph-stack-simple:before { content: "\e468"; }
+.ph.ph-shuffle:before { content: "\e422"; }
+.ph.ph-stack:before { content: "\e466"; }

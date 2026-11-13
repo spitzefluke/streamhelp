@@ -32,10 +32,10 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let uid = 1;
 const nid = () => `L${uid++}${Math.random().toString(36).slice(2, 5)}`;
 function mk(type, over = {}) {
-  const base = { id: nid(), type, visible: true, x: 0.5, y: 0.5, scale: 100, rot: 0, opacity: 100, flip: false, outline: 0, outlineColor: '#ffffff', shadow: false, anim: 'none', strength: 100, offset: 0, keys: [], ease: 'smooth' };
+  const base = { id: nid(), type, visible: true, x: 0.5, y: 0.5, scale: 100, rot: 0, opacity: 100, flip: false, outline: 0, outlineColor: '#ffffff', shadow: false, anim: 'none', strength: 100, offset: 0, keys: [], ease: 'smooth', bright: 0, contrast: 0, sat: 0, shine: false };
   const byType = {
-    shape: { shape: 'circle', fill: '#ffd34d', stroke: '#3a2a00', strokeW: 8 },
-    text: { text: 'GG', font: 'bold', fill: '#ffffff', stroke: '#1b1b3a', strokeW: 10 },
+    shape: { shape: 'circle', fill: '#ffd34d', stroke: '#3a2a00', strokeW: 8, grad: false, fill2: '#ff8a3d' },
+    text: { text: 'GG', font: 'bold', fill: '#ffffff', stroke: '#1b1b3a', strokeW: 10, grad: false, fill2: '#ffd34d' },
     image: { tol: 30, bgRemoved: false },
     effect: { effect: 'sparkle' },
   };
@@ -60,7 +60,7 @@ const animOf = (l) => (l.type === 'effect' && l.anim === 'none' ? `${EXTRA_LABEL
 const first = TEMPLATES[0].make();
 const st = {
   layers: first, sel: first[1].id, tab: 'props', fmt: 'emote', bg: 'check', speed: 'normal',
-  playing: !reduced, ct: 0, name: TEMPLATES[0].name, matte: 'dark', busy: false, exportMsg: '',
+  playing: !reduced, ct: 0, name: TEMPLATES[0].name, matte: 'dark', busy: false, exportMsg: '', guides: false, onion: false,
 };
 let t = 0;                 // Abspielposition 0 … 1
 const imgs = {};           // Ebenen-ID → Bild (freigestellt oder Original)
@@ -268,6 +268,13 @@ function bounds(L, S, g) {
   const m = (S * 0.84) / Math.max(im.width, im.height);
   return { hw: (im.width * m) / 2, hh: (im.height * m) / 2 };
 }
+function fillOf(o, L, r) {
+  if (!L.grad) return L.fill;
+  const gr = o.createLinearGradient(0, -r, 0, r);
+  gr.addColorStop(0, L.fill);
+  gr.addColorStop(1, L.fill2 || L.fill);
+  return gr;
+}
 function content(o, L, S, tt) {
   const u = S / WORK;
   const r = S * 0.36;
@@ -281,22 +288,41 @@ function content(o, L, S, tt) {
     else if (L.shape === 'burst') polyStar(o, 14, r * 1.04, r * 0.8);
     else if (L.shape === 'heart') heartPath(o, 0, r * 0.25, r * 1.35);
     else if (L.shape === 'bubble') { o.roundRect(-r, -r * 0.82, 2 * r, r * 1.45, r * 0.38); o.moveTo(-r * 0.4, r * 0.6); o.lineTo(-r * 0.6, r * 1.0); o.lineTo(-r * 0.02, r * 0.6); }
-    o.fillStyle = L.fill;
+    o.fillStyle = fillOf(o, L, r);
     o.fill('nonzero');
     if (L.strokeW > 0) {
       o.lineWidth = L.strokeW * u;
       o.strokeStyle = L.stroke;
       o.stroke();
-      if (L.shape === 'bubble') { o.beginPath(); o.moveTo(-r * 0.37, r * 0.6 - L.strokeW * u); o.lineTo(-r * 0.56, r * 0.93); o.lineTo(-r * 0.06, r * 0.6 - L.strokeW * u); o.fill(); }
+      if (L.shape === 'bubble') { o.beginPath(); o.moveTo(-r * 0.37, r * 0.6 - L.strokeW * u); o.lineTo(-r * 0.56, r * 0.93); o.lineTo(-r * 0.06, r * 0.6 - L.strokeW * u); o.fillStyle = L.grad ? L.fill2 : L.fill; o.fill(); }
     }
   } else if (L.type === 'text') {
     const fs = S * 0.3;
     o.font = FONT_CSS[L.font].replace('{s}', fs);
     o.textAlign = 'center';
     o.textBaseline = 'middle';
-    if (L.strokeW > 0) { o.lineWidth = L.strokeW * u * 1.6; o.strokeStyle = L.stroke; o.strokeText(L.text, 0, fs * 0.04); }
-    o.fillStyle = L.fill;
-    o.fillText(L.text, 0, fs * 0.04);
+    const live = !isBadge();
+    const draw = (str, x, y) => {
+      if (L.strokeW > 0) { o.lineWidth = L.strokeW * u * 1.6; o.strokeStyle = L.stroke; o.strokeText(str, x, y); }
+      o.fillText(str, x, y);
+    };
+    o.fillStyle = fillOf(o, L, fs * 0.5);
+    if (live && L.anim === 'wavetext') {
+      // Welle: Buchstaben einzeln auf und ab
+      const ch = [...(L.text || '')];
+      const ws = ch.map((c) => o.measureText(c).width);
+      let x = -ws.reduce((a, b) => a + b, 0) / 2;
+      o.textAlign = 'left';
+      ch.forEach((c, i) => { draw(c, x, fs * 0.04 + Math.sin(TAU * (tt - i * 0.1)) * fs * 0.16 * (L.strength / 100)); x += ws[i]; });
+    } else if (live && L.anim === 'type') {
+      // Tippen: Buchstabe für Buchstabe mit blinkendem Strich
+      const ch = [...(L.text || '')];
+      const full = o.measureText(L.text || '').width;
+      const part = ch.slice(0, Math.ceil(ch.length * Math.min(1, tt / 0.6))).join('');
+      o.textAlign = 'left';
+      draw(part, -full / 2, fs * 0.04);
+      if (tt < 0.6 && Math.floor(tt * 8) % 2 === 0) o.fillRect(-full / 2 + o.measureText(part).width + fs * 0.04, -fs * 0.34, fs * 0.07, fs * 0.7);
+    } else draw(L.text, 0, fs * 0.04);
   } else if (L.type === 'image') {
     const im = imgs[L.id];
     if (!im) return;
@@ -318,8 +344,8 @@ function layerPose(L, time) {
   const k = L.strength / 100;
   return { p: pose(L.anim, tt, k), room: 1 - (1 - (ROOM[L.anim] ?? 1)) * Math.min(1.5, k), tt };
 }
-// Farbton drehen ohne ctx.filter (z. B. ältere Safari-Versionen)
-function hueRotate(c, deg) {
+// Farbton, Helligkeit, Kontrast, Sättigung ohne ctx.filter (z. B. ältere Safari-Versionen) – wie die CSS-Filter
+function adjust(c, deg, bright, contrast, sat) {
   const g = c.getContext('2d', { willReadFrequently: true });
   const im = g.getImageData(0, 0, c.width, c.height);
   const d = im.data;
@@ -329,12 +355,17 @@ function hueRotate(c, deg) {
   const m = [0.213 + co * 0.787 - si * 0.213, 0.715 - co * 0.715 - si * 0.715, 0.072 - co * 0.072 + si * 0.928,
     0.213 - co * 0.213 + si * 0.143, 0.715 + co * 0.285 + si * 0.14, 0.072 - co * 0.072 - si * 0.283,
     0.213 - co * 0.213 - si * 0.787, 0.715 - co * 0.715 + si * 0.715, 0.072 + co * 0.928 + si * 0.072];
+  const br = 1 + (bright || 0) / 100;
+  const ct = 1 + (contrast || 0) / 100;
+  const sa = 1 + (sat || 0) / 100;
   for (let p = 0; p < d.length; p += 4) {
     if (!d[p + 3]) continue;
-    const r = d[p]; const gg = d[p + 1]; const b = d[p + 2];
-    d[p] = m[0] * r + m[1] * gg + m[2] * b;
-    d[p + 1] = m[3] * r + m[4] * gg + m[5] * b;
-    d[p + 2] = m[6] * r + m[7] * gg + m[8] * b;
+    let r = d[p]; let gg = d[p + 1]; let b = d[p + 2];
+    if (deg) { const r0 = r; const g0 = gg; r = m[0] * r0 + m[1] * g0 + m[2] * b; gg = m[3] * r0 + m[4] * g0 + m[5] * b; b = m[6] * r0 + m[7] * g0 + m[8] * b; }
+    r *= br; gg *= br; b *= br;
+    r = (r - 127.5) * ct + 127.5; gg = (gg - 127.5) * ct + 127.5; b = (b - 127.5) * ct + 127.5;
+    if (sa !== 1) { const l = 0.2126 * r + 0.7152 * gg + 0.0722 * b; r = l + (r - l) * sa; gg = l + (gg - l) * sa; b = l + (b - l) * sa; }
+    d[p] = r; d[p + 1] = gg; d[p + 2] = b;
   }
   g.putImageData(im, 0, 0);
 }
@@ -351,6 +382,19 @@ function drawLayer(g, L, S, time) {
   o.scale(sc * p.sx * (L.flip ? -1 : 1), sc * p.sy);
   content(o, L, S, tt);
   o.restore();
+  if (L.shine && L.type !== 'effect' && !isBadge() && tt < 0.5) {
+    // Glanz: heller Streifen läuft schräg über die Ebene
+    const pos = (-0.3 + (tt / 0.5) * 1.6) * S;
+    const gr = o.createLinearGradient(pos - S * 0.16, pos - S * 0.16, pos + S * 0.16, pos + S * 0.16);
+    gr.addColorStop(0, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.5, 'rgba(255,255,255,0.75)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    o.save();
+    o.globalCompositeOperation = 'source-atop';
+    o.fillStyle = gr;
+    o.fillRect(0, 0, S, S);
+    o.restore();
+  }
   let src = a;
   if (L.outline > 0) {
     const b = off(S, 'b');
@@ -370,10 +414,18 @@ function drawLayer(g, L, S, time) {
     oc.drawImage(a, 0, 0);
     src = c;
   }
-  if (p.hue && !CAN_FILTER) hueRotate(src, p.hue);
+  const tone = p.hue || L.bright || L.contrast || L.sat;
+  if (tone && !CAN_FILTER) adjust(src, p.hue, L.bright, L.contrast, L.sat);
   g.save();
   g.globalAlpha = (L.opacity / 100) * p.alpha;
-  if (p.hue && CAN_FILTER) g.filter = `hue-rotate(${p.hue}deg)`;
+  if (tone && CAN_FILTER) {
+    const fl = [];
+    if (p.hue) fl.push(`hue-rotate(${p.hue}deg)`);
+    if (L.bright) fl.push(`brightness(${1 + L.bright / 100})`);
+    if (L.contrast) fl.push(`contrast(${1 + L.contrast / 100})`);
+    if (L.sat) fl.push(`saturate(${1 + L.sat / 100})`);
+    g.filter = fl.join(' ');
+  }
   if (L.shadow) { g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = S * 0.03; g.shadowOffsetY = S * 0.025; }
   g.drawImage(src, 0, 0);
   g.restore();
@@ -506,7 +558,16 @@ function propsTab(L) {
       colorEl(L, 'Rand', 'outlineColor')),
     hasFill ? field(L, 'Konturstärke', 'strokeW', 0, 24) : null,
     field(L, 'Rand außen', 'outline', 0, 24),
-    checkEl(L, 'Schatten darunter', 'shadow')));
+    checkEl(L, 'Schatten darunter', 'shadow'),
+    hasFill ? checkEl(L, 'Farbverlauf', 'grad') : null,
+    hasFill && L.grad ? h('div', { class: 'ee-indent' }, colorEl(L, 'Farbe unten', 'fill2')) : null,
+    L.type !== 'effect' ? checkEl(L, 'Glanz läuft darüber', 'shine') : null));
+  out.push(h('section', { class: 'ee-sec' },
+    h('div', { class: 'ee-caprow' }, cap('Farbe anpassen'), h('button', { type: 'button', class: 'btn btn-ghost ee-xs', 'data-act': 'tone' }, 'Zurücksetzen')),
+    field(L, 'Helligkeit', 'bright', -100, 100),
+    field(L, 'Kontrast', 'contrast', -100, 100),
+    field(L, 'Sättigung', 'sat', -100, 100),
+    h('p', { class: 'ee-hint' }, 'Kräftige Farben und etwas mehr Kontrast machen Emotes in 28 px besser erkennbar.')));
   out.push(h('section', { class: 'ee-sec' },
     h('div', { class: 'ee-caprow' }, cap('Lage'), h('button', { type: 'button', class: 'btn btn-ghost ee-xs', 'data-act': 'center' }, 'Zentrieren')),
     h('div', { class: 'ee-grid2' },
@@ -525,7 +586,11 @@ function animTab(L) {
   out.push(h('div', { class: 'ee-grid2' },
     chip(L.anim === 'none', { 'data-anim': 'none', class: 'ee-chip ee-chip-l' }, h('i', { class: 'ph ph-prohibit', 'aria-hidden': 'true' }), 'Keine'),
     chip(L.anim === 'custom', { 'data-anim': 'custom', class: 'ee-chip ee-chip-l' }, h('i', { class: 'ph ph-bezier-curve', 'aria-hidden': 'true' }), 'Eigene bauen')));
+  out.push(h('div', { class: 'ee-grid2 ee-grid2-s' },
+    h('button', { type: 'button', class: 'btn btn-secondary ee-xs', 'data-act': 'random', title: 'Zufällige Animation (R)' }, h('i', { class: 'ph ph-shuffle', 'aria-hidden': 'true' }), 'Überrasch mich'),
+    h('button', { type: 'button', class: 'btn btn-secondary ee-xs', 'data-act': 'all', title: 'Diese Animation für alle Ebenen übernehmen' }, h('i', { class: 'ph ph-stack', 'aria-hidden': 'true' }), 'Auf alle Ebenen')));
   for (const [g, items] of ANIM_GROUPS) {
+    if (g === 'Nur für Text' && L.type !== 'text') continue;
     out.push(h('section', { class: 'ee-sec ee-sec-tight' }, cap(g),
       h('div', { class: 'ee-grid4' }, ...items.map(([k, l, nw]) => tile(L.anim === k, { 'data-anim': k, title: l },
         h('canvas', { 'data-anim-prev': k, width: 80, height: 80 }), h('span', {}, l), nw ? newMark() : null)))));
@@ -658,6 +723,20 @@ function tick(now) {
     const Wd = c.width;
     const key = c.dataset.animPrev;
     x.clearRect(0, 0, Wd, Wd);
+    if (TEXT_ONLY.has(key)) {
+      x.font = `700 ${Wd * 0.34}px Inter, sans-serif`;
+      x.fillStyle = accent;
+      x.textBaseline = 'middle';
+      x.textAlign = 'left';
+      const ws = [...'Abc'].map((ch) => x.measureText(ch).width);
+      let xx = (Wd - ws.reduce((a, b) => a + b, 0)) / 2;
+      [...'Abc'].forEach((ch, i) => {
+        if (key === 'type' && i >= Math.ceil(3 * Math.min(1, tp / 0.6))) return;
+        x.fillText(ch, xx, Wd / 2 + (key === 'wavetext' ? Math.sin(TAU * (tp - i * 0.1)) * Wd * 0.08 : 0));
+        xx += ws[i];
+      });
+      return;
+    }
     const p = pose(key, tp, 1);
     const room = ROOM[key] ?? 1;
     x.save();
@@ -683,6 +762,38 @@ function tick(now) {
 }
 function drawOverlay() {
   octx.clearRect(0, 0, WORK, WORK);
+  if (st.onion && !st.playing && !isBadge()) {
+    // Zwiebelhaut: Bild davor und danach durchscheinend
+    const n = frames();
+    const ft = Math.floor(t * n) / n;
+    const oc = off(WORK, 'onion');
+    const og = oc.getContext('2d');
+    for (const d of [-1, 1]) {
+      render(og, WORK, (ft + d / n + 1) % 1);
+      octx.globalAlpha = 0.28;
+      octx.drawImage(oc, 0, 0);
+    }
+    octx.globalAlpha = 1;
+  }
+  if (st.guides) {
+    // Hilfslinien: Mitte und Sicherheitszone
+    octx.save();
+    octx.strokeStyle = accent;
+    octx.globalAlpha = 0.55;
+    octx.lineWidth = 1;
+    octx.setLineDash([3, 5]);
+    octx.beginPath();
+    octx.moveTo(224, 0); octx.lineTo(224, 448); octx.moveTo(0, 224); octx.lineTo(448, 224);
+    octx.stroke();
+    octx.setLineDash([]);
+    octx.globalAlpha = 0.4;
+    octx.strokeRect(36, 36, 376, 376);
+    octx.font = '500 11px Inter, sans-serif';
+    octx.fillStyle = accent;
+    octx.globalAlpha = 0.8;
+    octx.fillText('Sicherheitszone – wichtiges hier drin halten', 42, 30);
+    octx.restore();
+  }
   const L = selLayer();
   if (!L || !L.visible || L.type === 'effect') return;
   const b = bounds(L, WORK, octx);
@@ -833,6 +944,27 @@ function setKey(fieldName, val) {
   st.playing = false;
   st.ct = ft;
   update({ keys: keys.sort((a, b) => a.t - b.t) }, !!fieldName);
+}
+const TEXT_ONLY = new Set(ANIM_GROUPS.find(([g]) => g === 'Nur für Text')?.[1].map(([k]) => k) ?? []);
+function randomAnim() {
+  const L = selLayer();
+  if (!L) return;
+  const pool = ANIM_GROUPS.filter(([g]) => g !== 'Nur für Text' || L.type === 'text').flatMap(([, it]) => it.map(([k]) => k)).filter((k) => k !== L.anim);
+  const patch = { anim: pool[Math.floor(Math.random() * pool.length)], strength: 70 + Math.round(Math.random() * 6) * 10 };
+  if (L.type === 'effect') patch.effect = EXTRAS[Math.floor(Math.random() * EXTRAS.length)][0];
+  update(patch, false);
+  if (!reduced) st.playing = true;
+  st.tab = 'anim';
+  refresh();
+}
+function applyAll() {
+  const L = selLayer();
+  if (!L) return;
+  pushHist(false);
+  const pick = { anim: L.anim, strength: L.strength, ease: L.ease, keys: JSON.parse(JSON.stringify(L.keys)) };
+  setLayers(st.layers.map((l) => (l.type === 'effect' || (l.type !== 'text' && TEXT_ONLY.has(L.anim)) ? l : { ...l, ...pick })));
+  note(`„${ANIM_LABEL[L.anim]}“ gilt jetzt für alle passenden Ebenen.`);
+  refresh();
 }
 function pickAnim(key) {
   const L = selLayer();
@@ -1140,7 +1272,7 @@ async function toggleCloud() {
 const COLOR = /^#[0-9a-f]{6}$/i;
 const SAFE_ID = /^[\w-]{1,48}$/;
 const clampNum = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
-const RANGES = { x: [-0.5, 1.5], y: [-0.5, 1.5], scale: [5, 400], rot: [-360, 360], opacity: [0, 100], outline: [0, 24], strokeW: [0, 24], strength: [20, 150], offset: [0, 95], tol: [0, 100] };
+const RANGES = { x: [-0.5, 1.5], y: [-0.5, 1.5], scale: [5, 400], rot: [-360, 360], opacity: [0, 100], outline: [0, 24], strokeW: [0, 24], strength: [20, 150], offset: [0, 95], tol: [0, 100], bright: [-100, 100], contrast: [-100, 100], sat: [-100, 100] };
 function cleanLayer(raw, seen) {
   if (!raw || typeof raw !== 'object' || !['shape', 'text', 'image', 'effect'].includes(raw.type)) return null;
   const L = mk(raw.type);
@@ -1151,7 +1283,7 @@ function cleanLayer(raw, seen) {
     else if (typeof def === 'boolean') L[k] = v === true;
     else if (typeof def === 'string' && typeof v === 'string') L[k] = v.slice(0, 40);
   }
-  for (const k of ['fill', 'stroke', 'outlineColor']) if (k in L && !COLOR.test(L[k])) L[k] = mk(raw.type)[k];
+  for (const k of ['fill', 'fill2', 'stroke', 'outlineColor']) if (k in L && !COLOR.test(L[k])) L[k] = mk(raw.type)[k];
   if (L.type === 'shape' && !SHAPE_LABEL[L.shape]) L.shape = 'circle';
   if (L.type === 'text') { L.text = L.text.slice(0, 14); if (!FONT_CSS[L.font]) L.font = 'bold'; }
   if (L.type === 'effect' && !EXTRA_LABEL[L.effect]) L.effect = 'sparkle';
@@ -1517,6 +1649,9 @@ function setup() {
     else if (act === 'cut') { update({ bgRemoved: true }, false); applyCutout(selLayer()); refresh(); }
     else if (act === 'uncut') { update({ bgRemoved: false }, false); applyCutout(selLayer()); refresh(); }
     else if (act === 'addkey') { setKey(null); refresh(); }
+    else if (act === 'tone') { update({ bright: 0, contrast: 0, sat: 0 }, false); refresh(); }
+    else if (act === 'random') randomAnim();
+    else if (act === 'all') applyAll();
     else if (act === 'delkey') {
       const n = frames();
       const ct = snapT(st.ct);
@@ -1578,6 +1713,10 @@ function setup() {
       if (e.key === 'Escape') { e.preventDefault(); closeLib(); }
       return;
     }
+    if (!$('#ee-keys').hidden) {
+      if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeKeys(); }
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveAll(true); return; }
     const tag = (e.target.tagName || '').toLowerCase();
     if ((tag === 'input' && !['range', 'checkbox', 'radio'].includes(e.target.type)) || tag === 'textarea' || tag === 'select') return;
@@ -1596,6 +1735,10 @@ function setup() {
     else if (k === 't') addLayer('text', { y: 0.74, scale: 70 });
     else if (k === 'f') addLayer('shape');
     else if (k === 'e') addLayer('effect');
+    else if (k === 'g') toggleView('guides');
+    else if (k === 'o') toggleView('onion');
+    else if (k === 'r') randomAnim();
+    else if (k === '?') openKeys();
     else if (k.startsWith('arrow')) {
       const L = selLayer();
       if (!L) return;
@@ -1608,6 +1751,37 @@ function setup() {
   document.addEventListener('visibilitychange', () => { last = 0; if (document.hidden) flushSave(); });
   window.addEventListener('pagehide', flushSave);
   setupSaving();
+  $('#ee-guides').addEventListener('click', () => toggleView('guides'));
+  $('#ee-onion').addEventListener('click', () => toggleView('onion'));
+  $('#ee-keys-open').addEventListener('click', openKeys);
+  $('#ee-keys-close').addEventListener('click', closeKeys);
+  $('#ee-keys').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeKeys(); });
+}
+
+// ---------- Hilfslinien, Zwiebelhaut, Tastenkürzel ----------
+function toggleView(k) {
+  st[k] = !st[k];
+  const b = $(k === 'guides' ? '#ee-guides' : '#ee-onion');
+  b.classList.toggle('btn-primary', st[k]);
+  b.classList.toggle('btn-secondary', !st[k]);
+  b.setAttribute('aria-pressed', String(st[k]));
+  if (k === 'onion' && st.onion && st.playing) note('Zwiebelhaut zeigt sich, sobald die Animation pausiert ist (Leertaste).');
+  dirty = true;
+}
+const SHORTCUTS = [['Leertaste', 'Abspielen / Pause'], [', und .', 'Ein Bild zurück / vor'], ['Pfeiltasten', 'Ebene verschieben (mit Umschalt: 10 px)'],
+  ['Umschalt + Drehen', 'In 15°-Schritten drehen'], ['T · F · E', 'Text, Form, Effekt hinzufügen'], ['R', 'Zufällige Animation'], ['G', 'Hilfslinien'],
+  ['O', 'Zwiebelhaut'], ['Strg+D', 'Ebene duplizieren'], ['Entf', 'Ebene löschen'], ['Strg+Z / Strg+Y', 'Rückgängig / Wiederholen'],
+  ['Strg+S', 'Sofort speichern'], ['Strg+O', 'Meine Emotes'], ['Strg+V', 'Bild einfügen'], ['?', 'Diese Übersicht']];
+let keysFocus = null;
+function openKeys() {
+  keysFocus = document.activeElement;
+  $('#ee-keys-list').replaceChildren(...SHORTCUTS.flatMap(([k, d]) => [h('kbd', {}, k), h('span', {}, d)]));
+  $('#ee-keys').hidden = false;
+  $('#ee-keys-close').focus();
+}
+function closeKeys() {
+  $('#ee-keys').hidden = true;
+  keysFocus?.focus?.();
 }
 
 // ---------- Zugang ----------

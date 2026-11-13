@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HOpRILamAh97UL5dDJSAi5uOruhM2+AGTyfev59Taoc=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-do5jNvdMjS2twfzP6aZZPUUDqCmy+8xe2D6BPazwf58=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,9 +21,9 @@
   <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
-  <link rel="stylesheet" href="css/phosphor.css?v=134284b134">
+  <link rel="stylesheet" href="css/phosphor.css?v=b5fbb9a9fb">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
-  <link rel="stylesheet" href="css/emotes.css?v=494061317d">
+  <link rel="stylesheet" href="css/emotes.css?v=5f7ea9f46b">
   <!-- Emote-Editor (js/emotes-page.js) nach dem Entwurf „Emote Editor“ (Claude Design, Nocturne) – Extra von StreamHelp MAX, läuft nur im Browser -->
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
@@ -73,9 +73,9 @@
       "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
       "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
       "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
-      "./js/emote-anim.js": "./js/emote-anim.js?v=eacd3e7c14",
+      "./js/emote-anim.js": "./js/emote-anim.js?v=aaf9fedce0",
       "./js/emote-store.js": "./js/emote-store.js?v=4059f38cc5",
-      "./js/emotes-page.js": "./js/emotes-page.js?v=1a440d0d50",
+      "./js/emotes-page.js": "./js/emotes-page.js?v=599444ddf7",
       "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
       "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
       "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
@@ -195,6 +195,7 @@
         <button type="button" class="btn btn-secondary btn-icon" id="ee-undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig" disabled><i class="ph ph-arrow-u-up-left" aria-hidden="true"></i></button>
         <button type="button" class="btn btn-secondary btn-icon" id="ee-redo" title="Wiederholen (Strg+Y)" aria-label="Wiederholen" disabled><i class="ph ph-arrow-u-up-right" aria-hidden="true"></i></button>
       </div>
+      <button type="button" class="btn btn-secondary btn-icon" id="ee-keys-open" title="Tastenkürzel (?)" aria-label="Tastenkürzel"><i class="ph ph-keyboard" aria-hidden="true"></i></button>
       <button type="button" class="btn btn-primary" id="ee-export"><i class="ph ph-download-simple" aria-hidden="true"></i>Exportieren</button>
     </header>
 
@@ -230,6 +231,10 @@
             <label class="seg-opt"><input type="radio" name="ee-bg" value="light"><i class="ph ph-sun" aria-hidden="true"></i>Hell</label>
           </div>
           <span class="ee-help">Ziehen = verschieben · Ecke = Größe · Punkt oben = drehen · Pfeiltasten = feinjustieren</span>
+          <div class="ee-pair">
+            <button type="button" class="btn btn-secondary btn-icon ee-sm" id="ee-guides" aria-pressed="false" title="Hilfslinien &amp; Rand-Sicherheitszone (G)" aria-label="Hilfslinien"><i class="ph ph-crosshair-simple" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-secondary btn-icon ee-sm" id="ee-onion" aria-pressed="false" title="Zwiebelhaut: Bild davor und danach durchscheinend zeigen, wenn pausiert (O)" aria-label="Zwiebelhaut"><i class="ph ph-stack-simple" aria-hidden="true"></i></button>
+          </div>
         </div>
         <p class="ee-note" id="ee-note" role="status" hidden></p>
         <div class="ee-stagebox">
@@ -278,6 +283,14 @@
         <div class="ee-head" id="ee-head" aria-hidden="true"></div>
       </div>
     </footer>
+
+    <div class="dialog-backdrop" id="ee-keys" hidden>
+      <div class="dialog ee-keysdlg" role="dialog" aria-modal="true" aria-labelledby="ee-keys-title">
+        <div class="dialog-title" id="ee-keys-title">Tastenkürzel</div>
+        <div class="ee-keys" id="ee-keys-list"></div>
+        <div class="dialog-actions"><button type="button" class="btn btn-secondary" id="ee-keys-close">Schließen</button></div>
+      </div>
+    </div>
 
     <div class="dialog-backdrop" id="ee-lib" hidden>
       <div class="dialog ee-libdlg" role="dialog" aria-modal="true" aria-labelledby="ee-lib-title">
