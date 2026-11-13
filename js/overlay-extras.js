@@ -19,6 +19,8 @@
 //   bet=tr|…         Zuschauer-Wette: Frage, Antworten mit Balken und Quote, Restzeit; nach der Auflösung Ergebnis und Top 3   btsize=100
 //   scratch=bc|…     Rubbellos: bei jedem !rubbeln erscheint ein Los und wird live freigerubbelt                          scsize=100
 //   sponsor=tr|…     Sponsor-Einblendung (Sponsoring-Börse): Logo, Text, Code mit „Anzeige“ – Takt legt die Firma fest   spsize=100
+//   donate=2,38|…    Spendenpool (betterplace, …_charity_pool.sql): Betrag, Balken mit Meilensteinen, nächster Meilenstein   dpsize=100
+//                    dptitle=Überschrift · dpnote=Zeile darunter (z. B. „Spenden: !spenden“) · dplist=1 alle Meilensteine zeigen
 // Live liest das Overlay ohne Anmeldung (freigegeben in …_stream_extras.sql), im Demo-Modus localStorage.
 import { CONFIG } from './config.js';
 import { channelHeaders, rtSpec } from './channel.js';
@@ -52,8 +54,9 @@ export function setupOverlayExtras(o) {
     bet: o.position(o.params.get('bet'), null),
     scratch: o.position(o.params.get('scratch'), null),
     sponsor: o.position(o.params.get('sponsor'), null),
+    donate: o.position(o.params.get('donate'), null),
   };
-  const sizes = { fwsize: '--fws', sasize: '--sas', qzsize: '--qzs', qusize: '--qus', ttsize: '--tts', cdsize: '--cds', gwsize: '--gws', hwsize: '--hws', plsize: '--pls', ctsize: '--cts', sgsize: '--sgs', hrsize: '--hrs', cmsize: '--cms', sosize: '--sos', cpsize: '--cps', btsize: '--bts', scsize: '--scs', spsize: '--sps' };
+  const sizes = { fwsize: '--fws', sasize: '--sas', qzsize: '--qzs', qusize: '--qus', ttsize: '--tts', cdsize: '--cds', gwsize: '--gws', hwsize: '--hws', plsize: '--pls', ctsize: '--cts', sgsize: '--sgs', hrsize: '--hrs', cmsize: '--cms', sosize: '--sos', cpsize: '--cps', btsize: '--bts', scsize: '--scs', spsize: '--sps', dpsize: '--dps' };
   for (const [param, cssVar] of Object.entries(sizes)) document.documentElement.style.setProperty(cssVar, o.number(param, 100, 50, 200) / 100);
   const src = o.client ? liveData(o.client) : demoData();
   const ctx = { ...o, src };
@@ -76,6 +79,7 @@ export function setupOverlayExtras(o) {
   if (cfg.bet) setupBet(ctx, card('ov-x-bet', 'bet', cfg.bet, o));
   if (cfg.scratch) setupScratch(ctx, card('ov-x-scratch', 'scratch', cfg.scratch, o));
   if (cfg.sponsor) setupSponsor(ctx, card('ov-x-sponsor', 'sponsor', cfg.sponsor, o));
+  if (cfg.donate) setupDonate(ctx, card('ov-x-donate', 'donate', cfg.donate, o));
 }
 
 function card(id, key, pos, o) {
@@ -175,6 +179,8 @@ function liveData(sb) {
     scratchLast: async () => (await rows(sb.from('scratch_draws').select('id').order('id', { ascending: false }).limit(1)))?.[0]?.id ?? 0,
     // Sponsoren mit Einblendung (sponsor_list, ohne Login lesbar – Werbung ist ohnehin öffentlich)
     sponsors: () => rows(sb.rpc('sponsor_list')),
+    // Spendenpool: ohne Login lesbar; den Stand holt der Server bei betterplace (während laufender Streams)
+    charity: () => rows(sb.rpc('charity_public')),
     songs: () => rows(sb.from('bot_songs').select('id, title, seconds, who, status, position, played_at').in('status', ['queued', 'playing']).order('position').order('id').limit(20)),
     cardUrl: (path) => (!path ? '' : path.startsWith('a:') ? artistFileUrl(path.slice(2))
       : `${CONFIG.SUPABASE_URL}/storage/v1/object/public/cards/${path.split('/').map(encodeURIComponent).join('/')}`),
@@ -201,6 +207,7 @@ function demoData() {
     scratchAfter: async (id) => read('scratch_draws', []).filter((d) => d.id > id).slice(0, 5),
     scratchLast: async () => read('scratch_draws', []).at(-1)?.id ?? 0,
     sponsors: async () => read('sponsors', []).filter((x) => x.active !== false),
+    charity: async () => demoCharity(),
     // wie cupBoard in js/extras-api.js (Demo)
     cupBoard: async () => {
       const c = { title: 'Community-Cup', rules: '', prizes: [], open: false, round: 1, code_sent_at: null, ...read('cup', {}) };
@@ -1511,4 +1518,129 @@ async function setupSponsor({ src, opt, editTests }, el) {
     due.set(key(next), now + Math.max(5, Math.min(120, next.every_min)) * 60_000);
     show(next);
   }, 5000);
+}
+
+// ============================================================
+// Spendenpool für krebskranke Kinder (Startseite #spenden, Migration …_charity_pool.sql):
+// gesammelter Betrag, Balken mit Markierungen je Meilenstein, der nächste Meilenstein mit Restbetrag.
+// Wird ein Meilenstein erreicht, während das Overlay läuft, leuchtet die Karte auf (die Ansage selbst kommt
+// als Alert „🎗️ Spenden-Meilenstein“ und vom Bot). Ohne eingerichtete Spendenaktion bleibt die Ebene leer.
+// ============================================================
+const DP_EVERY = 60_000;
+const dpMoney = (cents) => new Intl.NumberFormat('de-DE', {
+  style: 'currency', currency: 'EUR', minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: cents % 100 ? 2 : 0,
+}).format(Math.max(0, cents) / 100);
+
+// Demo: dieselben Zahlen wie die Startseite im Demo-Modus (js/api.js charityPool)
+function demoCharity() {
+  const k = Math.max(0, (Date.now() - Date.UTC(2026, 10, 1)) / 60000);
+  const raised = Math.min(180000, 52000 + Math.floor(k / 3) * 100);
+  const at = (cents) => (raised >= cents ? new Date().toISOString() : null);
+  return {
+    enabled: true, event_id: '1', goal_cents: 200000, raised_cents: raised, donations: 40 + Math.floor(k / 17),
+    milestones: [
+      { id: 1, amount_cents: 25000, title: 'Glücksrad-Marathon', reached_at: '2026-11-03T18:00:00Z' },
+      { id: 2, amount_cents: 50000, title: 'Gesichtsbemalung live im Stream', reached_at: '2026-11-08T20:00:00Z' },
+      { id: 3, amount_cents: 100000, title: '24-Stunden-Stream', reached_at: at(100000) },
+      { id: 4, amount_cents: 200000, title: 'Community-Treffen in Hamburg', reached_at: at(200000) },
+    ],
+  };
+}
+
+async function setupDonate({ src, opt, params, editTests }, el) {
+  const title = (params.get('dptitle') ?? '').trim().slice(0, 60) || '🎗️ Spenden für krebskranke Kinder';
+  const note = (params.get('dpnote') ?? '').trim().slice(0, 80);
+  const showList = params.get('dplist') === '1';
+  el.innerHTML = `
+    <header class="ov-head"><span class="ov-dot" aria-hidden="true"></span><span data-title></span></header>
+    <div class="dpo-body">
+      <p class="dpo-sum"><b class="dpo-raised" data-raised></b><span class="dpo-of" data-of></span></p>
+      <div class="dpo-bar" data-bar><span class="dpo-fill" data-fill></span></div>
+      <p class="dpo-next" data-next></p>
+      <ol class="dpo-list" data-list hidden></ol>
+      <p class="dpo-note" data-note hidden></p>
+    </div>`;
+  const q = (k) => el.querySelector(`[data-${k}]`);
+  q('title').textContent = title;
+  q('note').textContent = note;
+  q('note').hidden = !note;
+  let reached = null; // Meilensteine, die schon erreicht waren
+  let shown = null;   // angezeigter Betrag (zählt beim Steigen hoch)
+
+  const countTo = (cents) => {
+    const from = shown ?? cents;
+    shown = cents;
+    if (from === cents) { q('raised').textContent = dpMoney(cents); return; }
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / 1200);
+      q('raised').textContent = dpMoney(Math.round(from + (cents - from) * (1 - (1 - t) ** 3)));
+      if (t < 1 && shown === cents) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+
+  const paint = (p) => {
+    const on = !!(p?.enabled && p.event_id);
+    el.hidden = !on && !opt.edit;
+    if (!on) return;
+    const steps = [...(p.milestones ?? [])].sort((a, b) => a.amount_cents - b.amount_cents);
+    const raised = Math.max(0, Number(p.raised_cents) || 0);
+    // Skala: Ziel der Aktion, sonst der höchste Meilenstein
+    const top = Math.max(Number(p.goal_cents) || 0, steps.at(-1)?.amount_cents || 0, raised, 1);
+    countTo(raised);
+    q('of').textContent = p.goal_cents ? ` von ${dpMoney(p.goal_cents)}` : ' gesammelt';
+    q('fill').style.setProperty('--p', `${Math.min(100, (raised / top) * 100)}%`);
+    const bar = q('bar');
+    bar.querySelectorAll('.dpo-mark').forEach((m) => m.remove());
+    for (const m of steps) {
+      if (m.amount_cents > top) continue;
+      const mark = document.createElement('span');
+      mark.className = `dpo-mark${m.reached_at ? ' is-done' : ''}`;
+      mark.style.setProperty('--at', `${(m.amount_cents / top) * 100}%`);
+      bar.append(mark);
+    }
+    const next = steps.find((m) => !m.reached_at);
+    q('next').innerHTML = next
+      ? `Nächster Meilenstein: <b>${esc(next.title)}</b> · noch ${esc(dpMoney(Math.max(0, next.amount_cents - raised)))}`
+      : steps.length ? '🎉 Alle Meilensteine geschafft – danke!' : '';
+    q('next').hidden = !q('next').innerHTML;
+    const list = q('list');
+    list.hidden = !showList || !steps.length;
+    if (showList) {
+      list.innerHTML = steps.map((m) => `<li class="${m.reached_at ? 'is-done' : m === next ? 'is-next' : ''}">
+        <span class="dpo-check" aria-hidden="true">${m.reached_at ? '✓' : m === next ? '➜' : '○'}</span>
+        <b>${esc(dpMoney(m.amount_cents))}</b><span>${esc(m.title)}</span></li>`).join('');
+    }
+    // Neu erreicht, während das Overlay läuft: kurz aufleuchten
+    const now = new Set(steps.filter((m) => m.reached_at).map((m) => m.id));
+    if (reached && [...now].some((id) => !reached.has(id))) {
+      restart(el, 'is-milestone');
+      beep(opt.volume, [[523, 0], [659, 0.12], [784, 0.24], [1047, 0.36, 0.4]]);
+    }
+    reached = now;
+  };
+
+  if (opt.test || opt.edit) {
+    let demo = demoCharity();
+    demo = { ...demo, raised_cents: 93000, milestones: demo.milestones.map((m) => ({ ...m, reached_at: m.amount_cents <= 93000 ? m.reached_at ?? 'x' : null })) };
+    paint(demo);
+    // ▶ Testen im OBS-Editor: Spenden kommen rein, der nächste Meilenstein wird erreicht
+    const push = () => {
+      const raised = demo.raised_cents >= 100000 ? 93000 : demo.raised_cents + 3500;
+      demo = { ...demo, raised_cents: raised, milestones: demo.milestones.map((m) => ({ ...m, reached_at: m.amount_cents <= raised ? 'x' : null })) };
+      paint(demo);
+    };
+    if (editTests) editTests.donate = () => { for (let i = 0; i < 3; i++) setTimeout(push, i * 900); };
+    if (opt.test && !opt.edit) setInterval(push, 4000);
+    return;
+  }
+  const reload = async () => {
+    const p = await src.charity?.().catch((err) => { console.warn('Overlay: Spendenpool nicht verfügbar', err); return null; });
+    if (p !== null && p !== undefined) paint(p);
+    else if (!reached) paint(null);
+  };
+  await reload();
+  setInterval(reload, DP_EVERY);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) reload(); });
 }

@@ -373,3 +373,30 @@
 @keyframes spo-in { from { opacity: 0; transform: translateY(-.6em) scale(.94); } }
 @keyframes spo-out { to { opacity: 0; transform: translateY(-.4em) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .ov-x-sponsor.is-in, .ov-x-sponsor.is-out { animation: none; } }
+
+/* ---------- Spendenpool (donate=…, js/overlay-extras.js setupDonate) ---------- */
+.ov-x-donate { --c: #ff5f8f; font-size: calc(16px * var(--dps, 1)); width: 22em; border-color: rgba(255, 95, 143, .45); }
+.dpo-body { display: grid; gap: .55em; padding: .9em 1.2em 1.05em; }
+.dpo-sum { margin: 0; display: flex; align-items: baseline; gap: .35em; flex-wrap: wrap; }
+.dpo-raised { font-family: var(--font-display); font-size: 2.3em; font-weight: 800; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
+.dpo-of { color: #c7cede; font-size: .95em; }
+.dpo-bar { position: relative; height: .8em; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: visible; }
+.dpo-fill { position: absolute; inset: 0 auto 0 0; width: var(--p, 0%); border-radius: inherit; background: linear-gradient(90deg, #ff5f8f, #ffb347); box-shadow: 0 0 1em rgba(255, 95, 143, .55); transition: width 1.2s var(--ease-out); }
+.dpo-mark { position: absolute; top: -.25em; bottom: -.25em; left: var(--at); width: .2em; margin-left: -.1em; border-radius: .1em; background: rgba(255, 255, 255, .55); }
+.dpo-mark.is-done { background: #fff; box-shadow: 0 0 .5em #fff; }
+.dpo-next { margin: 0; font-size: .95em; color: #dfe4ee; }
+.dpo-next b { color: #ffd36b; font-weight: 700; }
+.dpo-list { list-style: none; margin: .1em 0 0; padding: 0; display: grid; gap: .3em; font-size: .9em; }
+.dpo-list li { display: grid; grid-template-columns: 1.2em 4.6em minmax(0, 1fr); gap: .4em; align-items: baseline; color: #aab3c5; }
+.dpo-list li b { color: #dfe4ee; font-variant-numeric: tabular-nums; }
+.dpo-list li.is-done { color: #9ff0c3; }
+.dpo-list li.is-done b { color: #9ff0c3; }
+.dpo-list li.is-next { color: #fff; }
+.dpo-check { text-align: center; }
+.dpo-note { margin: 0; font-size: .85em; color: #aab3c5; }
+.ov-x-donate.is-milestone { animation: dpo-hit 2.4s var(--ease-out); }
+@keyframes dpo-hit {
+  0% { box-shadow: 0 0 0 .2em #ffd36b, 0 0 3em rgba(255, 211, 107, .9); transform: scale(1.06); }
+  40% { transform: scale(1); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
