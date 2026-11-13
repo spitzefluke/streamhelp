@@ -4,6 +4,7 @@
 //   · Mit #k=<schlüssel>: Stand des Angebots, Bewerbungen (Zahlen nur, wenn der Streamer zustimmt),
 //     Zusagen/Absagen, laufende Sponsorings beenden, Angebot beenden.
 // Der Schlüssel steht im #-Teil der Adresse – der geht beim Laden nie an einen Server.
+import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { avatarSrc } from './avatar.js';
 import { createApi, germanError } from './api.js';
 import { setupConsent } from './consent.js';

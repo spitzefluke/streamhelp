@@ -2,8 +2,9 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="same-origin">
+  <script src="js/a11y.js?v=c70e1d4f99"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cookie-Richtlinie · StreamHelp</title>
   <meta name="description" content="Welche Cookies und welchen Speicher im Browser StreamHelp nutzt – keine Werbung, kein Tracking – und wie du deine Auswahl änderst.">
@@ -78,6 +79,7 @@
           <tr><td><code>sb-…-auth-token</code></td><td>Anmeldung (Sitzung) bei Supabase, damit du angemeldet bleibst.</td><td>localStorage · bis zum Abmelden</td></tr>
           <tr><td><code>sh_consent</code></td><td>Deine Auswahl im Cookie-Fenster (nur „Externe Medien“ ja/nein und wann).</td><td>localStorage · bis du sie änderst</td></tr>
           <tr><td><code>sh_lang</code></td><td>Gewählte Sprache von Startseite und Anmeldung.</td><td>localStorage · dauerhaft</td></tr>
+          <tr><td><code>sh_a11y</code></td><td>Deine Bedienungshilfen (Schriftgröße, Kontrast, Animationen aus …), nur wenn du dort etwas einstellst.</td><td>localStorage · bis du sie zurücksetzt</td></tr>
           <tr><td><code>sh_channel</code></td><td>Welchen Kanal du zuletzt geöffnet hast.</td><td>localStorage · dauerhaft</td></tr>
           <tr><td><code>sh_ref</code></td><td>Kanal aus einem Einladungs-Link (<code>?ref=…</code>, „Freunde werben“).</td><td>localStorage · 30 Tage</td></tr>
           <tr><td><code>sh_view</code>, <code>sh_sidebar</code>, <code>sh_ideas_view</code>, <code>sh_look</code>, <code>sh_lib_favs_v1</code>, <code>sh_obs_cols</code>, <code>sh_obs_guide_seen</code>, <code>sh_obs_setup_seen</code>, <code>sh_rec_settings</code></td><td>Ansicht und Einstellungen im Dashboard: Darstellung, Seitenleiste, Raster oder Liste, Favoriten, OBS-Fenster, gesehene Anleitungen, Aufnahme-Studio.</td><td>localStorage · dauerhaft</td></tr>

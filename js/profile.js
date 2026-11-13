@@ -3,6 +3,7 @@
 // Links, Wochenplan und die nächsten Termine (mit Countdown). Termine kommen schon in echter Zeit
 // aus der Datenbank (Zeitzone des Streamers, Sommerzeit, „Pause bis …“) und stehen hier in der
 // Zeitzone des Besuchers. „In den Kalender“ lädt den Wochenplan als .ics (wiederholt sich wöchentlich).
+import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { avatarSrc } from './avatar.js';
 import { createApi, germanError } from './api.js';
 import { setupConsent } from './consent.js';

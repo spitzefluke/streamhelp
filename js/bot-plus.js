@@ -504,7 +504,8 @@ function songCard(card) {
   };
 
   addEventListener('message', (e) => {
-    if (!songPlayer.frame || e.source !== songPlayer.frame.contentWindow) return;
+    // Nur der eingebettete YouTube-Player (Fenster und Herkunft müssen passen)
+    if (!songPlayer.frame || e.source !== songPlayer.frame.contentWindow || e.origin !== 'https://www.youtube-nocookie.com') return;
     let data;
     try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
     if (data?.event === 'onError') step('skip');                         // nicht abspielbar: weiter

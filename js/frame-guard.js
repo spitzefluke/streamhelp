@@ -7,7 +7,16 @@ export function guardFrame() {
   let sameOrigin = false;
   try { sameOrigin = window.top.location.origin === location.origin; } catch { /* fremde Seite */ }
   if (sameOrigin) return true;
-  document.documentElement.innerHTML = '<body style="font:16px system-ui;padding:24px;background:#07090f;color:#eef1f7">'
-    + 'Diese Seite darf nicht eingebettet werden. <a style="color:#ffb81c" target="_top" rel="noopener" href="' + location.href.replace(/"/g, '%22') + '">Direkt öffnen</a></body>';
+  // Ohne innerHTML: die Adresse kommt als Text/Attribut in die Seite, nie als HTML
+  const body = document.createElement('body');
+  body.style.cssText = 'font:16px system-ui;padding:24px;background:#07090f;color:#eef1f7';
+  const link = document.createElement('a');
+  link.style.color = '#ffb81c';
+  link.target = '_top';
+  link.rel = 'noopener';
+  link.href = location.href;
+  link.textContent = 'Direkt öffnen';
+  body.append('Diese Seite darf nicht eingebettet werden. ', link);
+  document.documentElement.replaceChildren(document.createElement('head'), body);
   return false;
 }

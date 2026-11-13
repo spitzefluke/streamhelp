@@ -2,6 +2,7 @@
 // das Formular gesperrt. Danach geht es an die Edge Function billing (action "cancel"): Sie speichert die Kündigung
 // mit Eingangszeit, kündigt bei Stripe zum Laufzeitende (wenn die Angaben eindeutig passen) und bestätigt per E-Mail.
 // Die Bestätigung erscheint zusätzlich hier zum Drucken oder Speichern.
+import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { PRO_BOOKABLE } from './pro.js';
 
 const $ = (sel) => document.querySelector(sel);

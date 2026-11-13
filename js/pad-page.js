@@ -2,6 +2,7 @@
 //   #bestaetigen=<token>  Link aus der Bestätigungs-Mail → Eintrag bestätigen
 //   #austragen=<token>    Link aus jeder Mail → Eintrag löschen
 // Offen erst, wenn js/launch.js waitlist = true (dafür muss der Mail-Versand in Supabase eingerichtet sein).
+import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { setupConsent } from './consent.js';
 import { LAUNCH } from './launch.js';
 

@@ -4,6 +4,7 @@
 // Prüfung der Twitch-Vorgaben, Download als ZIP.
 // Formate: Emote (112, 56, 28 px, je höchstens 1 MB) und Abzeichen (72, 36, 18 px, je höchstens 25 KB).
 // Hochgeladen wird nichts. Ab dem Start von MAX (js/launch.js: max) nur mit MAX; bis dahin für alle zum Ausprobieren.
+import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { setupConsent } from './consent.js';
 import { h } from './extras-core.js';
 import { MAX_ENFORCED } from './pro.js';

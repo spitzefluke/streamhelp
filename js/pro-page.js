@@ -2,6 +2,7 @@
 // Content-Ideen kommen aus js/defaults.js – neue Ideen erscheinen hier also von selbst.
 // Ab dem Start (js/launch.js: pro) bucht der Inhaber eines Kanals hier: Häkchen „sofort starten“ → „zahlungspflichtig
 // bestellen“ → Edge Function billing → Bezahlseite von Stripe → zurück mit ?bestellt=1 bzw. ?abgebrochen=1.
+import './frame-guard-auto.js'; // zuerst: nicht in fremden Seiten (Clickjacking)
 import { DEFAULT_TILES } from './defaults.js';
 import { setupConsent } from './consent.js';
 import { h } from './extras-core.js';
