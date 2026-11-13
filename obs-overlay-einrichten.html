@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LEip3IjpuWcjnhNvI9wen1Dk0O2mpQ1sa80AeoZzsB4='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="same-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overlay in OBS einrichten – Anleitung · StreamHelp</title>
+  <meta name="description" content="Anleitung: So richtest du das StreamHelp-Overlay in OBS ein – automatisch über den WebSocket-Server oder von Hand als Browserquelle, mit Tipps gegen Lags.">
+  <link rel="canonical" href="https://streamhelp.de/obs-overlay-einrichten.html">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="StreamHelp">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:title" content="Overlay in OBS einrichten – Anleitung · StreamHelp">
+  <meta property="og:description" content="Anleitung: So richtest du das StreamHelp-Overlay in OBS ein – automatisch über den WebSocket-Server oder von Hand als Browserquelle, mit Tipps gegen Lags.">
+  <meta property="og:url" content="https://streamhelp.de/obs-overlay-einrichten.html">
+  <meta property="og:image" content="https://streamhelp.de/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d0b26">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/seo.css">
+  <!-- Themenseite für Suchmaschinen (statisch, ohne Skripte). Texte nah an den Funktionen in README.md halten;
+       verlinkt aus der Fußzeile der Startseite und untereinander. Kopf/Fuß gleich auf allen vier Themenseiten. -->
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "StreamHelp", "item": "https://streamhelp.de/"}, {"@type": "ListItem", "position": 2, "name": "Anleitung: Overlay in OBS einrichten", "item": "https://streamhelp.de/obs-overlay-einrichten.html"}]}</script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/favicon.svg" width="28" height="28" alt="">StreamHelp</a>
+      <nav aria-label="Themen"><a href="twitch-overlay.html">OBS-Overlay</a><a href="twitch-chatbot.html">Chat-Bot</a><a href="twitch-content-ideen.html">Content-Ideen</a><a href="obs-overlay-einrichten.html" aria-current="page">Anleitung</a></nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <p class="crumbs"><a href="./">StreamHelp</a> › Anleitung: Overlay in OBS einrichten</p>
+      <div class="hero">
+        <p class="eyebrow">Anleitung</p>
+        <h1>Overlay in OBS einrichten – in fünf Minuten</h1>
+        <p class="lead">So kommt das StreamHelp-Overlay in OBS Studio oder Streamlabs Desktop: automatisch per Klick oder von Hand als Browserquelle. Mit Tipps für flüssige Streams und Hilfe bei Problemen.</p>
+        <div class="cta"><a class="btn btn-solid" href="./#login">Jetzt anmelden</a><a class="btn btn-line" href="./#funktionen">Alle Funktionen</a></div>
+      </div>
+      <section aria-labelledby="schritte">
+        <h2 id="schritte">Schritt für Schritt</h2>
+        <ol class="steps">
+          <li><h3>Bei StreamHelp anmelden</h3><p>Auf <a href="./">streamhelp.de</a> mit Twitch anmelden und „Kanal anmelden“ wählen. Jeder Kanal wird von Hand freigeschaltet – meist geht das schnell.</p></li>
+          <li><h3>Twitch verbinden</h3><p>Im Dashboard einmal Twitch verbinden. Damit kommen Chat und Alerts an – mit Affiliate auch Kanalpunkte.</p></li>
+          <li><h3>OBS-Fenster öffnen</h3><p>Im Dashboard oben rechts auf <b>🎛️ OBS</b> klicken. Dort schaltest du die Ebenen ein, die du im Stream sehen willst – am Anfang ist alles aus.</p></li>
+          <li><h3>Automatisch in OBS übernehmen (empfohlen)</h3><p>In OBS unter <i>Werkzeuge → WebSocket-Servereinstellungen</i> „WebSocket-Server aktivieren“ anhaken und über „Verbindungsinfo anzeigen“ das Passwort kopieren. Im OBS-Fenster von StreamHelp das Passwort eintragen und auf <b>„In OBS übernehmen“</b> klicken: StreamHelp legt die Browserquelle „StreamHelp-Overlay“ an und legt sie über deine Kamera. Das Passwort bleibt nur in deinem Browser.</p></li>
+          <li><h3>Oder von Hand einfügen</h3><p>Im OBS-Fenster von StreamHelp die Adresse kopieren. In OBS bei <i>Quellen</i> auf <b>+</b> → <b>Browser</b>, die Adresse einfügen, Breite <b>1920</b> und Höhe <b>1080</b> eintragen und „Audio über OBS steuern“ anhaken.</p></li>
+          <li><h3>Testen</h3><p>Im OBS-Fenster einen Test-Alert schicken und mit <b>🔊 Ton prüfen</b> kontrollieren, ob der Ton im Stream ankommt. Fertig – ab jetzt nie wieder die Adresse tauschen.</p></li>
+        </ol>
+      </section>
+      <section aria-labelledby="tipps">
+        <h2 id="tipps">Tipps für ein flüssiges Overlay</h2>
+        <ul>
+          <li>„Benutzerdefinierte Bildrate“ der Browserquelle auf <b>30</b> statt 60 – halbiert die Arbeit und sieht gleich aus.</li>
+          <li>In OBS unter <i>Einstellungen → Erweitert</i> die <b>Browserquellen-Hardwarebeschleunigung</b> anlassen.</li>
+          <li>„Quelle herunterfahren, wenn nicht sichtbar“ <b>nicht</b> beim Overlay einschalten – sonst fehlen Alerts.</li>
+          <li>Nur die Ebenen einschalten, die du wirklich zeigst; ausgeschaltete Ebenen kosten nichts.</li>
+        </ul>
+      </section>
+      <section aria-labelledby="probleme">
+        <h2 id="probleme">Wenn etwas nicht klappt</h2>
+        <details><summary>Es kommen keine Alerts an</summary><p>Prüfe im Dashboard, ob Twitch verbunden ist – der Twitch-Gesundheitscheck zeigt, was fehlt. Danach einen Test-Alert schicken.</p></details><details><summary>Ich höre keinen Ton</summary><p>Bei der Browserquelle muss „Audio über OBS steuern“ an sein; im OBS-Mixer steht dann „StreamHelp-Overlay“. „🔊 Ton prüfen“ findet die häufigsten Ursachen.</p></details><details><summary>StreamHelp findet OBS nicht</summary><p>OBS muss auf demselben PC laufen (ab Version 28) und der WebSocket-Server aktiviert sein. Alternativ die Adresse von Hand einfügen.</p></details>
+      </section>
+
+      <section class="more" aria-labelledby="more-title">
+        <h2 id="more-title">Mehr zu StreamHelp</h2>
+        <ul><li><a href="twitch-overlay.html">OBS-Overlay & Alerts</a></li><li><a href="twitch-chatbot.html">Chat-Bot auf Deutsch</a></li><li><a href="twitch-content-ideen.html">Glücksrad, Bingo & mehr</a></li><li><a href="pro.html">Free und Pro</a></li></ul>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">
+      <span>© 2026 StreamHelp · Hamburg</span>
+      <nav aria-label="Rechtliches"><a href="./">Startseite</a><a href="ueber-uns.html">Über uns</a><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a><a href="cookies.html">Cookies</a><a href="nutzungsbedingungen.html">Nutzungsbedingungen</a></nav>
+    </div>
+  </footer>
+</body>
+</html>

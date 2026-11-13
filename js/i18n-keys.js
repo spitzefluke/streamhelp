@@ -527,4 +527,9 @@ export default [
   "Noch {amount} bis „{title}“",
   "Der Knopf führt zu unserer Spendenaktion auf betterplace.org. Das Geld geht direkt an die Deutsche Kinderkrebsstiftung – StreamHelp verdient daran nichts.",
   "Geschafft!",
+  "Ratgeber",
+  "OBS-Overlay & Alerts",
+  "Chat-Bot auf Deutsch",
+  "Glücksrad, Bingo & mehr",
+  "Overlay in OBS einrichten",
 ];

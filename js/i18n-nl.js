@@ -525,4 +525,9 @@ export default [
   "Nog {amount} tot „{title}”",
   "De knop brengt je naar onze inzamelactie op betterplace.org. Het geld gaat rechtstreeks naar de Deutsche Kinderkrebsstiftung – StreamHelp verdient er niets aan.",
   "Gehaald!",
+  "Gidsen",
+  "OBS-overlay & alerts",
+  "Chatbot in het Duits",
+  "Rad, bingo & meer",
+  "Overlay instellen in OBS",
 ];

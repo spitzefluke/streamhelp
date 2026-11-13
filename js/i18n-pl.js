@@ -525,4 +525,9 @@ export default [
   "Jeszcze {amount} do „{title}”",
   "Przycisk prowadzi do naszej zbiórki na betterplace.org. Pieniądze trafiają bezpośrednio do Deutsche Kinderkrebsstiftung – StreamHelp nic na tym nie zarabia.",
   "Udało się!",
+  "Poradniki",
+  "Nakładka OBS i alerty",
+  "Chatbot po niemiecku",
+  "Koło, bingo i więcej",
+  "Konfiguracja nakładki w OBS",
 ];

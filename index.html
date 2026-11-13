@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-L+Bp0q6cs3YS87KD+BrJOQiW5AhgAssk8/ygggZ1xcw=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-62BrDtN/ECc+H345xJA6+6IwsGsKS5n/5ph6I0bAzkg=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamHelp – OBS-Overlay, Chat-Bot &amp; Content-Ideen für Twitch</title>
@@ -34,10 +34,64 @@
         "url": "https://streamhelp.de/",
         "image": "https://streamhelp.de/assets/og-image.png",
         "applicationCategory": "MultimediaApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
         "operatingSystem": "Web",
         "inLanguage": "de",
         "description": "Stream-Zentrale für Twitch: OBS-Overlay, Alerts, Chat-Bot, Kanalpunkte und Content-Ideen zum Mitmachen.",
         "featureList": ["OBS-Overlay als eine Browserquelle", "Alerts mit eigenem Design", "Chat-Bot mit eigenen Befehlen", "Glücksrad, Bingo, Verlosung und weitere Content-Ideen", "Twitch-Panel unter dem Stream", "Aufnahme-Studio für YouTube, Shorts und TikTok"]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Was kostet StreamHelp?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Aktuell nichts – StreamHelp ist kostenlos. Später kommt ein optionales Abo mit Extras. Bevor sich etwas ändert, sagen wir rechtzeitig Bescheid."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Brauche ich OBS?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Für Overlay und Alerts ja – genauer: ein Streaming-Programm mit Browserquelle (OBS, Streamlabs Desktop o. Ä.). Dort fügst du eine einzige Adresse ein, alles Weitere stellst du im OBS-Fenster von StreamHelp ein. Content-Ideen, Chat-Bot und Kanalpunkte laufen auch ohne."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Ich bin (noch) kein Affiliate – bringt mir StreamHelp trotzdem etwas?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Ja. Kanalpunkte, Abos, Bits und Vorhersagen gibt es bei Twitch nur für Affiliates und Partner – diese Bereiche sind in deinem Kanal deshalb ausgegraut und klar erklärt. Chat-Bot, Overlay, Follower-Alerts, Umfragen, Verlosungen, Haustier, Content-Ideen und die Twitch-Erweiterung laufen ganz normal."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Wie komme ich als Streamer dazu?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Mit Twitch anmelden, „Kanal anmelden“ wählen und kurz warten: Jeder Kanal wird von Hand freigeschaltet. Danach verbindest du einmal Twitch (Chat, Alerts – mit Affiliate auch Kanalpunkte) und fügst das Overlay in OBS ein."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Was dürfen meine Mods?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Erst einmal nichts – du gibst sie frei und sperrst sie mit einem Klick wieder. Freigegebene Mods steuern Content-Ideen und Overlay, schalten den Raid-Schutz, passen Kanalpunkte-Kosten an und pflegen Bot-Befehle. Twitch-Verbindung und Mod-Freigaben bleiben bei dir."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Ist mein Twitch-Konto sicher?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Die Anmeldung läuft direkt über Twitch – dein Passwort sehen wir nie. Ergebnisse schreibt der StreamHelp-Bot, nie dein eigenes Konto, und die Verbindung kannst du jederzeit in den Twitch-Einstellungen unter „Verbindungen“ trennen. Was gespeichert wird, steht in den Datenschutzhinweisen."
+            }
+          }
+        ]
       }
     ]
   }</script>
@@ -50,7 +104,7 @@
   <link rel="stylesheet" href="css/style.css?v=d7d54cd13e">
   <link rel="stylesheet" href="css/phosphor.css?v=5fd0d30b55">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
-  <link rel="stylesheet" href="css/landing.css?v=c576c9e999">
+  <link rel="stylesheet" href="css/landing.css?v=92e9c75f79">
   <link rel="stylesheet" href="css/yami.css?v=414a6010cd">
   <link rel="stylesheet" href="css/shell.css?v=beb5f24ba1">
   <link rel="stylesheet" href="css/prank-fx.css?v=82d09df5b9">
@@ -128,20 +182,20 @@
       "./js/frame-guard.js": "./js/frame-guard.js?v=3a391987bd",
       "./js/games.js": "./js/games.js?v=1dbc5571d9",
       "./js/help.js": "./js/help.js?v=a68e78522c",
-      "./js/i18n-en.js": "./js/i18n-en.js?v=6aa4228ba4",
-      "./js/i18n-es.js": "./js/i18n-es.js?v=4415200ab7",
-      "./js/i18n-fr.js": "./js/i18n-fr.js?v=c02e19d138",
-      "./js/i18n-it.js": "./js/i18n-it.js?v=6f5fce0431",
-      "./js/i18n-keys.js": "./js/i18n-keys.js?v=4343221a2f",
-      "./js/i18n-nl.js": "./js/i18n-nl.js?v=ed1615425c",
-      "./js/i18n-pl.js": "./js/i18n-pl.js?v=ad60fb1f50",
-      "./js/i18n-pt.js": "./js/i18n-pt.js?v=f06dc4f210",
-      "./js/i18n-ru.js": "./js/i18n-ru.js?v=bed6b319a5",
-      "./js/i18n-tr.js": "./js/i18n-tr.js?v=5386bb6cdd",
+      "./js/i18n-en.js": "./js/i18n-en.js?v=f17c02ffe9",
+      "./js/i18n-es.js": "./js/i18n-es.js?v=6d60cbfdd1",
+      "./js/i18n-fr.js": "./js/i18n-fr.js?v=964c624e83",
+      "./js/i18n-it.js": "./js/i18n-it.js?v=d7fa072c37",
+      "./js/i18n-keys.js": "./js/i18n-keys.js?v=9c9c139663",
+      "./js/i18n-nl.js": "./js/i18n-nl.js?v=064bf5bb8e",
+      "./js/i18n-pl.js": "./js/i18n-pl.js?v=ea01380f8e",
+      "./js/i18n-pt.js": "./js/i18n-pt.js?v=59a6b46c27",
+      "./js/i18n-ru.js": "./js/i18n-ru.js?v=98903a5302",
+      "./js/i18n-tr.js": "./js/i18n-tr.js?v=7e218fee87",
       "./js/i18n.js": "./js/i18n.js?v=4550a5388d",
       "./js/intro.js": "./js/intro.js?v=91b52e9132",
       "./js/kuendigen.js": "./js/kuendigen.js?v=0908c3d587",
-      "./js/landing.js": "./js/landing.js?v=d63600a119",
+      "./js/landing.js": "./js/landing.js?v=1e86762ef9",
       "./js/launch.js": "./js/launch.js?v=0fd38405df",
       "./js/library.js": "./js/library.js?v=18de8e88ef",
       "./js/look-builder.js": "./js/look-builder.js?v=7fb22ef480",
@@ -212,7 +266,27 @@
        Plätze [data-yami]. Die Teile dazwischen bleiben HTML, weil js/app.js und js/landing.js sie füllen (Live-Zahlen,
        Kanäle, KI-Hilfe, Kontakt) – Stile in css/landing.css (unter .nct). [data-yami-bg] = Hintergrund mit Parallaxe. -->
   <div id="landing" class="landing nct yami" hidden>
-    <div data-yami="top" data-no-i18n></div>
+    <div data-yami="top" data-no-i18n>
+      <!-- Fassung ohne JavaScript (für Suchmaschinen und falls die bewegte Startseite nicht lädt): dieselben Texte wie
+           die React-Teile (landing-yami/src/sections). Unsichtbar, sobald JS läuft (.nc-js); js/landing.js entfernt sie,
+           wenn React steht, und zeigt sie wieder, falls React nicht lädt. Texte bei Änderungen dort mitziehen. -->
+      <div class="yk-ssr">
+        <nav class="yk-ssr-nav" aria-label="Hauptmenü">
+          <a href="./" class="yk-ssr-brand"><img src="assets/favicon.svg" width="26" height="26" alt="">StreamHelp</a>
+          <a href="#funktionen">Funktionen</a><a href="#start">So startest du</a><a href="#preise">Preise</a><a href="#faq">FAQ</a><a href="ueber-uns.html">Über uns</a>
+        </nav>
+        <header class="yk-ssr-hero">
+          <p class="nc-eyebrow">Für Twitch-Streamer und ihre Zuschauer</p>
+          <h1>Dein Stream. Eine Zentrale.</h1>
+          <p class="nc-text">Overlay, Alerts, Chat-Bot und Mitmach-Spiele für deine Community – in einer einzigen OBS-Browserquelle statt fünf Tools.</p>
+          <p><a class="nc-btn nc-btn-solid" href="#login" data-go="login" data-quick="twitch">Kostenlos starten</a></p>
+        </header>
+        <section class="yk-ssr-sec" aria-labelledby="ssr-quelle">
+          <h2 id="ssr-quelle">Eine Browserquelle für alles.</h2>
+          <p class="nc-text"><b>So sieht dein Stream aus:</b> Alerts, Chat, Glücksrad und Laufband laufen zusammen in einer Szene – du fügst nur eine Adresse in OBS ein. Wie das geht, zeigt die <a href="obs-overlay-einrichten.html">Anleitung: Overlay in OBS einrichten</a>.</p>
+        </section>
+      </div>
+    </div>
 
     <section id="zahlen" class="nc-band" aria-label="Auf einen Blick" data-stats>
       <div class="yk-bg" data-yami-bg aria-hidden="true"></div>
@@ -228,7 +302,41 @@
       </div>
     </section>
 
-    <div data-yami="mid" data-no-i18n></div>
+    <div data-yami="mid" data-no-i18n>
+      <div class="yk-ssr">
+        <section class="yk-ssr-sec" id="start" aria-labelledby="ssr-start">
+          <p class="nc-eyebrow">So startest du</p>
+          <h2 id="ssr-start">In drei Schritten live</h2>
+          <ol class="yk-ssr-steps">
+            <li><b>Anmelden</b> – am schnellsten mit Twitch.</li>
+            <li><b>Twitch verbinden</b> – einmal Chat und Alerts erlauben, mit Affiliate auch Kanalpunkte.</li>
+            <li><b>OBS öffnen</b> – Browserquelle einfügen, fertig: alles läuft live.</li>
+          </ol>
+        </section>
+        <section class="yk-ssr-sec" id="funktionen" aria-labelledby="ssr-funktionen">
+          <p class="nc-eyebrow">Funktionen</p>
+          <h2 id="ssr-funktionen">Für jede Rolle das Richtige – ohne fünf Tools.</h2>
+          <ul class="yk-ssr-grid">
+            <li><h3>Alerts mit eigenem Design</h3><p>Follows, Abos, Bits und Raids als Einblendung – mit Sound und deinem Look. <a href="twitch-overlay.html">Mehr zu Overlay und Alerts</a></p></li>
+            <li><h3>Chat-Bot und eigene Befehle</h3><p>Antwortet im Chat, zählt Watchtime und verkündet Ergebnisse – als StreamHelp-Bot, nie über dein Konto. <a href="twitch-chatbot.html">Mehr zum Chat-Bot</a></p></li>
+            <li><h3>Mitmach-Spiele</h3><p>Glücksrad, Bingo, Verlosungen und Quiz – Zuschauer spielen über die Seite oder den Chat. <a href="twitch-content-ideen.html">Alle Content-Ideen</a></p></li>
+            <li><h3>Eine Browserquelle für alles</h3><p>Overlay, Alerts, Laufband und Timer in einer einzigen OBS-Quelle.</p></li>
+            <li><h3>Raid-Schutz mit einem Klick</h3><p>Ein Klick pausiert alle Aktionen, Kanalpunkte gehen zurück.</p></li>
+            <li><h3>Mods freigeben und wieder sperren</h3><p>Nur was der Streamer freigibt – mit einem Klick wieder weg.</p></li>
+          </ul>
+        </section>
+        <section class="yk-ssr-sec" id="preise" aria-labelledby="ssr-preise">
+          <p class="nc-eyebrow">Preise</p>
+          <h2 id="ssr-preise">Fast alles kostenlos</h2>
+          <p class="nc-text">Chat-Bot, Alerts, Overlay, Design-Bibliothek und die meisten Content-Ideen bleiben kostenlos. Pro schaltet ein paar besondere Ideen dazu.</p>
+          <ul class="yk-ssr-grid">
+            <li><h3>Zuschauer · 0 €</h3><p>Fortnite-Bingo mit eigener Karte, Glücksrad drehen und abstimmen, das Haustier im Chat füttern, den Streamer mit Kanalpunkten ärgern.</p></li>
+            <li><h3>Streamer · 0 € (aktuell kostenlos)</h3><p>Alerts mit eigenem Design, eine Browserquelle für alles, Chat-Bot und eigene Befehle, Twitch-Gesundheitscheck alle 30 Minuten, Mods freigeben und wieder sperren.</p></li>
+            <li><h3>Pro · 2,99 € im Monat (bald buchbar)</h3><p>Alles aus dem Streamer-Paket, dazu Stream-Dino und Cup, Herzfrequenz im Stream und Nachrichten vorlesen lassen. <a href="pro.html">Free und Pro im Vergleich</a></p></li>
+          </ul>
+        </section>
+      </div>
+    </div>
 
     <section id="streamer" class="nc-sec nc-sec--channels" hidden>
       <div class="yk-bg" data-yami-bg aria-hidden="true"></div>
@@ -384,7 +492,15 @@
         </details>
       </section>
 
-    <div data-yami="end" data-no-i18n></div>
+    <div data-yami="end" data-no-i18n>
+      <div class="yk-ssr">
+        <section class="yk-ssr-sec" aria-labelledby="ssr-cta">
+          <h2 id="ssr-cta">Bereit für den nächsten Stream?</h2>
+          <p class="nc-text">In fünf Minuten eingerichtet. Aktuell kostenlos.</p>
+          <p><a class="nc-btn nc-btn-solid" href="#login" data-go="login" data-quick="twitch">Mit Twitch anmelden</a></p>
+        </section>
+      </div>
+    </div>
 
     <!-- Fußzeile: vier Spalten mit Überschrift, darunter © und die Rechtstexte -->
     <footer class="nc-foot">
@@ -416,6 +532,15 @@
               <li><a href="ueber-uns.html#roadmap">Roadmap</a></li>
               <li><a href="sponsoring.html">Sponsoring für Firmen</a></li>
               <li><a href="pad.html">StreamHelp Pad (bald)</a></li>
+            </ul>
+          </nav>
+          <nav class="nc-foot-col" aria-labelledby="foot-ratgeber">
+            <h2 class="nc-foot-h" id="foot-ratgeber">Ratgeber</h2>
+            <ul>
+              <li><a href="twitch-overlay.html">OBS-Overlay &amp; Alerts</a></li>
+              <li><a href="twitch-chatbot.html">Chat-Bot auf Deutsch</a></li>
+              <li><a href="twitch-content-ideen.html">Glücksrad, Bingo &amp; mehr</a></li>
+              <li><a href="obs-overlay-einrichten.html">Overlay in OBS einrichten</a></li>
             </ul>
           </nav>
           <nav class="nc-foot-col" aria-labelledby="foot-community">

@@ -525,4 +525,9 @@ export default [
   "Faltan {amount} para «{title}»",
   "El botón te lleva a nuestra campaña en betterplace.org. El dinero va directamente a la Deutsche Kinderkrebsstiftung: StreamHelp no gana nada con ello.",
   "¡Conseguido!",
+  "Guías",
+  "Overlay de OBS y alertas",
+  "Chatbot en alemán",
+  "Ruleta, bingo y más",
+  "Configurar el overlay en OBS",
 ];

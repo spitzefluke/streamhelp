@@ -525,4 +525,9 @@ export default [
   "„{title}” için {amount} kaldı",
   "Düğme seni betterplace.org'daki bağış kampanyamıza götürür. Para doğrudan Deutsche Kinderkrebsstiftung'a gider – StreamHelp bundan hiçbir şey kazanmaz.",
   "Başardık!",
+  "Rehberler",
+  "OBS overlay ve uyarılar",
+  "Almanca sohbet botu",
+  "Çark, bingo ve dahası",
+  "OBS’te overlay kurulumu",
 ];

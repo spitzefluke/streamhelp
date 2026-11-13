@@ -46,10 +46,17 @@ export function setupLanding(root, opts = {}) {
 }
 
 // React-Teil nachladen (ein Modul, ~150 KB gzip). Schlägt das fehl, bleiben die HTML-Teile benutzbar.
+// Die Fassung ohne JavaScript (.yk-ssr in index.html) verschwindet, sobald React steht; lädt React nicht, kommt sie zurück.
 function mountReact(root, still) {
   import('./vendor/yami-landing.js')
-    .then(({ mountYami }) => mountYami({ root, t, still, langPicker: () => langPicker('lang-pick--nav') }))
-    .catch((err) => console.error('Startseite (React) nicht geladen:', err));
+    .then(({ mountYami }) => {
+      root.querySelectorAll('.yk-ssr').forEach((el) => el.remove());
+      mountYami({ root, t, still, langPicker: () => langPicker('lang-pick--nav') });
+    })
+    .catch((err) => {
+      console.error('Startseite (React) nicht geladen:', err);
+      root.classList.add('yk-fallback');
+    });
 }
 
 // „Stream finden“: Showcase (mit Zustimmung, weiß ob live) und Kanal-Liste (alle freigeschalteten) zu einer

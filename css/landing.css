@@ -149,7 +149,7 @@ html:has(.nct:not([hidden])) { scroll-behavior: smooth; }
 
 /* Fußzeile: Spalten mit Überschrift, darunter eine Leiste mit © und Rechtstexten */
 .nc-foot { border-top: 1px solid var(--color-neutral-800); padding: 56px 0 28px; }
-.nc-foot-cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px 24px; }
+.nc-foot-cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 32px 24px; }
 .nc-foot-h { margin: 0 0 18px; font-size: 15px; font-weight: 600; letter-spacing: 0; line-height: 1.3; color: var(--color-text); }
 .nc-foot-col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .nc-foot-col a { display: flex; align-items: center; min-height: 36px; }
@@ -345,3 +345,20 @@ html:has(.nct:not([hidden])) { scroll-behavior: smooth; }
 @keyframes nc-confetti { to { transform: translateY(min(90vh, 900px)) rotate(var(--r)) scale(var(--s)); opacity: 0; } }
 @media (max-width: 520px) { .nc-pool-list li { grid-template-columns: auto 1fr auto; } .nc-pool-list b { grid-column: 2; grid-row: 1; } .nc-pool-list em { grid-column: 3; } .nc-pool-what { grid-column: 2 / -1; grid-row: 2; } .nc-pool-list small { grid-column: 2 / -1; grid-row: 3; } }
 @media (prefers-reduced-motion: reduce) { .nc-pool-fill { transition: none; } .nc-pool-list li.is-new { animation: none; } }
+
+/* Startseite ohne JavaScript (index.html, .yk-ssr in den Plätzen [data-yami]): für Suchmaschinen und als Ersatz,
+   falls die React-Teile nicht laden. Läuft JS, ist sie aus (.nc-js); js/landing.js zeigt sie bei Fehlern wieder (.yk-fallback). */
+.nct.nc-js .yk-ssr { display: none; }
+.nct.nc-js.yk-fallback .yk-ssr { display: block; }
+.yk-ssr { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0; }
+.yk-ssr-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 12px 0 28px; font-size: 14px; }
+.nct .yk-ssr-brand { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; color: var(--color-paper, #f1eee4); font-weight: 700; font-size: 18px; }
+.yk-ssr-hero { display: grid; gap: 16px; padding: 32px 0 48px; max-width: 760px; }
+.nct .yk-ssr-hero h1 { margin: 0; font-size: clamp(2.6rem, 7vw, 5rem); line-height: .95; text-transform: uppercase; }
+.yk-ssr-sec { display: grid; gap: 14px; padding: 40px 0; }
+.nct .yk-ssr-sec h2 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.05; }
+.yk-ssr-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; line-height: 1.5; }
+.yk-ssr-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.yk-ssr-grid li { padding: 18px 20px; border-radius: 16px; background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.nct .yk-ssr-grid h3 { margin: 0 0 6px; font-size: 18px; }
+.yk-ssr-grid p { line-height: 1.5; opacity: .85; }
