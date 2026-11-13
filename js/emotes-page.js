@@ -1043,6 +1043,20 @@ function download(blob, name) {
 }
 const kb = (bytes) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1).replace('.', ',')} MB`);
 
+// Ein fertiges Bild in einer Größe: GIF (animiert) oder PNG
+async function makeFile(size, animated, n = frames(), mod = null) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  if (animated) {
+    const enc = mod ?? await import('./gif-encode.js');
+    const fr = [];
+    for (let i = 0; i < n; i++) { render(g, size, i / n); fr.push(g.getImageData(0, 0, size, size)); }
+    return enc.encodeGif(fr, { delayCs: FRAME_MS / 10, matte: MATTES[st.matte] });
+  }
+  render(g, size, isBadge() ? 0.3 : 0);
+  return new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error('PNG ließ sich nicht erzeugen'))), 'image/png'));
+}
 async function saveSizes(list) {
   st.busy = true;
   st.exportMsg = 'Wird erstellt …';
@@ -1055,18 +1069,7 @@ async function saveSizes(list) {
     const mod = animated ? await import('./gif-encode.js') : null;
     const files = [];
     for (const size of list) {
-      const c = document.createElement('canvas');
-      c.width = c.height = size;
-      const g = c.getContext('2d', { willReadFrequently: true });
-      let blob;
-      if (animated) {
-        const fr = [];
-        for (let i = 0; i < n; i++) { render(g, size, i / n); fr.push(g.getImageData(0, 0, size, size)); }
-        blob = mod.encodeGif(fr, { delayCs: FRAME_MS / 10, matte: MATTES[st.matte] });
-      } else {
-        render(g, size, isBadge() ? 0.3 : 0);
-        blob = await new Promise((ok, fail) => c.toBlob((b) => (b ? ok(b) : fail(new Error('PNG ließ sich nicht erzeugen'))), 'image/png'));
-      }
+      const blob = await makeFile(size, animated, n, mod);
       files.push({ size, blob, name: `${st.name || 'emote'}_${size}.${animated ? 'gif' : 'png'}` });
     }
     if (files.length === 1) download(files[0].blob, files[0].name);
@@ -1084,12 +1087,63 @@ async function saveSizes(list) {
   st.busy = false;
   renderExport();
 }
+// ---------- Im Stream benutzen (Emote-Regen im Overlay, ohne Twitch-Upload) ----------
+const PUB_SIZE = 160;
+let pubChannel = null;
+const codeOf = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 25);
+function pubMsg(text) { $('#ee-pub-msg').textContent = text; $('#ee-pub-msg').hidden = !text; }
+async function renderPub() {
+  const list = $('#ee-pub-list');
+  const code = $('#ee-pub-code');
+  if (!code.value) code.value = codeOf(st.name) || 'emote';
+  $('#ee-pub-save').disabled = true;
+  list.replaceChildren();
+  const api = await accountUser();
+  if (!api) { pubMsg('Zum Freigeben bitte mit deinem Kanal anmelden.'); return; }
+  try {
+    if (!pubChannel) pubChannel = (await api.channelMine())?.id ?? null;
+    if (!pubChannel) { pubMsg('Freigeben kann nur, wer einen eigenen Kanal bei StreamHelp hat.'); return; }
+    const items = await api.channelEmotes(pubChannel);
+    $('#ee-pub-save').disabled = !st.layers.length;
+    list.replaceChildren(...items.map((e) => h('li', {},
+      h('img', { src: e.url, alt: '', width: 32, height: 32, loading: 'lazy' }),
+      h('code', {}, e.code),
+      h('span', { class: 'ee-pub-cmd' }, `!regen ${e.code}`),
+      h('button', { type: 'button', class: 'btn btn-ghost ee-xs', 'data-unpub': e.code, 'aria-label': `${e.code} entfernen` }, 'Entfernen'))));
+    if (!items.length) list.append(h('li', { class: 'ee-pub-empty' }, 'Noch keine eigenen Emotes im Emote-Regen.'));
+  } catch (e) {
+    pubMsg(cloudMissing(e) ? 'Freigeben ist noch nicht eingerichtet.' : errText(e));
+  }
+}
+async function publish() {
+  const code = codeOf($('#ee-pub-code').value);
+  $('#ee-pub-code').value = code;
+  if (code.length < 2) { pubMsg('Das Code-Wort braucht mindestens 2 Zeichen (a–z, 0–9).'); return; }
+  const api = await accountUser();
+  if (!api || !pubChannel) { renderPub(); return; }
+  $('#ee-pub-save').disabled = true;
+  pubMsg('Wird freigegeben …');
+  try {
+    const blob = await makeFile(PUB_SIZE, isAnimated());
+    if (blob.size > 3 * 1024 * 1024) throw new Error('Das Emote ist zu groß (höchstens 3 MB) – Tempo „schnell“ oder weniger Effekte helfen.');
+    await api.channelEmoteSave(pubChannel, code, blob);
+    await renderPub();
+    pubMsg(`Freigegeben: „!regen ${code}“ lässt es im Overlay regnen – auch wenn der Bot das schreibt.`);
+  } catch (e) {
+    pubMsg(cloudMissing(e) ? 'Freigeben ist noch nicht eingerichtet.' : errText(e));
+    $('#ee-pub-save').disabled = false;
+  }
+}
+
 let lastFocus = null;
 function openExport() {
   lastFocus = document.activeElement;
   st.exportMsg = '';
   $('#ee-dialog').hidden = false;
   renderExport();
+  pubMsg('');
+  $('#ee-pub-code').value = codeOf(st.name);
+  renderPub();
   dirty = true;
   $('#ee-save').focus();
 }
@@ -1701,6 +1755,19 @@ function setup() {
   $('#ee-save').addEventListener('click', () => saveSizes(FORMATS[st.fmt].sizes));
   $('#ee-ex-sizes').addEventListener('click', (e) => { const b = e.target.closest('[data-save]'); if (b && !st.busy) saveSizes([Number(b.dataset.save)]); });
   document.querySelectorAll('[name="ee-matte"]').forEach((r) => r.addEventListener('change', () => { st.matte = r.value; scheduleSave(); }));
+  $('#ee-pub-save').addEventListener('click', publish);
+  $('#ee-pub-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); publish(); } });
+  $('#ee-pub-list').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-unpub]');
+    if (!b) return;
+    try {
+      const api = await accountUser();
+      if (!api || !pubChannel) return;
+      await api.channelEmoteDelete(pubChannel, b.dataset.unpub);
+      pubMsg(`„${b.dataset.unpub}“ ist aus dem Emote-Regen entfernt.`);
+      await renderPub();
+    } catch (err) { pubMsg(errText(err)); }
+  });
 
   // Tastatur
   window.addEventListener('keydown', (e) => {

@@ -243,6 +243,18 @@ input[type=checkbox] { accent-color: var(--color-accent); width: 16px; height: 1
 .ee-grid2-s { gap: 6px; }
 .ee-grid2-s .btn { width: 100%; }
 
+/* — Im Stream benutzen — */
+.ee-pub { display: grid; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--color-divider); }
+.ee-pub h2 { margin: 0; font-weight: 400; display: flex; align-items: center; gap: 4px; }
+.ee-pub code, .ee-publist code { font: 500 12px "JetBrains Mono", ui-monospace, monospace; color: var(--color-accent-200); }
+.ee-pubrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.ee-pubrow .input { flex: 1 1 140px; width: auto; min-width: 0; }
+.ee-publist { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; max-height: 180px; overflow: auto; }
+.ee-publist li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--radius-md); background: var(--color-bg); font-size: 13px; }
+.ee-publist img { width: 32px; height: 32px; object-fit: contain; }
+.ee-pub-cmd { flex: 1; min-width: 0; color: var(--color-neutral-500); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ee-pub-empty { color: var(--color-neutral-500); background: none !important; }
+
 /* — Speichern — */
 .ee-libbtn { min-height: 30px; padding: 4px 10px; font-size: 13px; flex: none; }
 .ee-savestate { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 200px; padding: 4px 8px; border: 0; border-radius: var(--radius-md); background: none;

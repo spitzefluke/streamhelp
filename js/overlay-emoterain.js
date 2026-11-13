@@ -4,9 +4,14 @@
 //                                 benutzten. Abklingzeit für alle; Streamer und Mods dürfen immer.
 //   Emote-Combo                   schreibt der Chat dasselbe Emote oft genug in kurzer Zeit, regnet es von selbst.
 //   Jedes Emote                   auf Wunsch fällt zu jedem Emote im Chat ein einzelnes herunter.
+//   Eigene Emotes                 aus dem Emote-Editor („Im Stream benutzen“, Migration …_channel_emotes.sql): Ihr
+//                                 Code-Wort zählt wie ein Twitch-Emote – „!regen ggstempel“ (auch vom Bot), Combo,
+//                                 einzelne Tropfen. Sie müssen nicht bei Twitch hochgeladen sein.
 // Parameter: ercmd=regen  erwho=all|subs|mods  ercool=30 (s)  ercombo=5 (0 = aus)  erall=1  ermax=40  ersize=100
 // Testmodus (test=1): alle paar Sekunden ein Probe-Regen.
 import { EMOTE_URL, connectTwitchChat } from './twitch-chat.js';
+import { CONFIG } from './config.js';
+import { channelHeaders } from './channel.js';
 
 const COMBO_WINDOW_MS = 8000;
 const COMBO_COOLDOWN_MS = 20_000;
@@ -15,6 +20,25 @@ const RECENT = 12;
 // Für den Testmodus: bekannte globale Twitch-Emotes (Kappa, <3, HeyGuys, LUL) – fällt ein Bild aus, kommt ein Emoji
 const TEST_EMOTES = [{ id: '25', name: 'Kappa' }, { id: '9', name: '<3' }, { id: '30259', name: 'HeyGuys' }, { id: '425618', name: 'LUL' }];
 const FALLBACK = ['💜', '✨', '🎉', '⭐'];
+const CUSTOM_REFRESH_MS = 120_000;
+
+// Eigene Emotes des Kanals: code → Bild-Adresse (Demo-Modus: aus dem Browser-Speicher des Editors)
+async function loadCustomEmotes() {
+  const url = (u) => (typeof u === 'string' && (/^https:\/\//.test(u) || /^data:image\/(gif|png);base64,/.test(u)) ? u : null);
+  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
+    try { return (JSON.parse(localStorage.getItem('zd_channel_emotes')) ?? []).map((e) => ({ code: e.code, url: url(e.url) })).filter((e) => e.url); } catch { return []; }
+  }
+  const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/rpc/channel_emotes`, {
+    method: 'POST',
+    headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', ...channelHeaders() },
+    body: '{}',
+    cache: 'no-store',
+  });
+  if (!res.ok) return []; // Migration fehlt oder Kanal unbekannt: dann eben nur Twitch-Emotes
+  const list = await res.json();
+  return (Array.isArray(list) ? list : []).filter((e) => /^[a-z0-9]{2,25}$/.test(e?.code ?? '') && typeof e.path === 'string')
+    .map((e) => ({ code: e.code, url: `${CONFIG.SUPABASE_URL}/storage/v1/object/public/channel-emotes/${e.path.split('/').map(encodeURIComponent).join('/')}?v=${Date.parse(e.updated_at) || 0}` }));
+}
 
 export function readEmoteRain({ flag, number, params }) {
   if (!flag('erain', false)) return null;
@@ -40,6 +64,12 @@ export function setupEmoteRain(cfg, { channel, test }) {
   const seen = new Map();            // Emote → Zeitpunkte (Combo)
   const comboAt = new Map();         // Emote → letzter Combo-Regen
   let lastRain = 0;
+  let custom = new Map();            // eigenes Emote: code → { id, name, url }
+  const refreshCustom = () => loadCustomEmotes().then((list) => {
+    custom = new Map(list.map((e) => [e.code, { id: `c:${e.code}`, name: e.code, url: e.url }]));
+  }, () => {});
+  refreshCustom();
+  const customTimer = setInterval(refreshCustom, CUSTOM_REFRESH_MS);
 
   function drop(emote, { delay = 0, small = false } = {}) {
     if (layer.childElementCount >= MAX_ON_SCREEN) return;
@@ -53,7 +83,7 @@ export function setupEmoteRain(cfg, { channel, test }) {
       const img = new Image();
       img.alt = '';
       img.decoding = 'async';
-      img.src = EMOTE_URL(emote.id);
+      img.src = emote.url ?? EMOTE_URL(emote.id);
       img.onerror = () => { img.replaceWith(document.createTextNode(FALLBACK[Math.floor(Math.random() * FALLBACK.length)])); };
       el.append(img);
     } else el.textContent = emote.text ?? '💜';
@@ -75,6 +105,16 @@ export function setupEmoteRain(cfg, { channel, test }) {
 
   function onMessage(m) {
     const emotes = m.parts.filter((p) => p.emote).map((p) => ({ id: p.emote, name: p.name }));
+    // eigene Emotes: Code-Wörter im Text (Groß/Klein egal, Satzzeichen drumherum zählen nicht)
+    if (custom.size) {
+      for (const p of m.parts) {
+        if (p.emote || !p.text) continue;
+        for (const w of p.text.toLowerCase().split(/\s+/)) {
+          const e = custom.get(w.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ''));
+          if (e) emotes.push(e);
+        }
+      }
+    }
     const now = Date.now();
     for (const e of emotes) {
       if (!recent.some((r) => r.id === e.id)) recent.push(e);
@@ -107,8 +147,9 @@ export function setupEmoteRain(cfg, { channel, test }) {
   const stop = channel ? connectTwitchChat(channel, { message: onMessage }) : () => {};
   let timer = 0;
   if (test) {
-    rain(TEST_EMOTES, Math.round(cfg.max / 2));
-    timer = setInterval(() => rain(TEST_EMOTES, Math.round(cfg.max / 2)), 7000);
+    const testList = () => [...TEST_EMOTES, ...custom.values()];
+    rain(testList(), Math.round(cfg.max / 2));
+    timer = setInterval(() => rain(testList(), Math.round(cfg.max / 2)), 7000);
   }
-  return () => { stop(); clearInterval(timer); layer.remove(); };
+  return () => { stop(); clearInterval(timer); clearInterval(customTimer); layer.remove(); };
 }

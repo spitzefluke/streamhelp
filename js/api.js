@@ -328,6 +328,26 @@ async function createSupabaseApi({ memory = false } = {}) {
       const { error } = await sb.storage.from('emote-projects').remove([`${user.id}/${id}.json`]);
       if (error) throw error;
     },
+    // Kanal-Emotes für den Emote-Regen (Migration …_channel_emotes.sql): Liste in core.channel_emotes,
+    // Bilder öffentlich im Bucket channel-emotes unter <Kanal-ID>/<code>.gif|png
+    async channelEmotes(channelId) {
+      const list = unwrap(await sb.rpc('channel_emotes', { p_channel: channelId ?? null })) ?? [];
+      return list.map((e) => ({ ...e, url: `${CONFIG.SUPABASE_URL}/storage/v1/object/public/channel-emotes/${e.path}?v=${Date.parse(e.updated_at) || 0}` }));
+    },
+    async channelEmoteSave(channelId, code, blob) {
+      const animated = blob.type === 'image/gif';
+      const row = unwrap(await sb.rpc('channel_emote_save', { p_channel: channelId, p_code: code, p_animated: animated }));
+      unwrap(await sb.storage.from('channel-emotes').upload(row.path, blob, { contentType: blob.type, upsert: true, cacheControl: '60' }));
+      if (row.old_path) await sb.storage.from('channel-emotes').remove([row.old_path]);
+      return row;
+    },
+    async channelEmoteDelete(channelId, code) {
+      const row = unwrap(await sb.rpc('channel_emote_delete', { p_channel: channelId, p_code: code }));
+      if (row?.path) {
+        const { error } = await sb.storage.from('channel-emotes').remove([row.path]);
+        if (error) throw error;
+      }
+    },
     async discordGet() { return unwrap(await sb.rpc('discord_get')); },
     async discordSave(p) {
       return unwrap(await sb.rpc('discord_save', {
@@ -1751,6 +1771,21 @@ function createLocalApi() {
       return JSON.parse(JSON.stringify(p.doc));
     },
     async emoteProjectDelete(id) { demoEmoteProjects.delete(id); },
+    // Kanal-Emotes im Demo-Modus: als Data-URL im Browser (zd_channel_emotes), damit das Overlay sie findet
+    async channelEmotes() { return store.get('channel_emotes', []); },
+    async channelEmoteSave(channelId, code, blob) {
+      if (!current) throw new Error('Bitte zuerst anmelden.');
+      const c = String(code ?? '').toLowerCase().trim();
+      if (!/^[a-z0-9]{2,25}$/.test(c)) throw new Error('Das Code-Wort darf nur Buchstaben a–z und Ziffern haben (2 bis 25 Zeichen).');
+      const url = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => fail(r.error); r.readAsDataURL(blob); });
+      const list = store.get('channel_emotes', []).filter((e) => e.code !== c);
+      if (list.length >= 50) throw new Error('Höchstens 50 Emotes je Kanal – entferne zuerst ein altes.');
+      const animated = blob.type === 'image/gif';
+      list.push({ code: c, path: `demo/${c}.${animated ? 'gif' : 'png'}`, animated, updated_at: new Date().toISOString(), url });
+      store.set('channel_emotes', list.sort((a, b) => a.code.localeCompare(b.code)));
+      return { code: c };
+    },
+    async channelEmoteDelete(channelId, code) { store.set('channel_emotes', store.get('channel_emotes', []).filter((e) => e.code !== code)); },
     async consoleModelGet() { await requireAdmin(); return demoConsoleModel; },
     async consoleModelUpload(file) {
       await requireAdmin();

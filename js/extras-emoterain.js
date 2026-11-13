@@ -1,5 +1,5 @@
 // Emote-Regen: nur die Kachel mit Erklärung. Das Overlay liest den Chat selbst mit (js/overlay-emoterain.js) –
-// keine Datenbank, kein Bot. Eingeschaltet und eingestellt wird es im OBS-Editor (Ebene „Emote-Regen“).
+// kein Bot nötig. Eigene Emotes aus dem Emote-Editor kommen aus core.channel_emotes (…_channel_emotes.sql). Eingeschaltet und eingestellt wird es im OBS-Editor (Ebene „Emote-Regen“).
 import { $, h, isAdmin, makeDialog, openFeature, paintTile } from './extras-core.js';
 
 const DEMO_EMOTES = ['💜', '🎉', '😂', '🔥', '✨', '👑', '🐸', '💥'];
@@ -21,6 +21,7 @@ export const emoterain = {
               <li><b>!regen</b> im Chat – gern mit Emotes dahinter: <i>!regen Kappa PogChamp</i>. Ohne Emote regnen die zuletzt benutzten.</li>
               <li><b>Emote-Combo:</b> Schreibt der Chat dasselbe Emote oft hintereinander, regnet es von selbst.</li>
               <li>Streamer und Mods dürfen immer, alle anderen nach einer kurzen Pause.</li>
+              <li><b>Eigene Emotes</b> ohne Twitch-Upload: im <a href="emotes.html">Emote-Editor</a> unter „Exportieren → Im Stream benutzen“ mit Code-Wort freigeben – dann z. B. <i>!regen ggstempel</i>. Klappt auch, wenn der Bot das schreibt.</li>
             </ul>
             <button class="btn btn--ghost btn--sm" type="button" data-rain>🌧️ Hier mal regnen lassen</button>
           </div>
