@@ -530,4 +530,6 @@ export default [
   "Chatbot in het Duits",
   "Rad, bingo & meer",
   "Overlay instellen in OBS",
+  "Emote-maker",
+  "Emotes",
 ];

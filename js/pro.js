@@ -13,6 +13,18 @@ export const PRO_ENFORCED = LAUNCH.pro;
 export const PRO_BOOKABLE = LAUNCH.pro;
 
 export const PRO_PRICE = { month: '2,99 €', label: '2,99 € im Monat' };
+
+// StreamHelp MAX: alles aus Pro und dazu der zweite Bot. Buchbar erst mit eigenem Schalter (js/launch.js: max),
+// in Supabase dazu STRIPE_PRICE_MAX und MAX_OPEN=1. Ob ein Kanal MAX hat: channel_has_max() bzw. pro_status().max
+export const MAX_BOOKABLE = LAUNCH.pro && LAUNCH.max;
+// Ab dem Start von MAX ist Bot 2 (der Plattform-Bot auf Platz 2) nur noch mit MAX wählbar (js/dash-bot.js)
+export const MAX_ENFORCED = MAX_BOOKABLE;
+export const MAX_PRICE = { month: '5,99 €', label: '5,99 € im Monat' };
+export const MAX_FEATURES = [
+  { name: 'Bot 2 – schneller', desc: 'Der zweite StreamHelp-Bot für deinen Chat: antwortet im doppelten Tempo (halber Sendeabstand).' },
+  { name: 'Mehr Bot-Befehle', desc: 'Bis zu 250 eigene Chat-Befehle statt 25.' },
+  { name: 'Emote-Ersteller', desc: 'Twitch-Emotes selbst machen: zuschneiden, Hintergrund weg, Rand und Text – in 112, 56 und 28 Pixeln.', href: 'emotes.html' },
+];
 export const PRO_SOON = 'Pro ist bald buchbar – wir melden dafür gerade ein Gewerbe an. Bis dahin kannst du alles kostenlos nutzen.';
 
 // Content-Ideen (Kachel-Art → Name und kurze Beschreibung), die es nur mit Pro gibt

@@ -8225,7 +8225,7 @@ function renderBotPanel() {
   }
   // Zwei Plattform-Bots: Auswahl und Protokoll (js/dash-bot.js, Migration …_bot_stats.sql)
   const botCtx = { api: state.api, toast, germanError, refreshTwitch };
-  renderBotPick(t, botCtx);
+  renderBotPick(t, botCtx).catch((err) => console.warn('Bot-Auswahl:', err?.message ?? err));
   setupBotLog(botCtx);
   renderBotLog(botCtx);
   renderCommands();

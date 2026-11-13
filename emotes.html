@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-rhCVQBy+ZCVWa0z4pb1KASqaa4cLliG4UxUnH6rJxjE=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="same-origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emote-Ersteller · StreamHelp</title>
+  <meta name="description" content="Twitch-Emotes selbst machen: Bild zuschneiden, Hintergrund entfernen, Rand und Text dazu – fertig in 112, 56 und 28 Pixeln. Ein Extra von StreamHelp MAX.">
+  <link rel="canonical" href="https://streamhelp.de/emotes.html">
+  <meta name="theme-color" content="#0b0714">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="StreamHelp">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:url" content="https://streamhelp.de/emotes.html">
+  <meta property="og:title" content="Emote-Ersteller · StreamHelp">
+  <meta property="og:description" content="Twitch-Emotes in drei Größen – direkt im Browser.">
+  <meta property="og:image" content="https://streamhelp.de/assets/og-image.png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
+  <link rel="stylesheet" href="css/phosphor.css?v=5fd0d30b55">
+  <link rel="stylesheet" href="css/profile.css?v=473cb2f696">
+  <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
+  <link rel="stylesheet" href="css/emotes.css?v=b46cefba49">
+  <!-- Emote-Ersteller (js/emotes-page.js) – Extra von StreamHelp MAX, läuft nur im Browser -->
+  <!-- versions:start (node tools/stamp-versions.mjs) -->
+  <script type="importmap">{
+    "imports": {
+      "./js/admin.js": "./js/admin.js?v=878a109e40",
+      "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
+      "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
+      "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
+      "./js/api.js": "./js/api.js?v=a239707a79",
+      "./js/app.js": "./js/app.js?v=bb4feb2864",
+      "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
+      "./js/avatar.js": "./js/avatar.js?v=136eccd608",
+      "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
+      "./js/bot-plus.js": "./js/bot-plus.js?v=ced2515118",
+      "./js/bot-reasons.js": "./js/bot-reasons.js?v=e2e03e6022",
+      "./js/bot-studio.js": "./js/bot-studio.js?v=d0b5032fbb",
+      "./js/brand-colors.js": "./js/brand-colors.js?v=4cadf11bf4",
+      "./js/challenge.js": "./js/challenge.js?v=e9003437a5",
+      "./js/channel.js": "./js/channel.js?v=9ca5d517e8",
+      "./js/config.js": "./js/config.js?v=9983d070cb",
+      "./js/consent.js": "./js/consent.js?v=c698a67e69",
+      "./js/console-bridge-page.js": "./js/console-bridge-page.js?v=3010f23352",
+      "./js/console-bridge.js": "./js/console-bridge.js?v=e39cacfe99",
+      "./js/console-link.js": "./js/console-link.js?v=27b5b54789",
+      "./js/console-touch-draw.js": "./js/console-touch-draw.js?v=ffcbfc14e2",
+      "./js/console-touch-page.js": "./js/console-touch-page.js?v=07a19c470d",
+      "./js/console-touch-saver.js": "./js/console-touch-saver.js?v=793d14eeb4",
+      "./js/console-touch.js": "./js/console-touch.js?v=b6eab9539d",
+      "./js/dash-artist.js": "./js/dash-artist.js?v=28e15868ab",
+      "./js/dash-bot.js": "./js/dash-bot.js?v=bde73c8184",
+      "./js/dash-console-3d.js": "./js/dash-console-3d.js?v=345361bc02",
+      "./js/dash-console-ads.js": "./js/dash-console-ads.js?v=99dc09defa",
+      "./js/dash-console-kit.js": "./js/dash-console-kit.js?v=04a8cff103",
+      "./js/dash-console-manual.js": "./js/dash-console-manual.js?v=b74d2c0b45",
+      "./js/dash-console-rear.js": "./js/dash-console-rear.js?v=13223a0473",
+      "./js/dash-console-spec.js": "./js/dash-console-spec.js?v=0dae1af8e8",
+      "./js/dash-console-survey.js": "./js/dash-console-survey.js?v=5ab919de44",
+      "./js/dash-console-tips.js": "./js/dash-console-tips.js?v=ea2871823b",
+      "./js/dash-console-touch.js": "./js/dash-console-touch.js?v=2a2568ff4d",
+      "./js/dash-console.js": "./js/dash-console.js?v=4b75ec3958",
+      "./js/dash-discord.js": "./js/dash-discord.js?v=9526da96a9",
+      "./js/dash-money.js": "./js/dash-money.js?v=27c4d95119",
+      "./js/dash-network.js": "./js/dash-network.js?v=fec34b21f7",
+      "./js/dash-obsdata.js": "./js/dash-obsdata.js?v=800b31c135",
+      "./js/dash-profile.js": "./js/dash-profile.js?v=d64a161e18",
+      "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
+      "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
+      "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
+      "./js/emotes-page.js": "./js/emotes-page.js?v=a5aed968c2",
+      "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
+      "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
+      "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
+      "./js/extras-core.js": "./js/extras-core.js?v=11e697c4d7",
+      "./js/extras-counter.js": "./js/extras-counter.js?v=f5ef93b3a8",
+      "./js/extras-cup.js": "./js/extras-cup.js?v=9eff968373",
+      "./js/extras-emoterain.js": "./js/extras-emoterain.js?v=260fb52829",
+      "./js/extras-fun.js": "./js/extras-fun.js?v=dcf17541ef",
+      "./js/extras-gamewheel.js": "./js/extras-gamewheel.js?v=f9e4229236",
+      "./js/extras-giveaway.js": "./js/extras-giveaway.js?v=f10ed16401",
+      "./js/extras-guard.js": "./js/extras-guard.js?v=6ef5d043e0",
+      "./js/extras-heart.js": "./js/extras-heart.js?v=c35e588fc4",
+      "./js/extras-hotwords.js": "./js/extras-hotwords.js?v=fea8926ca1",
+      "./js/extras-live.js": "./js/extras-live.js?v=869fb7dfb4",
+      "./js/extras-obswatch.js": "./js/extras-obswatch.js?v=a9ba0e26f0",
+      "./js/extras-play.js": "./js/extras-play.js?v=24950909df",
+      "./js/extras-poll.js": "./js/extras-poll.js?v=9d625d0b37",
+      "./js/extras-scratch.js": "./js/extras-scratch.js?v=3e50c227be",
+      "./js/extras.js": "./js/extras.js?v=c66aa479c2",
+      "./js/frame-guard.js": "./js/frame-guard.js?v=3a391987bd",
+      "./js/games.js": "./js/games.js?v=1dbc5571d9",
+      "./js/help.js": "./js/help.js?v=a68e78522c",
+      "./js/i18n-en.js": "./js/i18n-en.js?v=c99b1f5e79",
+      "./js/i18n-es.js": "./js/i18n-es.js?v=6e3fcce73b",
+      "./js/i18n-fr.js": "./js/i18n-fr.js?v=8f265ee2d4",
+      "./js/i18n-it.js": "./js/i18n-it.js?v=c923576dc9",
+      "./js/i18n-keys.js": "./js/i18n-keys.js?v=80b4190dc3",
+      "./js/i18n-nl.js": "./js/i18n-nl.js?v=e925afafc1",
+      "./js/i18n-pl.js": "./js/i18n-pl.js?v=a5e52dce21",
+      "./js/i18n-pt.js": "./js/i18n-pt.js?v=cedc3e9161",
+      "./js/i18n-ru.js": "./js/i18n-ru.js?v=c85900a1be",
+      "./js/i18n-tr.js": "./js/i18n-tr.js?v=e12634fb30",
+      "./js/i18n.js": "./js/i18n.js?v=4550a5388d",
+      "./js/intro.js": "./js/intro.js?v=91b52e9132",
+      "./js/kuendigen.js": "./js/kuendigen.js?v=0908c3d587",
+      "./js/landing.js": "./js/landing.js?v=1e86762ef9",
+      "./js/launch.js": "./js/launch.js?v=987cad909a",
+      "./js/library.js": "./js/library.js?v=18de8e88ef",
+      "./js/look-builder.js": "./js/look-builder.js?v=7fb22ef480",
+      "./js/obs-setup.js": "./js/obs-setup.js?v=3ab00b3752",
+      "./js/obs-ws.js": "./js/obs-ws.js?v=b971c9f274",
+      "./js/overlay-anniversary.js": "./js/overlay-anniversary.js?v=697507dd0e",
+      "./js/overlay-emoterain.js": "./js/overlay-emoterain.js?v=ccb1b9951d",
+      "./js/overlay-extras.js": "./js/overlay-extras.js?v=e3f4f65e3c",
+      "./js/overlay-hack.js": "./js/overlay-hack.js?v=5ca451921f",
+      "./js/overlay-modules.js": "./js/overlay-modules.js?v=e582495e55",
+      "./js/overlay-stage.js": "./js/overlay-stage.js?v=1709d9784b",
+      "./js/overlay-usage.js": "./js/overlay-usage.js?v=c51b368be2",
+      "./js/overlay.js": "./js/overlay.js?v=3e3d6738d7",
+      "./js/pad-page.js": "./js/pad-page.js?v=af20dc7ced",
+      "./js/pet-species.js": "./js/pet-species.js?v=ccc5a9c9c9",
+      "./js/pet.js": "./js/pet.js?v=d40129fa2c",
+      "./js/platform-gate.js": "./js/platform-gate.js?v=f7bbf2bf31",
+      "./js/platform-notices.js": "./js/platform-notices.js?v=2e1994fbf3",
+      "./js/prank-fx.js": "./js/prank-fx.js?v=1c40a17a79",
+      "./js/pro-page.js": "./js/pro-page.js?v=049a74be49",
+      "./js/pro.js": "./js/pro.js?v=74ff017042",
+      "./js/profile.js": "./js/profile.js?v=179c7737c3",
+      "./js/questions.js": "./js/questions.js?v=9749040be0",
+      "./js/random.js": "./js/random.js?v=15aa4d00fa",
+      "./js/record.js": "./js/record.js?v=1cd418223e",
+      "./js/rexi-sfx.js": "./js/rexi-sfx.js?v=a1036a43c2",
+      "./js/screen-holes.js": "./js/screen-holes.js?v=ebb20f0416",
+      "./js/secret-store.js": "./js/secret-store.js?v=086d5c4808",
+      "./js/security.js": "./js/security.js?v=f63e349e70",
+      "./js/shop.js": "./js/shop.js?v=fcc50151a8",
+      "./js/social-icons.js": "./js/social-icons.js?v=5a363186bc",
+      "./js/sponsor-files.js": "./js/sponsor-files.js?v=b7abefe613",
+      "./js/sponsoring.js": "./js/sponsoring.js?v=7572e11dab",
+      "./js/supabase-js.js": "./js/supabase-js.js?v=397c32fbeb",
+      "./js/theme-packs.js": "./js/theme-packs.js?v=90faabe1ce",
+      "./js/ticker.js": "./js/ticker.js?v=f42d43ff2c",
+      "./js/tour.js": "./js/tour.js?v=c499758325",
+      "./js/tts-voice.js": "./js/tts-voice.js?v=3a37b18618",
+      "./js/twitch-chat.js": "./js/twitch-chat.js?v=1b6eb8553c",
+      "./js/watch-import.js": "./js/watch-import.js?v=ee7e14f2c7",
+      "./js/wheel.js": "./js/wheel.js?v=d81e65a827",
+      "./js/youtube-chat.js": "./js/youtube-chat.js?v=bf81b00d4e",
+      "./js/youtube-connect.js": "./js/youtube-connect.js?v=dee2b757f5",
+      "./js/vendor/three-console.min.js": "./js/vendor/three-console.min.js?v=fdeadfdf0e",
+      "./js/vendor/yami-landing.js": "./js/vendor/yami-landing.js?v=3fa958ca19"
+    }
+  }</script>
+  <script type="module">import './js/emotes-page.js';</script>
+  <!-- versions:end -->
+</head>
+<body>
+  <div class="pp-glow" aria-hidden="true"></div>
+  <main class="pp em" id="em">
+    <header class="pp-top">
+      <a class="pp-brand" href="./"><img src="assets/favicon.svg" alt="" width="26" height="26"><span>Stream<b>help</b></span></a>
+      <a class="pp-btn pp-btn--ghost" href="./"><i class="ph ph-arrow-left" aria-hidden="true"></i>Zum Dashboard</a>
+    </header>
+
+    <section class="em-intro">
+      <p class="em-kicker">StreamHelp MAX <span class="em-chip">MAX</span></p>
+      <h1>Emote-Ersteller</h1>
+      <p class="em-lead">Aus einem Bild ein Twitch-Emote machen: zuschneiden, Hintergrund entfernen, Rand und Text dazu – fertig in 112, 56 und 28 Pixeln. Alles passiert in deinem Browser, hochgeladen wird nichts.</p>
+      <p class="em-free" id="em-free" hidden>🎁 Bis zum Start von MAX kannst du den Emote-Ersteller kostenlos ausprobieren.</p>
+    </section>
+
+    <section class="em-lock" id="em-lock">
+      <i class="ph ph-lock-key" aria-hidden="true"></i>
+      <div>
+        <h2>Nur mit StreamHelp MAX</h2>
+        <p>Der Emote-Ersteller gehört zu MAX – zusammen mit Bot 2 und bis zu 250 eigenen Chat-Befehlen. Melde dich mit deinem Kanal an, um ihn zu nutzen.</p>
+        <p><a class="pp-btn" href="pro.html?tarif=max#pr-order">MAX ansehen</a> <a class="pp-btn pp-btn--ghost" href="./#login">Anmelden</a></p>
+      </div>
+    </section>
+
+    <section class="em-tool" id="em-tool" hidden>
+      <div class="em-stage">
+        <label class="em-drop" id="em-drop">
+          <input type="file" id="em-file" accept="image/png,image/jpeg,image/gif,image/webp">
+          <i class="ph ph-upload-simple" aria-hidden="true"></i>
+          <span><b>Bild wählen</b> oder hierher ziehen · einfügen mit Strg+V</span>
+        </label>
+        <div class="em-canvas-wrap"><canvas id="em-canvas" width="448" height="448" aria-label="Emote-Vorschau – zum Verschieben ziehen"></canvas></div>
+        <p class="em-note" id="em-note" role="status"></p>
+      </div>
+
+      <div class="em-steps" id="em-steps" hidden>
+        <fieldset>
+          <legend>1 · Zuschnitt</legend>
+          <label>Zoom <input type="range" id="em-zoom" min="0.5" max="4" step="0.01" value="1"></label>
+          <p class="em-hint">Ziehe das Bild in der Vorschau an die richtige Stelle.</p>
+        </fieldset>
+        <fieldset>
+          <legend>2 · Hintergrund entfernen</legend>
+          <div class="em-row">
+            <button type="button" class="pp-btn pp-btn--ghost" id="em-pick"><i class="ph ph-palette" aria-hidden="true"></i>Farbe wählen</button>
+            <button type="button" class="pp-btn pp-btn--ghost" id="em-corner">Ecke nehmen</button>
+            <span class="em-swatch" id="em-key-swatch" title="entfernte Farbe"></span>
+            <button type="button" class="em-link" id="em-key-off">zurücksetzen</button>
+          </div>
+          <label>Toleranz <input type="range" id="em-tol" min="0" max="100" value="40"></label>
+        </fieldset>
+        <fieldset>
+          <legend>3 · Rand</legend>
+          <div class="em-row">
+            <label>Breite <input type="range" id="em-border" min="0" max="24" value="0"></label>
+            <label class="em-color">Farbe <input type="color" id="em-border-color" value="#ffffff"></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>4 · Text (optional)</legend>
+          <label>Text <input type="text" id="em-text" maxlength="12" placeholder="z. B. GG, HYPE, LOL"></label>
+          <div class="em-row">
+            <label class="em-color">Farbe <input type="color" id="em-text-color" value="#ffffff"></label>
+            <label class="em-color">Kontur <input type="color" id="em-text-stroke" value="#000000"></label>
+            <label>Position <select id="em-text-pos"><option value="bottom">unten</option><option value="middle">Mitte</option><option value="top">oben</option></select></label>
+          </div>
+          <label>Größe <input type="range" id="em-text-size" min="12" max="60" value="30"></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>5 · Vorschau</legend>
+          <div class="em-sizes">
+            <figure><img data-em-size="112" alt="" width="112" height="112"><figcaption>112 px</figcaption></figure>
+            <figure><img data-em-size="56" alt="" width="56" height="56"><figcaption>56 px</figcaption></figure>
+            <figure><img data-em-size="28" alt="" width="28" height="28"><figcaption>28 px</figcaption></figure>
+          </div>
+          <div class="em-chats">
+            <p class="em-chat is-dark"><b>Zuschauer:</b> das war krass <img data-em-chat alt="" width="28" height="28"> <img data-em-chat alt="" width="28" height="28"></p>
+            <p class="em-chat is-light"><b>Zuschauer:</b> das war krass <img data-em-chat alt="" width="28" height="28"> <img data-em-chat alt="" width="28" height="28"></p>
+          </div>
+        </fieldset>
+
+        <div class="em-save">
+          <label>Dateiname <input type="text" id="em-name" maxlength="20" value="emote"></label>
+          <button type="button" class="pp-btn" id="em-download"><i class="ph ph-download-simple" aria-hidden="true"></i>Als PNG speichern (3 Größen)</button>
+          <p class="em-hint">Twitch verlangt PNG mit transparentem Hintergrund, je höchstens 1 MB. Hochladen: Creator-Dashboard → Viewer-Belohnungen → Emotes.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="pp-foot">
+      <span>StreamHelp · Emote-Ersteller</span>
+      <span><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="cookies.html">Cookies</a> · <button type="button" class="ck-open" data-consent-open>Cookie-Einstellungen</button> · <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a> · <a href="pro.html">Free, Pro und MAX</a></span>
+    </footer>
+  </main>
+</body>
+</html>

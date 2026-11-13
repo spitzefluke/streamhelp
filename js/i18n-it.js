@@ -530,4 +530,6 @@ export default [
   "Chatbot in tedesco",
   "Ruota, bingo e altro",
   "Configurare l’overlay in OBS",
+  "Crea emote",
+  "Emote",
 ];

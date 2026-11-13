@@ -532,4 +532,6 @@ export default [
   "Chat-Bot auf Deutsch",
   "Glücksrad, Bingo & mehr",
   "Overlay in OBS einrichten",
+  "Emote-Ersteller",
+  "Emotes",
 ];

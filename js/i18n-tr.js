@@ -530,4 +530,6 @@ export default [
   "Almanca sohbet botu",
   "Çark, bingo ve dahası",
   "OBS’te overlay kurulumu",
+  "Emote oluşturucu",
+  "Emote'lar",
 ];

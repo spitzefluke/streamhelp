@@ -6,6 +6,13 @@
 // ctx: { api, toast, germanError, refreshTwitch }
 import { h } from './extras-core.js';
 import { botHint } from './bot-reasons.js';
+import { MAX_ENFORCED } from './pro.js';
+
+// Hat der Kanal StreamHelp MAX? (Bot 2 gibt es ab dem Start von MAX nur damit – channel_has_max, …_billing_max.sql)
+async function loadMax(api) {
+  if (!MAX_ENFORCED || !api?.channelHasMax) return false;
+  return !!(await api.channelHasMax().catch(() => false));
+}
 
 const STATUS = {
   sent: ['✓', 'gesendet'],
@@ -19,18 +26,21 @@ const SOURCE = { chat: 'Antwort', outbox: 'Ansage', test: 'Test', mod: 'Moderati
 const timeOf = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 // Auswahl Bot 1 / Bot 2 (nur zu sehen, wenn es die Migration gibt und mindestens ein Bot verbunden ist)
-export function renderBotPick(t, ctx) {
+export async function renderBotPick(t, ctx) {
   const box = document.getElementById('bot-pick');
   if (!box) return;
   const bots = t.bots ?? [];
   box.hidden = !bots.length;
   if (!bots.length) return;
   const list = document.getElementById('bot-pick-list');
-  const chosen = t.bot_slot === 2 ? 2 : 1;
+  const max = await loadMax(ctx.api);
+  const maxLocked = MAX_ENFORCED && !max; // Bot 2 nur mit MAX
+  const chosen = t.bot_slot === 2 && !maxLocked ? 2 : 1;
   const canChoose = !!t.can_choose_bot;
   const slots = [1, 2].map((slot) => {
     const bot = bots.find((b) => b.slot === slot);
-    const input = h('input', { type: 'radio', name: 'bot-slot', value: String(slot), checked: slot === chosen ? '' : null, disabled: !canChoose || !bot ? '' : null });
+    const locked = slot === 2 && maxLocked;
+    const input = h('input', { type: 'radio', name: 'bot-slot', value: String(slot), checked: slot === chosen ? '' : null, disabled: !canChoose || !bot || locked ? '' : null });
     input.addEventListener('change', async () => {
       if (!input.checked) return;
       list.querySelectorAll('input').forEach((i) => { i.disabled = true; });
@@ -48,14 +58,17 @@ export function renderBotPick(t, ctx) {
         await ctx.refreshTwitch();
       }
     });
-    return h('label', { class: `bot-pick-opt${slot === chosen ? ' is-on' : ''}${bot ? '' : ' is-off'}` },
+    return h('label', { class: `bot-pick-opt${slot === chosen ? ' is-on' : ''}${bot && !locked ? '' : ' is-off'}` },
       input,
-      h('span', {}, h('b', {}, bot ? bot.name : `Bot ${slot}`), h('small', {}, bot ? `Bot ${slot} · @${bot.login}` : `Bot ${slot} · gerade nicht verbunden`)));
+      h('span', {}, h('b', {}, bot ? bot.name : `Bot ${slot}`, locked ? h('span', { class: 'pr-chip pr-chip--max bot-pick-max' }, 'MAX') : null),
+        h('small', {}, locked ? h('a', { href: 'pro.html?tarif=max#pr-order' }, 'Nur mit StreamHelp MAX – mehr erfahren') : bot ? `Bot ${slot} · @${bot.login}` : `Bot ${slot} · gerade nicht verbunden`)));
   });
   list.replaceChildren(...slots);
   const active = t.bot_connected ? t.bot_name : null;
   const fallback = active && bots.find((b) => b.slot === chosen)?.name !== active;
-  document.getElementById('bot-pick-hint').textContent = !canChoose
+  document.getElementById('bot-pick-hint').textContent = maxLocked && t.bot_slot === 2
+    ? 'Bot 2 gibt es jetzt nur mit StreamHelp MAX – in deinem Chat schreibt ab der nächsten Nachricht Bot 1.'
+    : !canChoose
     ? `Gerade schreibt ${active ?? 'kein Bot'}. Den Bot wählt der Streamer selbst.`
     : fallback
       ? `Bot ${chosen} ist gerade nicht verbunden – solange schreibt ${active}.`

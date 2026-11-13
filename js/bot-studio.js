@@ -15,6 +15,8 @@ let sel = null;          // { kind: 'cmd' | 'timer' | 'pane', id }
 let dirty = false;
 let testLog = [];
 let ready = false;
+let cmdLimit = null;     // Höchstzahl eigener Befehle (max_limits, …_max_features.sql): null = unbegrenzt
+let isMax = false;
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, min, max, def) => Math.max(min, Math.min(max, Math.round(Number(v) || def)));
@@ -53,7 +55,9 @@ export async function renderBotStudio(deps) {
   ctx = deps;
   if (!$('#bot-studio')) return;
   if (!ready) setup();
-  const [c, t] = await Promise.allSettled([ctx.api.botCommands.list(), ctx.api.botPlus.timers.list()]);
+  const [c, t, m] = await Promise.allSettled([ctx.api.botCommands.list(), ctx.api.botPlus.timers.list(), ctx.api.maxLimits?.() ?? Promise.resolve(null)]);
+  cmdLimit = m.status === 'fulfilled' ? m.value?.command_limit ?? null : null;
+  isMax = m.status === 'fulfilled' && !!m.value?.max;
   loadError = c.status === 'rejected' ? ctx.cmdError(c.reason) : '';
   if (c.status === 'fulfilled') cmds = c.value ?? [];
   if (t.status === 'fulfilled') timers = t.value ?? [];
@@ -92,7 +96,7 @@ function renderList() {
     }
     if (q && !items.length) return null;
     return h('div', { class: 'bs-group' },
-      h('div', { class: 'bs-group-head' }, h('span', {}, g.label),
+      h('div', { class: 'bs-group-head' }, h('span', {}, g.label, g.id === 'cmd' && cmdLimit ? h('small', { class: 'bs-limit', title: isMax ? 'StreamHelp MAX' : 'Mit StreamHelp MAX bis zu 250' }, ` ${cmds.length}/${cmdLimit}`) : null),
         g.add && h('button', { type: 'button', class: 'bs-add', title: g.add, 'aria-label': g.add, onclick: () => pick({ kind: g.id, id: null }) }, h('i', { class: 'ph ph-plus', 'aria-hidden': 'true' }))),
       ...items);
   }).filter(Boolean);
