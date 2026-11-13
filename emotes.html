@@ -2,11 +2,11 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-rhCVQBy+ZCVWa0z4pb1KASqaa4cLliG4UxUnH6rJxjE=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bssy9nFTCRkqSlbMjlpLVpAOhs3wb7qBnyJuyUUDkRw=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Emote-Ersteller · StreamHelp</title>
-  <meta name="description" content="Twitch-Emotes selbst machen: Bild zuschneiden, Hintergrund entfernen, Rand und Text dazu – fertig in 112, 56 und 28 Pixeln. Ein Extra von StreamHelp MAX.">
+  <meta name="description" content="Twitch-Emotes und Abo-Abzeichen selbst machen: Hintergrund automatisch entfernen, radieren, Rand, Schatten und Text – fertig in allen Twitch-Größen. Ein Extra von StreamHelp MAX.">
   <link rel="canonical" href="https://streamhelp.de/emotes.html">
   <meta name="theme-color" content="#0b0714">
   <meta property="og:type" content="website">
@@ -20,10 +20,10 @@
   <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
-  <link rel="stylesheet" href="css/phosphor.css?v=5fd0d30b55">
+  <link rel="stylesheet" href="css/phosphor.css?v=d0f44e4156">
   <link rel="stylesheet" href="css/profile.css?v=473cb2f696">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
-  <link rel="stylesheet" href="css/emotes.css?v=b46cefba49">
+  <link rel="stylesheet" href="css/emotes.css?v=c74a3b631e">
   <!-- Emote-Ersteller (js/emotes-page.js) – Extra von StreamHelp MAX, läuft nur im Browser -->
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
@@ -72,7 +72,7 @@
       "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
       "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
       "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
-      "./js/emotes-page.js": "./js/emotes-page.js?v=a5aed968c2",
+      "./js/emotes-page.js": "./js/emotes-page.js?v=3ccdbcb863",
       "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
       "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
       "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
@@ -170,7 +170,7 @@
     <section class="em-intro">
       <p class="em-kicker">StreamHelp MAX <span class="em-chip">MAX</span></p>
       <h1>Emote-Ersteller</h1>
-      <p class="em-lead">Aus einem Bild ein Twitch-Emote machen: zuschneiden, Hintergrund entfernen, Rand und Text dazu – fertig in 112, 56 und 28 Pixeln. Alles passiert in deinem Browser, hochgeladen wird nichts.</p>
+      <p class="em-lead">Aus einem Bild ein Twitch-Emote oder Abo-Abzeichen machen: zuschneiden, Hintergrund automatisch entfernen, nachradieren, Rand, Schatten und Text dazu – fertig in allen Twitch-Größen als ZIP. Alles passiert in deinem Browser, hochgeladen wird nichts.</p>
       <p class="em-free" id="em-free" hidden>🎁 Bis zum Start von MAX kannst du den Emote-Ersteller kostenlos ausprobieren.</p>
     </section>
 
@@ -190,36 +190,67 @@
           <i class="ph ph-upload-simple" aria-hidden="true"></i>
           <span><b>Bild wählen</b> oder hierher ziehen · einfügen mit Strg+V</span>
         </label>
-        <div class="em-canvas-wrap"><canvas id="em-canvas" width="448" height="448" aria-label="Emote-Vorschau – zum Verschieben ziehen"></canvas></div>
+        <div class="em-tools" id="em-tools" hidden>
+          <div class="em-seg" role="group" aria-label="Werkzeug">
+            <button type="button" data-em-mode="move" aria-pressed="true" title="Bild verschieben (zwei Finger oder Mausrad: zoomen)"><i class="ph ph-hand" aria-hidden="true"></i>Verschieben</button>
+            <button type="button" data-em-mode="erase" aria-pressed="false" title="Stellen wegradieren"><i class="ph ph-eraser" aria-hidden="true"></i>Radieren</button>
+            <button type="button" data-em-mode="keep" aria-pressed="false" title="Zu viel entfernte Stellen zurückholen"><i class="ph ph-paint-brush" aria-hidden="true"></i>Zurückholen</button>
+          </div>
+          <label class="em-brush" id="em-brush-wrap" hidden>Pinsel <input type="range" id="em-brush" min="4" max="96" value="24"></label>
+          <span class="em-undo">
+            <button type="button" id="em-undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig" disabled><i class="ph ph-arrow-u-up-left" aria-hidden="true"></i></button>
+            <button type="button" id="em-redo" title="Wiederholen (Strg+Y)" aria-label="Wiederholen" disabled><i class="ph ph-arrow-u-up-right" aria-hidden="true"></i></button>
+          </span>
+        </div>
+        <div class="em-canvas-wrap" data-bg="check"><canvas id="em-canvas" width="448" height="448" aria-label="Emote-Vorschau – zum Verschieben ziehen, mit dem Mausrad zoomen"></canvas></div>
+        <div class="em-bgs" role="group" aria-label="Hintergrund der Vorschau">
+          <span>Prüfen auf:</span>
+          <button type="button" data-em-bg="check" aria-pressed="true">Karo</button>
+          <button type="button" data-em-bg="dark" aria-pressed="false">Dunkel</button>
+          <button type="button" data-em-bg="light" aria-pressed="false">Hell</button>
+        </div>
         <p class="em-note" id="em-note" role="status"></p>
       </div>
 
       <div class="em-steps" id="em-steps" hidden>
         <fieldset>
           <legend>1 · Zuschnitt</legend>
-          <label>Zoom <input type="range" id="em-zoom" min="0.5" max="4" step="0.01" value="1"></label>
-          <p class="em-hint">Ziehe das Bild in der Vorschau an die richtige Stelle.</p>
+          <label><span class="em-lab">Zoom <output id="em-zoom-val">100 %</output></span><input type="range" id="em-zoom" min="0.2" max="8" step="0.01" value="1"></label>
+          <label><span class="em-lab">Drehen <output id="em-rot-val">0°</output></span><input type="range" id="em-rot" min="-180" max="180" step="1" value="0"></label>
+          <div class="em-row">
+            <button type="button" class="pp-btn pp-btn--ghost" id="em-fit"><i class="ph ph-crop" aria-hidden="true"></i>Aufs Motiv zuschneiden</button>
+            <button type="button" class="pp-btn pp-btn--ghost" id="em-flip" aria-pressed="false"><i class="ph ph-flip-horizontal" aria-hidden="true"></i>Spiegeln</button>
+            <button type="button" class="em-link" id="em-reset">zurücksetzen</button>
+          </div>
+          <p class="em-hint">Ziehe das Bild in der Vorschau an die richtige Stelle, zoomen mit dem Mausrad oder zwei Fingern.</p>
         </fieldset>
         <fieldset>
           <legend>2 · Hintergrund entfernen</legend>
           <div class="em-row">
-            <button type="button" class="pp-btn pp-btn--ghost" id="em-pick"><i class="ph ph-palette" aria-hidden="true"></i>Farbe wählen</button>
-            <button type="button" class="pp-btn pp-btn--ghost" id="em-corner">Ecke nehmen</button>
-            <span class="em-swatch" id="em-key-swatch" title="entfernte Farbe"></span>
+            <button type="button" class="pp-btn pp-btn--ghost" id="em-auto"><i class="ph ph-magic-wand" aria-hidden="true"></i>Automatisch</button>
+            <button type="button" class="pp-btn pp-btn--ghost" id="em-pick"><i class="ph ph-eyedropper" aria-hidden="true"></i>Farbe wählen</button>
+            <span class="em-swatch" id="em-key-swatch" title="keine Farbe gewählt"></span>
             <button type="button" class="em-link" id="em-key-off">zurücksetzen</button>
           </div>
-          <label>Toleranz <input type="range" id="em-tol" min="0" max="100" value="40"></label>
+          <label>Toleranz <input type="range" id="em-tol" min="0" max="100" value="30"></label>
+          <label class="em-check"><input type="checkbox" id="em-connected" checked> Nur die Fläche am Rand entfernen – gleiche Farbe im Motiv bleibt</label>
+          <label>Kante säubern <input type="range" id="em-clean" min="0" max="3" step="1" value="0"></label>
+          <p class="em-hint">Eingeschlossene Stellen (z. B. zwischen Arm und Körper): noch einmal „Farbe wählen“ und hineintippen. Den Rest erledigen <b>Radieren</b> und <b>Zurückholen</b> über der Vorschau.</p>
         </fieldset>
         <fieldset>
-          <legend>3 · Rand</legend>
+          <legend>3 · Rand &amp; Schatten</legend>
           <div class="em-row">
             <label>Breite <input type="range" id="em-border" min="0" max="24" value="0"></label>
             <label class="em-color">Farbe <input type="color" id="em-border-color" value="#ffffff"></label>
           </div>
+          <label class="em-check"><input type="checkbox" id="em-shadow"> Schatten darunter (hebt das Emote vom Chat ab)</label>
         </fieldset>
         <fieldset>
           <legend>4 · Text (optional)</legend>
-          <label>Text <input type="text" id="em-text" maxlength="12" placeholder="z. B. GG, HYPE, LOL"></label>
+          <div class="em-row">
+            <label>Text <input type="text" id="em-text" maxlength="12" placeholder="z. B. GG, HYPE, LOL"></label>
+            <label>Schrift <select id="em-font"><option value="bold">Kräftig</option><option value="poster">Plakat</option><option value="narrow">Schmal</option><option value="tech">Technik</option></select></label>
+          </div>
           <div class="em-row">
             <label class="em-color">Farbe <input type="color" id="em-text-color" value="#ffffff"></label>
             <label class="em-color">Kontur <input type="color" id="em-text-stroke" value="#000000"></label>
@@ -229,22 +260,20 @@
         </fieldset>
 
         <fieldset>
-          <legend>5 · Vorschau</legend>
-          <div class="em-sizes">
-            <figure><img data-em-size="112" alt="" width="112" height="112"><figcaption>112 px</figcaption></figure>
-            <figure><img data-em-size="56" alt="" width="56" height="56"><figcaption>56 px</figcaption></figure>
-            <figure><img data-em-size="28" alt="" width="28" height="28"><figcaption>28 px</figcaption></figure>
+          <legend>5 · Vorschau &amp; Prüfung</legend>
+          <div class="em-seg em-format" role="radiogroup" aria-label="Format">
+            <label><input type="radio" name="em-format" value="emote" checked> Emote <small>112 · 56 · 28 px</small></label>
+            <label><input type="radio" name="em-format" value="badge"> Abo-Abzeichen <small>72 · 36 · 18 px</small></label>
           </div>
-          <div class="em-chats">
-            <p class="em-chat is-dark"><b>Zuschauer:</b> das war krass <img data-em-chat alt="" width="28" height="28"> <img data-em-chat alt="" width="28" height="28"></p>
-            <p class="em-chat is-light"><b>Zuschauer:</b> das war krass <img data-em-chat alt="" width="28" height="28"> <img data-em-chat alt="" width="28" height="28"></p>
-          </div>
+          <div class="em-sizes" id="em-sizes"></div>
+          <div class="em-chats" id="em-chats"></div>
+          <ul class="em-checks" id="em-checks" aria-live="polite"></ul>
         </fieldset>
 
         <div class="em-save">
           <label>Dateiname <input type="text" id="em-name" maxlength="20" value="emote"></label>
-          <button type="button" class="pp-btn" id="em-download"><i class="ph ph-download-simple" aria-hidden="true"></i>Als PNG speichern (3 Größen)</button>
-          <p class="em-hint">Twitch verlangt PNG mit transparentem Hintergrund, je höchstens 1 MB. Hochladen: Creator-Dashboard → Viewer-Belohnungen → Emotes.</p>
+          <button type="button" class="pp-btn" id="em-download"><i class="ph ph-file-zip" aria-hidden="true"></i><span id="em-download-label">Emote als ZIP speichern</span></button>
+          <p class="em-hint">Alle Größen in einer ZIP-Datei, PNG mit durchsichtigem Hintergrund. Einzelne Größen gibt es unter der Vorschau („einzeln“).</p>
         </div>
       </div>
     </section>

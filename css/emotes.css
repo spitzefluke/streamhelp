@@ -23,14 +23,40 @@
 .em-drop b { color: var(--text-strong); }
 .em-canvas-wrap { border-radius: 16px; overflow: hidden; border: 1px solid var(--line);
   background: repeating-conic-gradient(#2a2340 0 25%, #1c1630 0 50%) 0 0 / 24px 24px; }
+.em-canvas-wrap[data-bg="dark"] { background: #18181b; }
+.em-canvas-wrap[data-bg="light"] { background: #ffffff; }
 #em-canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; touch-action: none; cursor: grab; }
+#em-canvas:active { cursor: grabbing; }
+#em-canvas[data-mode="erase"], #em-canvas[data-mode="keep"] { cursor: none; }
 #em-canvas.is-picking { cursor: crosshair; }
+
+/* Werkzeugleiste über der Vorschau */
+.em-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.em-tools[hidden], .em-brush[hidden] { display: none; }
+.em-seg { display: inline-flex; flex-wrap: wrap; padding: 3px; gap: 3px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.em-seg button, .em-seg label { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border: 0; border-radius: 9px; background: none; color: var(--text-2); font: 600 14px var(--font-body); cursor: pointer; }
+.em-seg button:hover, .em-seg label:hover { color: var(--text-strong); }
+.em-seg button.is-on, .em-seg label:has(input:checked) { background: rgba(var(--acc-rgb), .2); color: var(--text-strong); }
+.em-seg .ph { font-size: 17px; }
+.em-brush { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 140px; font-size: 14px; color: var(--text-2); }
+.em-brush input { flex: 1; accent-color: var(--acc-2); }
+.em-undo { display: inline-flex; gap: 4px; margin-left: auto; }
+.em-undo button, .em-bgs button { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 600 13px var(--font-body); cursor: pointer; }
+.em-undo button:disabled { opacity: .4; cursor: default; }
+.em-undo .ph { font-size: 18px; }
+.em-bgs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.em-bgs button { height: 30px; }
+.em-bgs button[aria-pressed="true"] { border-color: var(--acc-2); background: rgba(var(--acc-rgb), .16); }
 .em-note, .em-hint { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-2); }
 
 .em-steps { display: grid; gap: 14px; }
 .em-steps fieldset { display: grid; gap: 10px; margin: 0; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
 .em-steps legend { padding: 0 6px; font-weight: 700; color: var(--text-strong); }
 .em-steps label { display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
+.em-steps label.em-check { display: flex; align-items: center; gap: 8px; }
+.em-check input { width: 18px; height: 18px; accent-color: var(--acc-2); }
+.em-lab { display: flex; justify-content: space-between; }
+.em-lab output { font-variant-numeric: tabular-nums; color: var(--muted); }
 .em-steps input[type="range"] { width: 100%; accent-color: var(--acc-2); }
 .em-steps input[type="text"], .em-steps select { padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; }
 .em-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -40,24 +66,36 @@
 .em-swatch { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line);
   background-image: repeating-conic-gradient(#888 0 25%, #ccc 0 50%); background-size: 10px 10px; }
 .em-link { padding: 0; border: 0; background: none; color: var(--acc-2); font: inherit; font-size: 14px; cursor: pointer; text-decoration: underline; }
-#em-pick.is-on { border-color: var(--acc-2); background: rgba(var(--acc-rgb), .18); }
+#em-pick.is-on, #em-flip.is-on { border-color: var(--acc-2); background: rgba(var(--acc-rgb), .18); }
+.em-format { justify-self: start; }
+.em-format input { position: absolute; opacity: 0; pointer-events: none; }
+.em-format label:has(input:focus-visible) { outline: 2px solid var(--acc-2); outline-offset: 1px; }
+.em-format small { font-weight: 500; color: var(--muted); }
 
 .em-sizes { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
 .em-sizes figure { display: grid; justify-items: center; gap: 6px; margin: 0; }
 .em-sizes img { border-radius: 6px; background: repeating-conic-gradient(#2a2340 0 25%, #1c1630 0 50%) 0 0 / 12px 12px; }
 .em-sizes figcaption { font-size: 12px; color: var(--muted); }
+.em-sizes .em-link { font-size: 12px; }
+.em-bad { color: var(--live); font-weight: 700; }
+.em-checks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.45; }
+.em-checks li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); }
+.em-checks .ph { flex: none; margin-top: 2px; font-size: 17px; }
+.em-checks .is-ok .ph { color: #3ddc84; }
+.em-checks .is-warn .ph { color: #ffb36b; }
 .em-chats { display: grid; gap: 8px; }
 .em-chat { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 14px; }
 .em-chat.is-dark { background: #18181b; color: #efeff1; }
 .em-chat.is-light { background: #ffffff; color: #0e0e10; border: 1px solid #e5e5ea; }
 .em-chat b { color: #bf94ff; }
 .em-chat.is-light b { color: #772ce8; }
-.em-chat img:not([src]), .em-sizes img:not([src]) { visibility: hidden; }
 
 .em-save { display: grid; gap: 10px; padding: 16px; border-radius: 16px; border: 1px solid rgba(255, 170, 90, .55); background: var(--surface); }
 .em-save label { display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
 .em-save input { padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; }
 .em-save .pp-btn { justify-self: start; }
 @media (prefers-color-scheme: light) {
-  .em-canvas-wrap, .em-sizes img { background: repeating-conic-gradient(#e7e3f1 0 25%, #fff 0 50%) 0 0 / 24px 24px; }
+  .em-canvas-wrap[data-bg="check"], .em-sizes img { background: repeating-conic-gradient(#e7e3f1 0 25%, #fff 0 50%) 0 0 / 24px 24px; }
+  .em-checks .is-ok .ph { color: #138a4a; }
+  .em-checks .is-warn .ph { color: #b45f06; }
 }

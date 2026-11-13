@@ -155,3 +155,10 @@
 .ph.ph-envelope-simple:before { content: "\e218"; }
 .ph.ph-columns:before { content: "\e546"; }
 .ph.ph-square-half-bottom:before { content: "\eb16"; }
+.ph.ph-eraser:before { content: "\e21e"; }
+.ph.ph-flip-horizontal:before { content: "\ed6a"; }
+.ph.ph-magic-wand:before { content: "\e6b6"; }
+.ph.ph-crop:before { content: "\e1d4"; }
+.ph.ph-file-zip:before { content: "\e958"; }
+.ph.ph-hand:before { content: "\e298"; }
+.ph.ph-eyedropper:before { content: "\e568"; }
