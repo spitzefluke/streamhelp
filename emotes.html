@@ -2,30 +2,29 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-N4xb1wwHnCSqvrcMZrxO6hC4rBylby6thq/0sWqDuBU=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-TB3Yztu/EQK/zzRXQVVEz6ceZbODzq8yRHVUK5TSWdg=' 'sha256-R9TDKf65BioLAzzmnMLHxNYmGP/4okfA2ieVbFMGGME='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Emote-Ersteller · StreamHelp</title>
-  <meta name="description" content="Twitch-Emotes und Abo-Abzeichen selbst machen: Hintergrund automatisch entfernen, radieren, Rand, Schatten und Text – fertig in allen Twitch-Größen. Ein Extra von StreamHelp MAX.">
+  <title>Emote-Editor · StreamHelp</title>
+  <meta name="description" content="Twitch-Emotes und Abo-Abzeichen im Browser bauen: Bild, Text, Formen und Effekte als Ebenen, jede einzeln animiert, Zeitleiste und Export als PNG oder GIF in allen Twitch-Größen. Ein Extra von StreamHelp MAX.">
   <link rel="canonical" href="https://streamhelp.de/emotes.html">
-  <meta name="theme-color" content="#0b0714">
+  <meta name="theme-color" content="#161826">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="StreamHelp">
   <meta property="og:locale" content="de_DE">
   <meta property="og:url" content="https://streamhelp.de/emotes.html">
-  <meta property="og:title" content="Emote-Ersteller · StreamHelp">
-  <meta property="og:description" content="Twitch-Emotes in drei Größen – direkt im Browser.">
+  <meta property="og:title" content="Emote-Editor · StreamHelp">
+  <meta property="og:description" content="Emotes mit Ebenen, Animation und Zeitleiste – direkt im Browser, als PNG oder GIF.">
   <meta property="og:image" content="https://streamhelp.de/assets/og-image.png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="assets/icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
-  <link rel="stylesheet" href="css/phosphor.css?v=d0f44e4156">
-  <link rel="stylesheet" href="css/profile.css?v=473cb2f696">
+  <link rel="stylesheet" href="css/phosphor.css?v=71c5bf1073">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
-  <link rel="stylesheet" href="css/emotes.css?v=227c6712e6">
-  <!-- Emote-Ersteller (js/emotes-page.js) – Extra von StreamHelp MAX, läuft nur im Browser -->
+  <link rel="stylesheet" href="css/emotes.css?v=884d77dd75">
+  <!-- Emote-Editor (js/emotes-page.js) nach dem Entwurf „Emote Editor“ (Claude Design, Nocturne) – Extra von StreamHelp MAX, läuft nur im Browser -->
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
     "imports": {
@@ -74,8 +73,8 @@
       "./js/dash-start.js": "./js/dash-start.js?v=19702535f8",
       "./js/dash-stats.js": "./js/dash-stats.js?v=2d5450ae6c",
       "./js/defaults.js": "./js/defaults.js?v=1388aea5a3",
-      "./js/emote-anim.js": "./js/emote-anim.js?v=0cb2cae0f7",
-      "./js/emotes-page.js": "./js/emotes-page.js?v=e1840a7953",
+      "./js/emote-anim.js": "./js/emote-anim.js?v=eacd3e7c14",
+      "./js/emotes-page.js": "./js/emotes-page.js?v=95bd5437bf",
       "./js/extras-api.js": "./js/extras-api.js?v=1e5b3c4de4",
       "./js/extras-bet.js": "./js/extras-bet.js?v=5c0cc72358",
       "./js/extras-chatcontrol.js": "./js/extras-chatcontrol.js?v=58d325d442",
@@ -134,7 +133,7 @@
       "./js/platform-notices.js": "./js/platform-notices.js?v=2e1994fbf3",
       "./js/prank-fx.js": "./js/prank-fx.js?v=1c40a17a79",
       "./js/pro-page.js": "./js/pro-page.js?v=db89c26c77",
-      "./js/pro.js": "./js/pro.js?v=74ff017042",
+      "./js/pro.js": "./js/pro.js?v=caf77e3875",
       "./js/profile.js": "./js/profile.js?v=3a604be18d",
       "./js/questions.js": "./js/questions.js?v=9749040be0",
       "./js/random.js": "./js/random.js?v=15aa4d00fa",
@@ -164,165 +163,136 @@
   <script type="module">import './js/emotes-page.js';</script>
   <!-- versions:end -->
 </head>
-<body>
-  <div class="pp-glow" aria-hidden="true"></div>
-  <main class="pp em" id="em">
-    <header class="pp-top">
-      <a class="pp-brand" href="./"><img src="assets/favicon.svg" alt="" width="26" height="26"><span>Stream<b>help</b></span></a>
-      <a class="pp-btn pp-btn--ghost" href="./"><i class="ph ph-arrow-left" aria-hidden="true"></i>Zum Dashboard</a>
+<body class="ee-body">
+  <section class="ee-lock" id="ee-lock">
+    <div class="ee-lock-card">
+      <a class="ee-brand" href="./"><img src="assets/favicon.svg" alt="" width="24" height="24"><span>Stream<b>help</b></span></a>
+      <h1>Emote-Editor</h1>
+      <p>Twitch-Emotes und Abo-Abzeichen mit Ebenen, Animation und Zeitleiste bauen – als PNG oder GIF in allen Twitch-Größen. Der Emote-Editor gehört zu <b>StreamHelp MAX</b>, zusammen mit Bot 2 und bis zu 250 eigenen Chat-Befehlen. Melde dich mit deinem Kanal an, um ihn zu nutzen.</p>
+      <p class="ee-lock-actions"><a class="btn btn-primary" href="pro.html?tarif=max#pr-order"><i class="ph ph-lock-key" aria-hidden="true"></i>MAX ansehen</a> <a class="btn btn-secondary" href="./#login">Anmelden</a></p>
+      <nav class="ee-legal" aria-label="Rechtliches"><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="cookies.html">Cookies</a> · <button type="button" class="ck-open" data-consent-open>Cookie-Einstellungen</button> · <button type="button" class="ck-open" data-a11y-open data-no-i18n>Bedienungshilfen</button> · <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a></nav>
+    </div>
+  </section>
+
+  <main class="ee" id="ee" hidden>
+    <h1 class="ee-sr">Emote-Editor</h1>
+    <header class="ee-headbar">
+      <a class="ee-brand" href="./" title="Zum Dashboard"><img src="assets/favicon.svg" alt="" width="24" height="24"><span>Stream<b>help</b></span></a>
+      <span class="ee-vr" aria-hidden="true"></span>
+      <span class="tag tag-accent">Emote-Editor</span>
+      <span class="tag tag-outline" id="ee-free" hidden title="Bis zum Start von MAX kannst du den Emote-Editor kostenlos ausprobieren.">MAX · gratis testen</span>
+      <input class="input ee-name" id="ee-name" aria-label="Dateiname" maxlength="20" spellcheck="false">
+      <div class="ee-grow"></div>
+      <div class="seg" role="radiogroup" aria-label="Format">
+        <label class="seg-opt"><input type="radio" name="ee-fmt" value="emote" checked>Emote</label>
+        <label class="seg-opt"><input type="radio" name="ee-fmt" value="badge">Abo-Abzeichen</label>
+      </div>
+      <div class="ee-pair">
+        <button type="button" class="btn btn-secondary btn-icon" id="ee-undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig" disabled><i class="ph ph-arrow-u-up-left" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-secondary btn-icon" id="ee-redo" title="Wiederholen (Strg+Y)" aria-label="Wiederholen" disabled><i class="ph ph-arrow-u-up-right" aria-hidden="true"></i></button>
+      </div>
+      <button type="button" class="btn btn-primary" id="ee-export"><i class="ph ph-download-simple" aria-hidden="true"></i>Exportieren</button>
     </header>
 
-    <section class="em-intro">
-      <p class="em-kicker">StreamHelp MAX <span class="em-chip">MAX</span></p>
-      <h1>Emote-Ersteller</h1>
-      <p class="em-lead">Aus einem Bild ein Twitch-Emote oder Abo-Abzeichen machen: zuschneiden, Hintergrund automatisch entfernen, nachradieren, Rand, Schatten und Text dazu, auf Wunsch animiert als GIF – fertig in allen Twitch-Größen als ZIP. Alles passiert in deinem Browser, hochgeladen wird nichts.</p>
-      <p class="em-free" id="em-free" hidden>🎁 Bis zum Start von MAX kannst du den Emote-Ersteller kostenlos ausprobieren.</p>
-    </section>
-
-    <section class="em-lock" id="em-lock">
-      <i class="ph ph-lock-key" aria-hidden="true"></i>
-      <div>
-        <h2>Nur mit StreamHelp MAX</h2>
-        <p>Der Emote-Ersteller gehört zu MAX – zusammen mit Bot 2 und bis zu 250 eigenen Chat-Befehlen. Melde dich mit deinem Kanal an, um ihn zu nutzen.</p>
-        <p><a class="pp-btn" href="pro.html?tarif=max#pr-order">MAX ansehen</a> <a class="pp-btn pp-btn--ghost" href="./#login">Anmelden</a></p>
-      </div>
-    </section>
-
-    <section class="em-tool" id="em-tool" hidden>
-      <div class="em-stage">
-        <label class="em-drop" id="em-drop">
-          <input type="file" id="em-file" accept="image/png,image/jpeg,image/gif,image/webp">
-          <i class="ph ph-upload-simple" aria-hidden="true"></i>
-          <span><b>Bild wählen</b> oder hierher ziehen · einfügen mit Strg+V</span>
-        </label>
-        <div class="em-tools" id="em-tools" hidden>
-          <div class="em-seg" role="group" aria-label="Werkzeug">
-            <button type="button" data-em-mode="move" aria-pressed="true" title="Bild verschieben (zwei Finger oder Mausrad: zoomen)"><i class="ph ph-hand" aria-hidden="true"></i>Verschieben</button>
-            <button type="button" data-em-mode="erase" aria-pressed="false" title="Stellen wegradieren"><i class="ph ph-eraser" aria-hidden="true"></i>Radieren</button>
-            <button type="button" data-em-mode="keep" aria-pressed="false" title="Zu viel entfernte Stellen zurückholen"><i class="ph ph-paint-brush" aria-hidden="true"></i>Zurückholen</button>
+    <div class="ee-cols">
+      <aside class="ee-left" aria-label="Ebenen">
+        <div class="ee-block">
+          <div class="ee-cap">Hinzufügen</div>
+          <div class="ee-add">
+            <button type="button" data-add="image" title="Bild hochladen (oder einfügen mit Strg+V)"><i class="ph ph-image" aria-hidden="true"></i>Bild</button>
+            <button type="button" data-add="text" title="Text (T)"><i class="ph ph-text-t" aria-hidden="true"></i>Text</button>
+            <button type="button" data-add="shape" title="Form (F)"><i class="ph ph-shapes" aria-hidden="true"></i>Form</button>
+            <button type="button" data-add="effect" title="Effekt (E)"><i class="ph ph-sparkle" aria-hidden="true"></i>Effekt</button>
           </div>
-          <label class="em-brush" id="em-brush-wrap" hidden>Pinsel <input type="range" id="em-brush" min="4" max="96" value="24"></label>
-          <span class="em-undo">
-            <button type="button" id="em-undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig" disabled><i class="ph ph-arrow-u-up-left" aria-hidden="true"></i></button>
-            <button type="button" id="em-redo" title="Wiederholen (Strg+Y)" aria-label="Wiederholen" disabled><i class="ph ph-arrow-u-up-right" aria-hidden="true"></i></button>
-          </span>
+          <input type="file" id="ee-file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
         </div>
-        <div class="em-canvas-wrap" data-bg="check"><canvas id="em-canvas" width="448" height="448" aria-label="Emote-Vorschau – zum Verschieben ziehen, mit dem Mausrad zoomen"></canvas></div>
-        <div class="em-bgs" role="group" aria-label="Hintergrund der Vorschau">
-          <span>Prüfen auf:</span>
-          <button type="button" data-em-bg="check" aria-pressed="true">Karo</button>
-          <button type="button" data-em-bg="dark" aria-pressed="false">Dunkel</button>
-          <button type="button" data-em-bg="light" aria-pressed="false">Hell</button>
+        <div class="ee-block">
+          <div class="ee-caprow"><span class="ee-cap">Ebenen</span><span class="ee-mini">oben = vorne</span></div>
+          <p class="ee-empty-list" id="ee-layers-empty" hidden>Noch leer. Füge oben ein Bild, einen Text, eine Form oder einen Effekt hinzu – oder starte mit einer Vorlage.</p>
+          <div class="ee-layers" id="ee-layers"></div>
         </div>
-        <p class="em-note" id="em-note" role="status"></p>
-      </div>
-
-      <div class="em-steps" id="em-steps" hidden>
-        <div class="em-kind">
-          <span>Was machst du?</span>
-          <div class="em-seg em-format" role="radiogroup" aria-label="Format">
-            <label><input type="radio" name="em-format" value="emote" checked> Emote <small>112 · 56 · 28 px</small></label>
-            <label><input type="radio" name="em-format" value="badge"> Abo-Abzeichen <small>72 · 36 · 18 px</small></label>
-          </div>
+        <div class="ee-block ee-bottom">
+          <div class="ee-cap">Schnellstart</div>
+          <div class="ee-templates" id="ee-templates"></div>
         </div>
-        <fieldset>
-          <legend>1 · Zuschnitt</legend>
-          <label><span class="em-lab">Zoom <output id="em-zoom-val">100 %</output></span><input type="range" id="em-zoom" min="0.2" max="8" step="0.01" value="1"></label>
-          <label><span class="em-lab">Drehen <output id="em-rot-val">0°</output></span><input type="range" id="em-rot" min="-180" max="180" step="1" value="0"></label>
-          <div class="em-row">
-            <button type="button" class="pp-btn pp-btn--ghost" id="em-fit"><i class="ph ph-crop" aria-hidden="true"></i>Aufs Motiv zuschneiden</button>
-            <button type="button" class="pp-btn pp-btn--ghost" id="em-flip" aria-pressed="false"><i class="ph ph-flip-horizontal" aria-hidden="true"></i>Spiegeln</button>
-            <button type="button" class="em-link" id="em-reset">zurücksetzen</button>
-          </div>
-          <p class="em-hint">Ziehe das Bild in der Vorschau an die richtige Stelle, zoomen mit dem Mausrad oder zwei Fingern.</p>
-        </fieldset>
-        <fieldset>
-          <legend>2 · Hintergrund entfernen</legend>
-          <div class="em-row">
-            <button type="button" class="pp-btn pp-btn--ghost" id="em-auto"><i class="ph ph-magic-wand" aria-hidden="true"></i>Automatisch</button>
-            <button type="button" class="pp-btn pp-btn--ghost" id="em-pick"><i class="ph ph-eyedropper" aria-hidden="true"></i>Farbe wählen</button>
-            <span class="em-swatch" id="em-key-swatch" title="keine Farbe gewählt"></span>
-            <button type="button" class="em-link" id="em-key-off">zurücksetzen</button>
-          </div>
-          <label>Toleranz <input type="range" id="em-tol" min="0" max="100" value="30"></label>
-          <label class="em-check"><input type="checkbox" id="em-connected" checked> Nur die Fläche am Rand entfernen – gleiche Farbe im Motiv bleibt</label>
-          <label>Kante säubern <input type="range" id="em-clean" min="0" max="3" step="1" value="0"></label>
-          <p class="em-hint">Eingeschlossene Stellen (z. B. zwischen Arm und Körper): noch einmal „Farbe wählen“ und hineintippen. Den Rest erledigen <b>Radieren</b> und <b>Zurückholen</b> über der Vorschau.</p>
-        </fieldset>
-        <fieldset>
-          <legend>3 · Farben, Rand &amp; Schatten</legend>
-          <div class="em-row em-row--3">
-            <label>Helligkeit <input type="range" id="em-bright" min="-100" max="100" value="0"></label>
-            <label>Kontrast <input type="range" id="em-contrast" min="-100" max="100" value="0"></label>
-            <label>Sättigung <input type="range" id="em-sat" min="-100" max="100" value="0"></label>
-          </div>
-          <p class="em-hint">Kräftige Farben und etwas mehr Kontrast machen Emotes in 28 px besser erkennbar. <button type="button" class="em-link" id="em-color-reset">Farben zurücksetzen</button></p>
-          <div class="em-row">
-            <label>Breite <input type="range" id="em-border" min="0" max="24" value="0"></label>
-            <label class="em-color">Farbe <input type="color" id="em-border-color" value="#ffffff"></label>
-          </div>
-          <label class="em-check"><input type="checkbox" id="em-shadow"> Schatten darunter (hebt das Emote vom Chat ab)</label>
-        </fieldset>
-        <fieldset>
-          <legend>4 · Text (optional)</legend>
-          <div class="em-row">
-            <label>Text <input type="text" id="em-text" maxlength="12" placeholder="z. B. GG, HYPE, LOL"></label>
-            <label>Schrift <select id="em-font"><option value="bold">Kräftig</option><option value="poster">Plakat</option><option value="narrow">Schmal</option><option value="tech">Technik</option></select></label>
-          </div>
-          <div class="em-row">
-            <label class="em-color">Farbe <input type="color" id="em-text-color" value="#ffffff"></label>
-            <label class="em-color">Kontur <input type="color" id="em-text-stroke" value="#000000"></label>
-            <label>Position <select id="em-text-pos"><option value="bottom">unten</option><option value="middle">Mitte</option><option value="top">oben</option></select></label>
-          </div>
-          <label>Größe <input type="range" id="em-text-size" min="12" max="60" value="30"></label>
-        </fieldset>
+        <nav class="ee-legal" aria-label="Rechtliches"><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="cookies.html">Cookies</a> · <button type="button" class="ck-open" data-consent-open>Cookie-Einstellungen</button> · <button type="button" class="ck-open" data-a11y-open data-no-i18n>Bedienungshilfen</button> · <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a> · <a href="pro.html">Free, Pro und MAX</a></nav>
+      </aside>
 
-        <fieldset id="em-anim-step">
-          <legend>5 · Animation <span class="em-tag" id="em-anim-tag">aus</span></legend>
-          <p class="em-hint" id="em-anim-badge" hidden>Abo-Abzeichen können bei Twitch nicht animiert sein – wähle oben „Emote“, um zu animieren.</p>
-          <div class="em-anim" id="em-anim-body">
-            <div class="em-anim-live">
-              <canvas id="em-live" width="224" height="224" aria-label="Live-Vorschau der Animation"></canvas>
-              <span>Live-Vorschau</span>
+      <section class="ee-main" id="ee-main" aria-label="Arbeitsfläche">
+        <div class="ee-stagebar">
+          <div class="seg" role="radiogroup" aria-label="Hintergrund der Vorschau">
+            <label class="seg-opt"><input type="radio" name="ee-bg" value="check" checked><i class="ph ph-checkerboard" aria-hidden="true"></i>Karo</label>
+            <label class="seg-opt"><input type="radio" name="ee-bg" value="dark"><i class="ph ph-moon" aria-hidden="true"></i>Dunkel</label>
+            <label class="seg-opt"><input type="radio" name="ee-bg" value="light"><i class="ph ph-sun" aria-hidden="true"></i>Hell</label>
+          </div>
+          <span class="ee-help">Ziehen = verschieben · Ecke = Größe · Punkt oben = drehen · Pfeiltasten = feinjustieren</span>
+        </div>
+        <p class="ee-note" id="ee-note" role="status" hidden></p>
+        <div class="ee-stagebox">
+          <div class="ee-stage" id="ee-stage">
+            <canvas id="ee-canvas" width="448" height="448" aria-label="Emote-Arbeitsfläche"></canvas>
+            <canvas id="ee-over" width="448" height="448" aria-hidden="true"></canvas>
+            <div class="ee-empty" id="ee-empty" hidden>
+              <i class="ph ph-upload-simple" aria-hidden="true"></i>
+              <div class="ee-empty-t">Bild hierher ziehen</div>
+              <div>oder links Text, Form oder Effekt hinzufügen. Einfügen geht auch mit Strg+V.</div>
             </div>
-            <div class="em-anim-set">
-              <div class="em-anims" id="em-anims" role="group" aria-label="Bewegung"></div>
-              <div class="em-row">
-                <div class="em-seg" role="radiogroup" aria-label="Tempo">
-                  <label><input type="radio" name="em-speed" value="slow"> langsam</label>
-                  <label><input type="radio" name="em-speed" value="normal" checked> normal</label>
-                  <label><input type="radio" name="em-speed" value="fast"> schnell</label>
-                </div>
-                <label>Stärke <input type="range" id="em-strength" min="20" max="150" value="100"></label>
-              </div>
-              <div class="em-row">
-                <label>Extras <select id="em-extras"></select></label>
-                <label>Kanten im GIF <select id="em-matte"><option value="dark">für dunklen Chat</option><option value="light">für hellen Chat</option><option value="none">ungemischt</option></select></label>
-              </div>
-              <p class="em-hint">Gespeichert wird ein GIF in Endlosschleife – so verlangt es Twitch (höchstens 60 Bilder, 1 MB). GIF kennt keine halbdurchsichtigen Kanten, deshalb werden sie mit der Chatfarbe gemischt.</p>
-            </div>
+            <div class="ee-drop" id="ee-drop" hidden>Loslassen zum Hinzufügen</div>
           </div>
-        </fieldset>
+        </div>
+        <div class="ee-under">
+          <div class="ee-stage-sizes" id="ee-stage-sizes"></div>
+          <div class="ee-chats" id="ee-chats"></div>
+        </div>
+      </section>
 
-        <fieldset>
-          <legend>6 · Vorschau &amp; Prüfung</legend>
-          <div class="em-sizes" id="em-sizes"></div>
-          <div class="em-chats" id="em-chats"></div>
-          <ul class="em-checks" id="em-checks" aria-live="polite"></ul>
-        </fieldset>
+      <aside class="ee-right" id="ee-right" aria-label="Eigenschaften"></aside>
+    </div>
 
-        <div class="em-save">
-          <label>Dateiname <input type="text" id="em-name" maxlength="20" value="emote"></label>
-          <button type="button" class="pp-btn" id="em-download"><i class="ph ph-file-zip" aria-hidden="true"></i><span id="em-download-label">Emote als ZIP speichern</span></button>
-          <p class="em-hint">Alle Größen in einer ZIP-Datei, PNG mit durchsichtigem Hintergrund. Einzelne Größen gibt es unter der Vorschau („einzeln“).</p>
+    <footer class="ee-time" aria-label="Zeitleiste">
+      <div class="ee-time-left">
+        <div class="ee-transport">
+          <button type="button" class="btn btn-secondary btn-icon ee-sm" id="ee-back" title="Bild zurück (,)" aria-label="Bild zurück"><i class="ph ph-skip-back" aria-hidden="true"></i></button>
+          <button type="button" class="btn btn-primary btn-icon ee-sm ee-playbtn" id="ee-play" title="Abspielen/Pause (Leertaste)" aria-label="Abspielen"><i class="ph ph-play" aria-hidden="true"></i></button>
+          <button type="button" class="btn btn-secondary btn-icon ee-sm" id="ee-fwd" title="Bild vor (.)" aria-label="Bild vor"><i class="ph ph-skip-forward" aria-hidden="true"></i></button>
+          <span class="ee-frame-no" id="ee-frame">1 / 30</span>
+        </div>
+        <div id="ee-track-labels"></div>
+        <div class="ee-speed">
+          <i class="ph ph-gauge" title="Tempo" aria-hidden="true"></i>
+          <div class="seg ee-seg-xs" role="radiogroup" aria-label="Tempo">
+            <label class="seg-opt"><input type="radio" name="ee-speed" value="slow">langsam</label>
+            <label class="seg-opt"><input type="radio" name="ee-speed" value="normal" checked>normal</label>
+            <label class="seg-opt"><input type="radio" name="ee-speed" value="fast">schnell</label>
+          </div>
         </div>
       </div>
-    </section>
-
-    <footer class="pp-foot">
-      <span>StreamHelp · Emote-Ersteller</span>
-      <span><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="cookies.html">Cookies</a> · <button type="button" class="ck-open" data-consent-open>Cookie-Einstellungen</button> · <button type="button" class="ck-open" data-a11y-open data-no-i18n>Bedienungshilfen</button> · <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a> · <a href="pro.html">Free, Pro und MAX</a></span>
+      <div class="ee-track" id="ee-track" title="Klicken oder ziehen, um zu einem Bild zu springen">
+        <div class="ee-ticks" id="ee-ticks"></div>
+        <div id="ee-lanes"></div>
+        <div class="ee-loop" id="ee-loop"></div>
+        <div class="ee-head" id="ee-head" aria-hidden="true"></div>
+      </div>
     </footer>
+
+    <div class="dialog-backdrop" id="ee-dialog" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="ee-ex-title">
+        <div class="dialog-title" id="ee-ex-title">Exportieren</div>
+        <div class="ee-exsizes" id="ee-ex-sizes"></div>
+        <ul class="ee-checks" id="ee-ex-checks"></ul>
+        <div class="ee-matte" id="ee-ex-matte" hidden>Kanten im GIF
+          <div class="seg ee-seg-xs" role="radiogroup" aria-label="Kanten im GIF">
+            <label class="seg-opt"><input type="radio" name="ee-matte" value="dark" checked>dunkler Chat</label>
+            <label class="seg-opt"><input type="radio" name="ee-matte" value="light">heller Chat</label>
+          </div>
+        </div>
+        <p class="ee-exmsg" id="ee-ex-msg" role="status" hidden></p>
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" id="ee-close">Schließen</button>
+          <button type="button" class="btn btn-primary" id="ee-save"><i class="ph ph-download-simple" aria-hidden="true"></i><span id="ee-save-label">Alle Größen</span></button>
+        </div>
+      </div>
+    </div>
   </main>
 </body>
 </html>

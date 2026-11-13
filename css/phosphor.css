@@ -162,3 +162,15 @@
 .ph.ph-file-zip:before { content: "\e958"; }
 .ph.ph-hand:before { content: "\e298"; }
 .ph.ph-eyedropper:before { content: "\e568"; }
+.ph.ph-text-t:before { content: "\e48a"; }
+.ph.ph-shapes:before { content: "\ec5e"; }
+.ph.ph-caret-up:before { content: "\e13c"; }
+.ph.ph-checkerboard:before { content: "\e8c4"; }
+.ph.ph-moon:before { content: "\e330"; }
+.ph.ph-bezier-curve:before { content: "\eb00"; }
+.ph.ph-skip-back:before { content: "\e5a4"; }
+.ph.ph-gauge:before { content: "\e628"; }
+.ph.ph-square:before { content: "\e45e"; }
+.ph.ph-chat-circle:before { content: "\e168"; }
+.ph.ph-seal:before { content: "\e604"; }
+.ph.ph-seal-check:before { content: "\e606"; }

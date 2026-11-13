@@ -23,7 +23,7 @@ export const MAX_PRICE = { month: '5,99 €', label: '5,99 € im Monat' };
 export const MAX_FEATURES = [
   { name: 'Bot 2 – schneller', desc: 'Der zweite StreamHelp-Bot für deinen Chat: antwortet im doppelten Tempo (halber Sendeabstand).' },
   { name: 'Mehr Bot-Befehle', desc: 'Bis zu 250 eigene Chat-Befehle statt 25.' },
-  { name: 'Emote-Ersteller', desc: 'Twitch-Emotes selbst machen: zuschneiden, Hintergrund weg, Rand und Text – in 112, 56 und 28 Pixeln.', href: 'emotes.html' },
+  { name: 'Emote-Ersteller', desc: 'Twitch-Emotes und Abo-Abzeichen bauen: Bild, Text, Formen und Effekte als Ebenen, jede einzeln animiert – als PNG oder GIF in allen Twitch-Größen.', href: 'emotes.html' },
 ];
 export const PRO_SOON = 'Pro ist bald buchbar – wir melden dafür gerade ein Gewerbe an. Bis dahin kannst du alles kostenlos nutzen.';
 
