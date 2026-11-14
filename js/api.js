@@ -1027,6 +1027,9 @@ async function createSupabaseApi({ memory = false } = {}) {
         remove: async (id) => unwrap(await sb.from('bot_faq').delete().eq('id', id)),
       },
       clips: async () => unwrap(await sb.from('bot_clips').select('clip_id, who, created_at').order('created_at', { ascending: false }).limit(8)),
+      // Entfolgen: Liste und Stand des Abgleichs (Migration …_bot_promo_prime_unfollow.sql)
+      unfollows: async () => unwrap(await sb.from('follower_unfollows').select('name, login, followed_at, detected_at').order('detected_at', { ascending: false }).limit(25)),
+      followerScan: async () => unwrap(await sb.rpc('follower_scan_info')),
       songs: {
         list: async () => unwrap(await sb.from('bot_songs').select('id, video_id, title, seconds, who, source, status, position, played_at')
           .in('status', ['queued', 'playing']).order('position').order('id').limit(200)),
@@ -1244,6 +1247,11 @@ function createLocalApi() {
     hype_end_text: '🚂 Der Hype-Train ist angekommen: Stufe {level}! Danke an alle, die mitgefahren sind 💜',
     goal_on: true, goal_text: '🎯 Ziel erreicht: {goal} ({current}/{target}) – danke euch allen! 🎉',
     faq_on: true, faq_gap: 15, stats_on: true, stats_cooldown: 30,
+    promo_on: true, promo_mod_text: '🛡️ {user} ist jetzt Moderator – herzlichen Glückwunsch und willkommen im Mod-Team! 🎉',
+    promo_vip_text: '💎 {user} ist jetzt VIP – herzlichen Glückwunsch! 🎉', thank_prime: true,
+    thank_prime_text: '👑 Danke für dein Prime-Abo, {user}! Schön, dass du es hier einlöst 💜',
+    thank_prime_resub_text: '👑 Danke für {months} Monate mit Prime, {user}! 💜',
+    unfollow_on: false, unfollow_chat: false, unfollow_text: '💔 {user} folgt nicht mehr.',
   };
   const emitDemo = (key, payload) => setTimeout(() => (demoListeners[key] ?? []).forEach((cb) => cb(payload)), 30);
   const isAdminNow = () => !!store.get('users', {})[current?.email]?.is_admin;
@@ -2915,7 +2923,7 @@ function createLocalApi() {
       async get() {
         await requireAdmin();
         return { settings: { ...BOT_DEFAULTS, ...store.get('bot_settings', {}) }, connected: false,
-          missing: { moderation: false, shoutout: false, followage: false, clip: false, ads: false, hype: false, goals: false } };
+          missing: { moderation: false, shoutout: false, followage: false, clip: false, ads: false, hype: false, goals: false, promo: false } };
       },
       async save(p) {
         await requireAdmin();
@@ -2965,6 +2973,15 @@ function createLocalApi() {
       },
       async clips() {
         return store.get('bot_clips', [{ clip_id: 'DemoClip-Beispiel', who: 'NightOwl_Mia', created_at: new Date(Date.now() - 3600_000).toISOString() }]);
+      },
+      // Entfolgen im Demo-Modus: ein Beispiel, sobald der Abgleich an ist
+      async unfollows() {
+        const on = !!store.get('bot_settings', {}).unfollow_on;
+        return on ? [{ name: 'DriveBy_Dan', login: 'driveby_dan', followed_at: new Date(Date.now() - 2 * 86400_000).toISOString(), detected_at: new Date(Date.now() - 1800_000).toISOString() }] : [];
+      },
+      async followerScan() {
+        const on = !!store.get('bot_settings', {}).unfollow_on;
+        return { status: on ? 'ok' : 'new', last_at: on ? new Date(Date.now() - 300_000).toISOString() : null, total: 128, tracked: on ? 128 : 0 };
       },
       songs: {
         all: () => store.get('bot_songs', [

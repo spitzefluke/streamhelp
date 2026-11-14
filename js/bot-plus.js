@@ -7,6 +7,7 @@
 //     OBS nimmt den Ton über das Desktop-Audio auf. Das Overlay zeigt nur an.
 //   · Clips & Statistik (!clip, !stats, !topchatter, !topwatch), Ansagen (Werbung, Hype-Train, Ziele) und
 //     Stichwort-Antworten (Migration …_bot_more.sql)
+//   · Glückwunsch für neue Mods/VIPs, eigener Text für Prime-Abos, Entfolgen (Migration …_bot_promo_prime_unfollow.sql)
 // Eingebunden von js/app.js (renderBotPanel). api = state.api, toast/germanError aus app.js.
 import { hasConsent, onConsent, setConsent } from './consent.js';
 import { h } from './extras-core.js';
@@ -24,6 +25,9 @@ const errText = (err) => (/bot_faq|bot_clips|bot_more|clip_on/i.test(err?.messag
     : ctx.germanError(err));
 // Neue Einstellungen (…_bot_more.sql) fehlen noch? Dann zeigt die Karte den Hinweis statt des Formulars.
 const hasMore = () => 'clip_on' in (settings ?? {});
+// Beförderungen, Prime-Abos, Entfolgen (…_bot_promo_prime_unfollow.sql)
+const PROMO_MIGRATION = 'Einmal nötig: supabase/migrations/20270102000000_bot_promo_prime_unfollow.sql im SQL Editor ausführen.';
+const hasPromo = () => 'promo_on' in (settings ?? {});
 
 // ---------- Formular-Bausteine (name = Spalte in bot_settings) ----------
 const toggle = (name, label, hint) => h('label', { class: 'toggle bp-toggle' },
@@ -77,6 +81,7 @@ function settingsForm(...kids) {
       msg.textContent = '✓ Gespeichert';
       msg.classList.add('is-ok');
       paintWarnings();
+      unfollowReload?.();
     } catch (err) {
       msg.textContent = /check constraint|violates/i.test(err?.message ?? '') ? 'Ein Wert liegt außerhalb des Erlaubten – bitte prüfen.' : errText(err);
     } finally {
@@ -132,13 +137,64 @@ function greetCard() {
         h('div', { class: 'bp-box' }, toggle('thank_follow', '💜 Follow', 'höchstens alle 5 s – gegen Follow-Bots'), text('thank_follow_text', 'Text')),
         h('div', { class: 'bp-box' }, toggle('thank_sub', '⭐ Abos'), text('thank_sub_text', 'Neues Abo'),
           text('thank_resub_text', 'Resub ({months} = Monate)'), text('thank_gift_text', 'Verschenkt ({amount} = Anzahl)')),
+        hasPromo() ? h('div', { class: 'bp-box' }, toggle('thank_prime', '👑 Eigener Text für Prime-Abos', 'aus: der normale Abo-Text'),
+          text('thank_prime_text', 'Neues Prime-Abo'), text('thank_prime_resub_text', 'Prime-Resub ({months} = Monate)'),
+          h('p', { class: 'form-hint' }, 'Ob ein Abo mit Prime kam, sagt Twitch nur im Chat – dafür muss der Bot verbunden sein. Gilt nur, wenn „Abos“ an ist.')) : null,
         h('div', { class: 'bp-box' }, toggle('thank_bits', '💎 Bits'), bits, text('thank_bits_text', 'Text ({amount} = Bits)')),
         h('div', { class: 'bp-box' }, toggle('thank_raid', '🚀 Raid'), text('thank_raid_text', 'Text ({amount} = Zuschauer)'),
           toggle('raid_shoutout', 'Automatisch Shoutout für den Raider', 'mit dem Text vom Shoutout (Stream-Infos)'))),
       h('p', { class: 'form-hint' }, h('code', {}, '{user}'), ' wird zum Namen (mit @). Im Raid-Schutz begrüßt und bedankt sich der Bot bei Follows und Raids nicht.'),
+      ...(hasPromo() ? [
+        h('h3', { class: 'bp-sub' }, 'Beförderungen'),
+        h('div', { class: 'bp-box' }, toggle('promo_on', '🎖️ Glückwunsch, wenn jemand Mod oder VIP wird', 'sobald du die Person bei Twitch beförderst'),
+          h('div', { class: 'bp-grid' }, text('promo_mod_text', 'Neuer Mod'), text('promo_vip_text', 'Neuer VIP'))),
+        h('h3', { class: 'bp-sub' }, 'Entfolgen'),
+        h('div', { class: 'bp-box' }, toggle('unfollow_on', '💔 Merken, wer entfolgt', 'Liste unten – nur du und deine freigegebenen Mods sehen sie'),
+          toggle('unfollow_chat', 'Zusätzlich im Chat melden'), text('unfollow_text', 'Text im Chat'),
+          h('p', { class: 'form-hint' }, 'Twitch meldet Entfolgen nicht selbst. StreamHelp gleicht darum, solange du live bist, alle 10 Minuten deine Follower ab ',
+            '(bis 5000 Follower) – entfolgt gilt, wer zweimal hintereinander fehlt. Wer offline entfolgt, taucht beim nächsten Stream auf. ',
+            'Tipp: Die Meldung im Chat lieber aus lassen – vor allen genannt zu werden, empfinden viele als Bloßstellen.')),
+      ] : []),
     ),
+    hasPromo() ? null : h('p', { class: 'form-msg' }, PROMO_MIGRATION, ' Danach gibt es hier: Glückwunsch für neue Mods/VIPs, eigener Text für Prime-Abos, Entfolgen.'),
+    scopeWarn('promo', 'Für den Glückwunsch an neue Mods und VIPs fehlt ein Twitch-Recht – der Streamer muss Twitch einmal neu verbinden.'),
+    hasPromo() ? unfollowList() : null,
   ];
 }
+
+// Wer zuletzt entfolgt ist, und der Stand des Abgleichs
+const SCAN_STATUS = {
+  new: 'Noch kein Abgleich – der erste läuft, sobald du live bist (er merkt sich nur, wer folgt).',
+  ok: 'Abgleich läuft.',
+  too_many: 'Zu viele Follower für den Abgleich (mehr als 5000) – Entfolgen lässt sich nicht verfolgen.',
+  incomplete: 'Twitch hat beim letzten Abgleich nicht alle Follower geliefert – nächster Versuch in 10 Minuten.',
+  glitch: 'Beim letzten Abgleich fehlten auf einmal sehr viele – das war wohl ein Fehler bei Twitch, gezählt wurde nichts.',
+  error: 'Der letzte Abgleich hat nicht geklappt – fehlt das Twitch-Recht „Follower lesen“? Dann Twitch einmal neu verbinden.',
+};
+const fmtWhen = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+function unfollowList() {
+  const status = h('p', { class: 'form-hint' });
+  const listEl = h('ul', { class: 'bp-clips' });
+  const box = h('section', { class: 'bp-unfollows' }, h('h3', { class: 'bp-sub' }, 'Zuletzt entfolgt'), status, listEl);
+  const load = async () => {
+    if (!settings?.unfollow_on) {
+      status.textContent = 'Aus – oben „Merken, wer entfolgt“ einschalten.';
+    } else {
+      const info = await ctx.api.botPlus.followerScan().catch(() => null);
+      status.textContent = info ? `${SCAN_STATUS[info.status] ?? ''}${info.last_at ? ` Zuletzt: ${fmtWhen(info.last_at)}` : ''}${info.tracked ? ` · ${info.tracked} Follower gemerkt` : ''}` : '';
+    }
+    const rows = await ctx.api.botPlus.unfollows().catch((err) => { listEl.replaceChildren(h('li', { class: 'cmd-empty' }, errText(err))); return null; });
+    if (!rows) return;
+    listEl.replaceChildren(...(rows.length ? rows.map((r) => h('li', {},
+      r.login ? h('a', { href: `https://twitch.tv/${encodeURIComponent(r.login)}`, target: '_blank', rel: 'noopener noreferrer' }, r.name || r.login) : h('strong', {}, r.name),
+      h('small', {}, ` · entfolgt ${fmtWhen(r.detected_at)}${r.followed_at ? ` · folgte seit ${new Date(r.followed_at).toLocaleDateString('de-DE')}` : ''}`)))
+      : [h('li', { class: 'cmd-empty' }, 'Bisher ist niemand entfolgt 💜')]));
+  };
+  unfollowReload = load;
+  load();
+  return box;
+}
+let unfollowReload = null;
 
 function modCard() {
   return [
@@ -575,7 +631,7 @@ export async function renderBotPlus(deps) {
   }
   if (!loaded) {
     cards.info.replaceChildren(...infoCard());
-    cards.greet.replaceChildren(...greetCard());
+    cards.greet.replaceChildren(...greetCard().filter(Boolean));
     cards.mod.replaceChildren(...modCard());
     if (cards.timers) await timersCard(cards.timers);
     songCard(cards.songs);
