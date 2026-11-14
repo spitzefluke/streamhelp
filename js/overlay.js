@@ -135,6 +135,11 @@ async function useChannel(key) {
 
 // live=1: Einstellungen aus der Datenbank (overlay_config). test/edit aus der Adresse gelten weiter.
 const urlParams = new URLSearchParams(location.search);
+// Hochformat für TikTok LIVE (fmt=v, Quelle 1080 × 1920): steht immer in der Adresse, auch im Live-Modus –
+// so teilen sich eine Quer- und eine Hochformat-Quelle dieselben Einstellungen. Karten in den Ecken halten
+// Abstand zu TikToks Kopfzeile, Kommentaren und Knöpfen (css/overlay.css, „Hochformat“).
+const VERTICAL = ['v', 'tiktok'].includes(urlParams.get('fmt'));
+if (VERTICAL) document.documentElement.classList.add('ov-vertical');
 const LIVE = urlParams.get('live') === '1';
 let liveConfig = '';
 if (LIVE) liveConfig = await readOverlayConfig().catch((err) => { console.warn('Overlay: Live-Einstellungen nicht lesbar', err); return ''; });
@@ -414,6 +419,8 @@ place($('ov-ticker'), opt.ticker);
 $('ov-ticker-label').textContent = `Mehr von ${STREAMER.name}`;
 $('ov-ticker').classList.add(`ticker-style-${opt.tstyle}`);
 if (opt.edit) setupEdit();
+// Im Editor: TikToks Bedienelemente als Schutzzone einblenden (nur Vorschau, nie in OBS/LIVE Studio)
+if (VERTICAL && opt.edit) document.documentElement.classList.add('ov-safe-guides');
 
 // Ecke (br, tl, …) per CSS-Klasse, freie Position als linke obere Ecke in Prozent.
 // Frei platzierte Karten bleiben immer ganz im Bild, auch wenn sie wachsen.

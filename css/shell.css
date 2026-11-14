@@ -725,6 +725,8 @@ a.pop-item { text-decoration: none; }
 .intro-cta { padding: 11px 20px; font-size: 15px; }
 .intro-hint { font-size: 13px; color: var(--dim); }
 .intro-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; }
+/* vier Antworten (z. B. „Wo streamst du?“ mit TikTok): 2 × 2 statt 3 + 1 */
+.intro-options:has(> :nth-child(4):last-child) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
 .intro-option {
   position: relative; display: grid; align-content: start; gap: 10px; min-height: 150px; padding: 22px; border-radius: 16px; text-align: left;
   background: var(--surface); border: 1px solid var(--line-soft); color: var(--text); font: inherit; cursor: pointer;

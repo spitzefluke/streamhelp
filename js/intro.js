@@ -20,9 +20,10 @@ const QUESTIONS = [
   { id: 'platform', title: 'Wo streamst du?', sub: 'Ein paar Funktionen gibt es nur auf Twitch.', options: [
     ['twitch', 'ph-twitch-logo', 'Twitch', 'Kanalpunkte, Bits und Abos inklusive.'],
     ['both', 'ph-arrows-split', 'Twitch + YouTube', 'Gleichzeitig live – der YouTube-Chat läuft im Overlay mit.'],
-    ['youtube', 'ph-youtube-logo', 'Vor allem YouTube', 'StreamHelp läuft über deinen Twitch-Kanal, YouTube kommt dazu.']] },
+    ['youtube', 'ph-youtube-logo', 'Vor allem YouTube', 'StreamHelp läuft über deinen Twitch-Kanal, YouTube kommt dazu.'],
+    ['tiktok', 'ph-tiktok-logo', 'Auch TikTok LIVE', 'Overlay im Hochformat und TikTok-Ideen. Chat und Geschenke bleiben in TikTok.']] },
 ];
-const LABEL = { new: 'Einsteiger', some: 'Ein paar Streams', pro: 'Erfahren', fun: 'Spaß', grow: 'Wachstum', affiliate: 'Affiliate-Ziel', twitch: 'Twitch', youtube: 'YouTube', both: 'Twitch + YouTube' };
+const LABEL = { new: 'Einsteiger', some: 'Ein paar Streams', pro: 'Erfahren', fun: 'Spaß', grow: 'Wachstum', affiliate: 'Affiliate-Ziel', twitch: 'Twitch', youtube: 'YouTube', both: 'Twitch + YouTube', tiktok: 'TikTok LIVE' };
 const PROMISES = [
   ['ph-user-focus', 'Auf dich zugeschnitten', 'Neu oder erfahren, mit oder ohne YouTube – du siehst nur, was passt.'],
   ['ph-cursor-click', 'Selbst ausprobieren', 'Kein Durchklicken: Du machst die Schritte direkt im Dashboard.'],
@@ -62,6 +63,13 @@ function loadAnswers() {
 }
 
 // Von vorn (Leiste „Einführung“ oder erster Besuch)
+// Antworten der Einführung für andere Bereiche (z. B. TikTok-Ideen zuerst zeigen)
+export function introAnswers() {
+  if (!intro.deps) return { exp: null, goal: null, platform: null };
+  loadAnswers();
+  return { ...intro.ans };
+}
+
 export function openIntro() {
   loadAnswers();
   intro.step = 0;
@@ -130,6 +138,7 @@ function planSteps() {
     a.exp === 'new' && { title: 'OBS einrichten', text: 'Eine Browserquelle, fertig – mit Bildern Schritt für Schritt.', where: 'OBS-Overlay · Anleitung' },
     { title: 'Overlay & Look wählen', text: 'Ein Komplett-Look aus der Design-Bibliothek, mit einem Klick.', where: 'Design-Bibliothek' },
     a.exp !== 'pro' && { title: 'Twitch verbinden', text: 'Damit Chat-Bot, Alerts und Kanalpunkte laufen.', where: 'Dein Start' },
+    a.platform === 'tiktok' && { title: 'TikTok LIVE vorbereiten', text: 'Overlay auf Hochformat stellen, als Link-Quelle in TikTok LIVE Studio einfügen – dazu passende TikTok-Ideen.', where: 'Content-Ideen · TikTok LIVE' },
     yt && { title: 'YouTube dazuschalten', text: 'Gleichzeitig auf YouTube live – der YouTube-Chat läuft im Overlay mit.', where: 'Twitch-Verbindung' },
     a.goal === 'grow' && { title: 'Zuschauer halten', text: 'Interaktive Ideen, Kanalpunkte und Chat-Befehle geben dem Chat etwas zu tun.', where: 'Content-Ideen' },
     a.goal === 'affiliate' && { title: 'Affiliate-Ziele im Blick', text: 'Twitch will 50 Follower, 500 Minuten an 7 Streamtagen und Ø 3 Zuschauer. Deine Streams siehst du in der Statistik.', where: 'Statistik' },

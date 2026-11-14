@@ -744,6 +744,17 @@ code { font-family: var(--font-mono); font-size: .9em; }
   position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0;
   transform-origin: 0 0; color-scheme: normal; background: transparent;
 }
+/* Hochformat für TikTok LIVE: 9:16, nicht höher als der Bildschirm */
+.obs-preview.is-vertical { aspect-ratio: 9 / 16; width: min(100%, calc(72vh * 9 / 16)); margin-inline: auto; }
+.obs-preview.is-vertical iframe { width: 1080px; height: 1920px; }
+body.obs-page .obs-preview.is-vertical { aspect-ratio: 16 / 9; width: 100%; margin-inline: 0; }
+.obs-fmt { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 4px; padding: 3px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2); }
+.obs-fmt label { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; min-height: 34px; padding: 4px 10px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; text-align: center; }
+.obs-fmt label small { font-weight: 400; color: var(--dim); }
+.obs-fmt input { position: absolute; opacity: 0; pointer-events: none; }
+.obs-fmt label:has(input:checked) { background: rgba(var(--acc-rgb), .24); color: var(--text-strong); }
+.obs-fmt label:has(input:focus-visible) { outline: 2px solid var(--acc); outline-offset: 1px; }
+.obs-fmt-hint { margin: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(254, 44, 85, .35); background: rgba(254, 44, 85, .08); font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
 .obs-preview-label {
   position: absolute; left: 10px; top: 10px; z-index: 2; padding: 3px 8px; border-radius: 999px; pointer-events: none;
   background: rgba(7, 9, 15, .75); font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
@@ -3247,3 +3258,53 @@ body.obs-page .obs-insp-head { padding-bottom: 8px; border-bottom: 1px solid var
 .pop-item--lang { cursor: default; gap: 10px; }
 .pop-item--lang .pop-item-ico { width: 18px; text-align: center; }
 .pop-item--lang .lang-pick { flex: 1; min-width: 0; margin: 0; color: inherit; }
+
+/* ---------- TikTok LIVE: Ideen fürs Hochformat (js/tiktok-ideas.js) ---------- */
+.tt-section { margin-top: 22px; border-radius: 18px; border: 1px solid var(--line); background: linear-gradient(135deg, rgba(37, 244, 238, .07), rgba(254, 44, 85, .07)), rgba(var(--surf-rgb), .7); overflow: hidden; }
+.tt-summary { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; list-style: none; }
+.tt-summary::-webkit-details-marker { display: none; }
+.tt-summary:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+.tt-logo { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; color: #fff; background: #000; box-shadow: -2px -2px 0 rgba(37, 244, 238, .85), 2px 2px 0 rgba(254, 44, 85, .85); }
+.tt-summary-text { flex: 1; min-width: 0; display: grid; }
+.tt-summary-text b { font-size: 17px; color: var(--text-strong); }
+.tt-summary-text small { font-size: 13px; color: var(--muted); }
+.tt-caret { font-size: 18px; color: var(--muted); transition: transform .2s; }
+.tt-section[open] .tt-caret { transform: rotate(180deg); }
+.tt-body { display: grid; gap: 14px; padding: 0 18px 18px; }
+.tt-intro { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
+.tt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.tt-card {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px 12px; align-items: start;
+  padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(var(--surf-rgb), .85);
+  color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, transform .15s;
+}
+.tt-card:hover, .tt-card:focus-visible { border-color: rgba(254, 44, 85, .6); transform: translateY(-1px); outline: none; }
+.tt-card-ico { grid-row: 1 / 3; width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 21px; background: var(--bg-2); }
+.tt-card-text { display: grid; gap: 3px; min-width: 0; }
+.tt-card-text b { font-size: 14.5px; color: var(--text-strong); }
+.tt-card-text small { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.tt-card-meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11.5px; color: var(--dim); }
+.tt-dialog { width: min(640px, calc(100vw - 24px)); }
+.tt-dialog-close { justify-content: flex-end; padding-bottom: 0; }
+.tt-dialog-body { display: grid; gap: 12px; padding: 0 22px 22px; }
+.tt-dlg-head { display: flex; gap: 14px; align-items: flex-start; }
+.tt-dlg-ico { flex: none; width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; font-size: 28px; background: var(--bg-2); }
+.tt-eyebrow { margin: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #fe2c55; }
+:root[data-theme="light"] .tt-eyebrow { color: #d1123d; }
+.tt-dlg-head h2 { margin: 2px 0 4px; font-size: 22px; text-transform: none; }
+.tt-pitch { margin: 0; font-size: 14px; color: var(--text-2); }
+.tt-meta { display: flex; gap: 14px; margin: 0; font-size: 13px; color: var(--muted); }
+.tt-h { margin: 6px 0 0; font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.tt-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; }
+.tt-tools { display: grid; gap: 8px; }
+.tt-tool { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(var(--surf-rgb), .85); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tt-tool:hover, .tt-tool:focus-visible { border-color: var(--acc); outline: none; }
+.tt-tool-ico { flex: none; font-size: 22px; }
+.tt-tool b { display: block; font-size: 14px; color: var(--text-strong); }
+.tt-tool small { font-size: 12.5px; color: var(--muted); }
+.tt-tip { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(var(--acc-rgb), .1); font-size: 13.5px; line-height: 1.45; }
+@media (max-width: 520px) {
+  .tt-summary { padding: 12px 14px; }
+  .tt-body { padding: 0 14px 14px; }
+  .tt-dialog-body { padding: 0 16px 18px; }
+}

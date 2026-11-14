@@ -845,3 +845,19 @@ body.is-apreview .ov-alert { position: relative; margin: 0; }
 /* Vom StreamHelp-Team pausiert (js/platform-gate.js): nichts zeigen */
 html.ov-paused body > *:not(.ov-paused-note) { display: none !important; }
 .ov-paused-note { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 14px 22px; border-radius: 14px; background: rgba(12, 8, 22, .85); color: #fff; font: 600 20px/1.3 system-ui, sans-serif; border: 1px solid rgba(255, 255, 255, .2); }
+
+/* ---------- Hochformat für TikTok LIVE (fmt=v, 1080 × 1920) ----------
+   TikTok legt Kopfzeile (oben), Kommentare und Geschenke (unten links) und Knöpfe (rechts unten) über das Bild.
+   Karten in den Ecken rücken deshalb aus diesen Bereichen heraus; frei platzierte Karten bleiben, wo sie sind. */
+html.ov-vertical { --tt-top: 9vh; --tt-bottom: 27vh; --tt-right: 14vw; }
+html.ov-vertical .pos-tl, html.ov-vertical .pos-tc, html.ov-vertical .pos-tr { top: var(--tt-top); }
+html.ov-vertical .pos-bl, html.ov-vertical .pos-bc, html.ov-vertical .pos-br { bottom: var(--tt-bottom); }
+html.ov-vertical .pos-br { right: var(--tt-right); }
+/* Nur in der Vorschau des Editors: wo TikTok etwas darüberlegt */
+html.ov-safe-guides::before, html.ov-safe-guides::after {
+  content: ""; position: fixed; left: 0; right: 0; z-index: 9998; pointer-events: none;
+  background: repeating-linear-gradient(135deg, rgba(254, 44, 85, .16) 0 14px, rgba(37, 244, 238, .1) 14px 28px);
+  border: 2px dashed rgba(254, 44, 85, .55);
+}
+html.ov-safe-guides::before { top: 0; height: calc(var(--tt-top) - 1vh); }
+html.ov-safe-guides::after { bottom: 0; height: calc(var(--tt-bottom) - 2vh); }

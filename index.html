@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6cASMUnGnMV34vplInCJB4a2XxExbSexhgp4XrFfD88=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-kRA7AFx/I2605qpx5wNYEZmOoP9UwSb/+EmzW6B5xQ0=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -102,12 +102,12 @@
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
-  <link rel="stylesheet" href="css/style.css?v=9fcc6af92f">
-  <link rel="stylesheet" href="css/phosphor.css?v=d5bcecce11">
+  <link rel="stylesheet" href="css/style.css?v=c9174eefba">
+  <link rel="stylesheet" href="css/phosphor.css?v=f57db87019">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
   <link rel="stylesheet" href="css/landing.css?v=92e9c75f79">
   <link rel="stylesheet" href="css/yami.css?v=414a6010cd">
-  <link rel="stylesheet" href="css/shell.css?v=b21ae3e42b">
+  <link rel="stylesheet" href="css/shell.css?v=4f7c8966f0">
   <link rel="stylesheet" href="css/prank-fx.css?v=82d09df5b9">
   <link rel="stylesheet" href="css/bingo.css?v=41f5ca23ab">
   <link rel="stylesheet" href="css/pet.css?v=810a0995fc">
@@ -123,7 +123,7 @@
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
       "./js/api.js": "./js/api.js?v=2e2f2c1fc5",
-      "./js/app.js": "./js/app.js?v=bb4feb2864",
+      "./js/app.js": "./js/app.js?v=25a44899f5",
       "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
       "./js/avatar.js": "./js/avatar.js?v=136eccd608",
       "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
@@ -202,7 +202,7 @@
       "./js/i18n-ru.js": "./js/i18n-ru.js?v=c85900a1be",
       "./js/i18n-tr.js": "./js/i18n-tr.js?v=e12634fb30",
       "./js/i18n.js": "./js/i18n.js?v=4550a5388d",
-      "./js/intro.js": "./js/intro.js?v=91b52e9132",
+      "./js/intro.js": "./js/intro.js?v=30d2b9efea",
       "./js/kuendigen.js": "./js/kuendigen.js?v=9478ee88ee",
       "./js/landing.js": "./js/landing.js?v=1e86762ef9",
       "./js/launch.js": "./js/launch.js?v=987cad909a",
@@ -217,7 +217,7 @@
       "./js/overlay-modules.js": "./js/overlay-modules.js?v=e582495e55",
       "./js/overlay-stage.js": "./js/overlay-stage.js?v=1709d9784b",
       "./js/overlay-usage.js": "./js/overlay-usage.js?v=c51b368be2",
-      "./js/overlay.js": "./js/overlay.js?v=208a8f2632",
+      "./js/overlay.js": "./js/overlay.js?v=2c09b8c996",
       "./js/pad-page.js": "./js/pad-page.js?v=1862a07033",
       "./js/pet-species.js": "./js/pet-species.js?v=ccc5a9c9c9",
       "./js/pet.js": "./js/pet.js?v=d40129fa2c",
@@ -242,6 +242,7 @@
       "./js/supabase-js.js": "./js/supabase-js.js?v=397c32fbeb",
       "./js/theme-packs.js": "./js/theme-packs.js?v=90faabe1ce",
       "./js/ticker.js": "./js/ticker.js?v=f42d43ff2c",
+      "./js/tiktok-ideas.js": "./js/tiktok-ideas.js?v=ad4aeaff7e",
       "./js/tour.js": "./js/tour.js?v=c499758325",
       "./js/tts-voice.js": "./js/tts-voice.js?v=3a37b18618",
       "./js/twitch-chat.js": "./js/twitch-chat.js?v=1b6eb8553c",
@@ -856,6 +857,20 @@
 
             <div id="grid" class="grid" aria-live="polite"></div>
           </div>
+
+          <!-- TikTok LIVE: Ideen fürs Hochformat (js/tiktok-ideas.js) – ohne TikTok-Verbindung, mit Werkzeugen zum Bedienen von Hand -->
+          <details class="tt-section" id="tt-ideas" data-for="team">
+            <summary class="tt-summary">
+              <span class="tt-logo" aria-hidden="true"><i class="ph ph-tiktok-logo"></i></span>
+              <span class="tt-summary-text"><b>TikTok LIVE</b><small>19 Ideen fürs Hochformat – Geschenke, Battles, Like-Spiele und Formate</small></span>
+              <i class="ph ph-caret-down tt-caret" aria-hidden="true"></i>
+            </summary>
+            <div class="tt-body">
+              <p class="tt-intro">TikTok gibt Chat, Geschenke und Likes eines LIVEs nicht an andere Dienste weiter. Diese Ideen laufen deshalb mit Werkzeugen, die du oder deine Mods von Hand bedienen – Zähler, Spiel-Rad, Timer – und mit dem Overlay im Hochformat. <button type="button" class="link-btn" data-tt-obs>Overlay auf Hochformat stellen →</button></p>
+              <div class="cat-chips" data-tt-chips role="group" aria-label="TikTok-Ideen filtern"></div>
+              <div class="tt-grid" data-tt-grid></div>
+            </div>
+          </details>
         </section>
 
         <!-- Vorschläge & Archiv -->
@@ -1522,6 +1537,12 @@
       <div class="updates-list" id="updates-list"></div>
       <div class="account-actions"><button type="button" class="btn btn--primary" id="updates-ok">Verstanden</button></div>
     </div>
+  </dialog>
+
+  <!-- TikTok-Idee im Detail (js/tiktok-ideas.js) -->
+  <dialog id="tt-dialog" class="dialog tt-dialog" aria-labelledby="tt-dialog-title">
+    <div class="dialog-head tt-dialog-close"><button class="icon-btn" type="button" data-close aria-label="Schließen">&times;</button></div>
+    <div class="tt-dialog-body" data-tt-body></div>
   </dialog>
 
   <!-- Einführung (js/intro.js): Willkommen, drei Fragen, Plan – danach die Mitmach-Tour (js/tour.js) -->
@@ -2587,6 +2608,12 @@
           <button class="obs-ctl" type="button" id="obs-setup-open"><i class="ph ph-question" aria-hidden="true"></i> In OBS einrichten</button>
           <a class="obs-ctl obs-ctl--ext" id="obs-ext-link" href="https://dashboard.twitch.tv/extensions/ozgdzg7ly1znn04xh3c61xdkua0y6v-0.0.1" target="_blank" rel="noopener noreferrer" title="StreamHelp als Panel, Komponente oder Overlay auf deinem Twitch-Kanal"><i class="ph ph-puzzle-piece" aria-hidden="true"></i> Twitch-Erweiterung <i class="ph ph-arrow-square-out obs-ctl-out" aria-hidden="true"></i></a>
         </div>
+        <!-- Format der Browserquelle: quer (Twitch, YouTube) oder hoch für TikTok LIVE (fmt=v) -->
+        <div class="obs-fmt" id="obs-fmt" role="radiogroup" aria-label="Format der Quelle">
+          <label><input type="radio" name="obs-fmt" value="h" checked><i class="ph ph-monitor" aria-hidden="true"></i>Querformat <small>1920 × 1080</small></label>
+          <label><input type="radio" name="obs-fmt" value="v"><i class="ph ph-device-mobile" aria-hidden="true"></i>Hochformat · TikTok <small>1080 × 1920</small></label>
+        </div>
+        <p class="obs-fmt-hint" id="obs-fmt-hint" hidden><b>TikTok LIVE Studio:</b> Quelle hinzufügen → <b>Link</b> → Adresse einfügen (1080 × 1920). <b>OBS:</b> Leinwand 1080 × 1920, Browserquelle. Rot gestreift = verdeckt TikTok; Karten in den Ecken halten Abstand. Chat und Geschenke aus TikTok kommen nicht im Overlay an.</p>
         <div class="obs-url">
           <input id="obs-url" type="text" readonly aria-label="Adresse für die OBS-Browserquelle">
           <button id="obs-copy" class="btn btn--ghost" type="button" title="Adresse kopieren" aria-label="Adresse kopieren"><i class="ph ph-copy" aria-hidden="true"></i><span class="obs-copy-text">Kopieren</span></button>

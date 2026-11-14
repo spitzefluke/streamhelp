@@ -31,7 +31,8 @@ import {
   channelFromUrl, channelParam, cleanChannel, rememberChannel, rememberedChannel, setChannel, withChannelParam,
 } from './channel.js';
 import { h } from './extras-core.js';
-import { maybeOpenIntro, openIntro, setupIntro } from './intro.js';
+import { introAnswers, maybeOpenIntro, openIntro, setupIntro } from './intro.js';
+import { renderTikTokIdeas } from './tiktok-ideas.js';
 import { applyI18n, initI18n, LANGS, langPicker, t as tr, watchI18n } from './i18n.js';
 import { avatarSrc } from './avatar.js';
 import { setupConsent } from './consent.js';
@@ -1037,6 +1038,8 @@ async function enterApp(user, { animate = false } = {}) {
   state.pendingPage = null;
   renderHero();
   renderGrid();
+  // TikTok LIVE: Ideen fürs Hochformat – oben und offen, wenn in der Einführung TikTok gewählt wurde
+  renderTikTokIdeas({ openExtra, openObs: () => { setObsFmt('v'); openObsWindow(); }, first: introAnswers().platform === 'tiktok' });
   loadGames();
   renderArchive();
   renderIdeas();
@@ -6146,7 +6149,14 @@ const OBS_SIZE = {
 const obs = { ws: null, scene: null, shotTimer: 0, shotGen: 0, connectSeq: 0, busy: false, stream: null, sources: [], previewSound: false, presets: null };
 // Live-Overlay: Einstellungen liegen in overlay_config, OBS lädt overlay.html?live=1
 const obsLive = { ready: false, loading: false, loadSeq: 0, pending: false, again: false, params: '', access: { can_edit: false, is_owner: false, admins_can_edit: false }, timer: 0, filling: false };
-const obsLiveUrl = () => withChannelParam(new URL('overlay.html?live=1', location.href)).href;
+// Format der Browserquelle: Querformat (Twitch, YouTube) oder Hochformat für TikTok LIVE (fmt=v, 1080 × 1920).
+// Nur eine Anzeige-Einstellung dieses Browsers – die Overlay-Einstellungen sind für beide Formate dieselben.
+const OBS_FMT_KEY = 'sh_obs_fmt';
+let obsFmt = (() => { try { return localStorage.getItem(OBS_FMT_KEY) === 'v' ? 'v' : 'h'; } catch { return 'h'; } })();
+const obsVertical = () => obsFmt === 'v';
+const obsSize = () => (obsVertical() ? '1080 × 1920' : '1920 × 1080');
+const withFmt = (url) => { if (obsVertical()) url.searchParams.set('fmt', 'v'); return url; };
+const obsLiveUrl = () => withChannelParam(withFmt(new URL('overlay.html?live=1', location.href))).href;
 // Gesperrt: ohne Recht zum Ändern – und solange der gespeicherte Stand noch lädt (sonst gingen Änderungen verloren)
 const obsLocked = () => obsLive.loading || (obsLive.ready && !obsLive.access.can_edit);
 
@@ -6158,6 +6168,10 @@ function setupObs() {
   form.addEventListener('change', () => updateObs());
   form.addEventListener('reset', () => setTimeout(() => { saveObs(null); updateObs(); }));
   $('#obs-copy').addEventListener('click', copyObsUrl);
+  // Quer- oder Hochformat (TikTok)
+  paintObsFmt();
+  $('#obs-fmt').addEventListener('change', (e) => setObsFmt(e.target.value));
+  document.querySelector('[data-tt-obs]')?.addEventListener('click', () => { setObsFmt('v'); openObsWindow(); });
   // Anleitung „In OBS einrichten“ (js/obs-setup.js)
   setupObsSetup({
     url: () => $('#obs-url').value,
@@ -6499,7 +6513,7 @@ function setupObsLayers() {
     url.searchParams.set('scene', btn.dataset.sceneCopy);
     try {
       await navigator.clipboard.writeText(url.href);
-      toast(`Adresse kopiert – in OBS als eigene Browserquelle (1920 × 1080) in die Szene legen.${obsLive.ready ? '' : ' Ohne Live-Modus stehen die Einstellungen in der Adresse.'}`, 'ok', 6000);
+      toast(`Adresse kopiert – in OBS als eigene Browserquelle (${obsSize()}) in die Szene legen.${obsLive.ready ? '' : ' Ohne Live-Modus stehen die Einstellungen in der Adresse.'}`, 'ok', 6000);
     } catch {
       prompt('Adresse für die Browserquelle:', url.href);
     }
@@ -7080,7 +7094,7 @@ function obsUrl({ preview = false } = {}) {
   }
   // Vorschau stumm – außer „Ton in der Vorschau“ ist an (Mixer: ▶ Probehören)
   if (preview) { if (!obs.previewSound) p.set('vol', '0'); p.set('test', '1'); p.set('edit', '1'); }
-  return withChannelParam(url).href;
+  return withChannelParam(withFmt(url)).href;
 }
 
 function loadObs() {
@@ -7814,14 +7828,33 @@ function renderObsPreview() {
 function fitObsPreview() {
   const box = $('#obs-preview');
   const frame = box.querySelector('iframe');
-  if (frame && box.clientWidth) frame.style.transform = `scale(${box.clientWidth / 1920})`;
+  if (!frame || !box.clientWidth) return;
+  if (!obsVertical()) { frame.style.transform = `scale(${box.clientWidth / 1920})`; return; }
+  // Hochformat: ganz zeigen (passend in Breite und Höhe) und mittig
+  const s = Math.min(box.clientWidth / 1080, (box.clientHeight || box.clientWidth * 16 / 9) / 1920);
+  frame.style.transform = `translate(${Math.max(0, (box.clientWidth - 1080 * s) / 2)}px, 0) scale(${s})`;
+}
+
+function setObsFmt(fmt) {
+  obsFmt = fmt === 'v' ? 'v' : 'h';
+  try { localStorage.setItem(OBS_FMT_KEY, obsFmt); } catch { /* privates Fenster: gilt nur jetzt */ }
+  paintObsFmt();
+  $('#obs-url').value = obsLive.ready ? obsLiveUrl() : obsUrl();
+  if ($('#obs-preview iframe')) renderObsPreview();
+}
+
+function paintObsFmt() {
+  const v = obsVertical();
+  document.querySelectorAll('#obs-fmt input').forEach((r) => { r.checked = (r.value === 'v') === v; });
+  $('#obs-preview').classList.toggle('is-vertical', v);
+  $('#obs-fmt-hint').hidden = !v;
 }
 
 async function copyObsUrl() {
   const input = $('#obs-url');
   try {
     await navigator.clipboard.writeText(input.value);
-    toast('Adresse kopiert – jetzt in OBS einfügen.', 'ok');
+    toast(obsVertical() ? 'Adresse kopiert – in TikTok LIVE Studio als Link-Quelle (1080 × 1920) oder in OBS einfügen.' : 'Adresse kopiert – jetzt in OBS einfügen.', 'ok');
   } catch {
     input.select();
     toast('Adresse ist markiert – mit Strg+C kopieren.');
@@ -7873,7 +7906,7 @@ function setupObsModules() {
   $('#obs-modules-copy').addEventListener('click', () => {
     const mod = customModule();
     if (!mod.layers.length) { toast('Erst Ebenen anhaken.', 'info'); return; }
-    copyText(moduleUrl(obsBaseUrl(), mod), 'Link kopiert – in OBS als Browserquelle (1920 × 1080) einfügen.');
+    copyText(moduleUrl(obsBaseUrl(), mod), `Link kopiert – in OBS als Browserquelle (${obsSize()}) einfügen.`);
   });
   $('#obs-modules-apply').addEventListener('click', (e) => {
     const mod = customModule();
@@ -7901,7 +7934,7 @@ function renderObsModules() {
     copy.type = 'button';
     copy.className = 'btn btn--ghost btn--sm';
     copy.textContent = 'Link kopieren';
-    copy.addEventListener('click', () => copyText(moduleUrl(obsBaseUrl(), mod), `Link für „${mod.name}“ kopiert – in OBS als Browserquelle (1920 × 1080) einfügen.`));
+    copy.addEventListener('click', () => copyText(moduleUrl(obsBaseUrl(), mod), `Link für „${mod.name}“ kopiert – in OBS als Browserquelle (${obsSize()}) einfügen.`));
     const apply = document.createElement('button');
     apply.type = 'button';
     apply.className = 'btn btn--primary btn--sm';
