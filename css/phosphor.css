@@ -194,3 +194,7 @@
 .ph.ph-user-circle:before { content: "\e4c4"; }
 .ph.ph-monitor:before { content: "\e32e"; }
 .ph.ph-tiktok-logo:before { content: "\eaf2"; }
+.ph.ph-cloud-rain:before { content: "\e1b4"; }
+.ph.ph-pause-circle:before { content: "\e3a0"; }
+.ph.ph-infinity:before { content: "\e634"; }
+.ph.ph-warning-circle:before { content: "\e4e2"; }

@@ -335,6 +335,16 @@ function liveExtras({ sb, unwrap, invoke }) {
       test: () => rpc('emote_rain_test'),
     },
 
+    // ---------- Seite Kanalpunkte (…_points_center.sql): Limits, alle pausieren, Einlösungen ----------
+    points: {
+      state: () => rpc('stream_rewards_state'),
+      setLimits: (key, { perStream = 0, perUser = 0, off = null } = {}) =>
+        rpc('stream_reward_limits_set', { p_key: key, p_stream: perStream, p_user: perUser, p_off: off }),
+      pause: (minutes = null) => rpc('stream_rewards_pause', { p_minutes: minutes }),
+      resume: () => rpc('stream_rewards_resume'),
+      apply: (key = null) => invoke('stream-tools', key ? { action: 'points_apply', key } : { action: 'points_apply' }),
+    },
+
     // ---------- Kanalpunkte (Vorlesen, Karten-Pack) ----------
     rewards: {
       list: async () => unwrap(await sb.from('stream_rewards').select('*').order('key')),
@@ -1613,6 +1623,39 @@ function demoExtras({ store, me, name, isAdmin, requireAdmin }) {
         store.set('emote_rain_events', [...store.get('emote_rain_events', []), ev].slice(-10));
         return { ok: true, live: false };
       },
+    },
+
+    // Wie stream_rewards_* in …_points_center.sql. Einlösungen gibt es im Demo nicht – die Zahlen sind ein Beispiel.
+    points: {
+      async state() {
+        await requireAdmin();
+        const p = store.get('points_state', {});
+        const until = p.paused_until ? Date.parse(p.paused_until) : null;
+        const paused = !!p.paused && (until === null || until > Date.now());
+        const stats = [];
+        const SAMPLE = { wheel: [8, 11, 6, 0, 7, 9, 4], throw: [40, 52, 38, 0, 22, 44, 31], sound: [23, 29, 20, 0, 12, 25, 18], cards: [6, 9, 5, 0, 3, 7, 4], rain: [3, 5, 4, 0, 1, 3, 2] };
+        for (const [key, week] of Object.entries(SAMPLE)) {
+          week.forEach((n, i) => { if (n) stats.push({ reward_id: `demo-${key}`, key, title: key, day: 6 - i, n, points: 0 }); });
+        }
+        return { paused, paused_until: paused ? p.paused_until ?? null : null, limits: store.get('points_limits', {}), stats, demo: true };
+      },
+      async setLimits(key, { perStream = 0, perUser = 0, off = null } = {}) {
+        await requireAdmin();
+        if (!/^[a-z][a-z0-9_-]{0,19}(:[0-9]{1,18})?$/.test(String(key))) throw new Error('Unbekannte Belohnung.');
+        const all = store.get('points_limits', {});
+        const clamp = (v) => Math.min(1000, Math.max(0, Math.round(Number(v) || 0)));
+        all[key] = { max_per_stream: clamp(perStream), max_per_user: clamp(perUser), off: off ?? all[key]?.off ?? false };
+        store.set('points_limits', all);
+        return this.state();
+      },
+      async pause(minutes = null) {
+        await requireAdmin();
+        const until = minutes > 0 ? new Date(Date.now() + Math.min(1440, minutes) * 60000).toISOString() : null;
+        store.set('points_state', { paused: true, paused_until: until });
+        return this.state();
+      },
+      async resume() { await requireAdmin(); store.set('points_state', {}); return this.state(); },
+      async apply() { return { applied: 0, errors: [], demo: true }; },
     },
 
     rewards: {

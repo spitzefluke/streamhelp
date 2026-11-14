@@ -18,7 +18,7 @@ import {
 import {
   KINDS, challengeBurst, challengeSummary, currentStage, doneCount, heartsHtml, pipsHtml, stageDone, stageLabel,
 } from './challenge.js';
-import { EXTRA_KINDS, buildExtraTile, extraIcon, listRewards, loadExtras, obsStatus, openExtra, renderGuard, setupExtras } from './extras.js';
+import { EXTRA_KINDS, buildExtraTile, extraIcon, loadExtras, obsStatus, openExtra, renderGuard, setupExtras } from './extras.js';
 import { autoOpenObsSetup, openObsSetup, setupObsSetup } from './obs-setup.js';
 import { guardFrame } from './frame-guard.js';
 import { installAlertPreset, openAlertDesigner, setupAlertDesigner, useAlertColor, useAlertMedia, useAlertPreset } from './alert-designer.js';
@@ -53,6 +53,7 @@ import { renderBotStudio } from './bot-studio.js';
 import { renderBotLog, renderBotPick, setupBotLog } from './dash-bot.js';
 import { loadUpdates, setMyChannel, startPlatformNotices } from './platform-notices.js';
 import { noAffiliate, setAffiliate } from './affiliate.js';
+import { renderPoints, setupPoints } from './points-page.js';
 import { renderYoutube } from './youtube-connect.js';
 import { LAYERS, MODULES, layerName, moduleUrl } from './overlay-modules.js';
 
@@ -575,9 +576,10 @@ function setupShell() {
     try { await navigator.clipboard.writeText(input.value); toast('Adresse kopiert – in OBS als Browserquelle einfügen.', 'ok'); }
     catch { input.select(); }
   });
-  $('#points-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-points-open]');
-    if (btn) POINTS_OPEN[btn.dataset.pointsOpen]?.();
+  // Seite Kanalpunkte (js/points-page.js)
+  setupPoints({
+    state, toast, germanError, setPage, streamerName,
+    open: { wheel: () => openWheelEdit(), prank: () => openPrank(), bingo: () => openBingo(), extra: (k) => openExtra(k) },
   });
 }
 
@@ -1261,6 +1263,7 @@ async function chooseChannel() {
   Object.assign(state, { platform: res.platform, channel: res.channel });
   setChannel(res.channel, res.platform);
   setAffiliate(res.channel?.affiliate ?? null); // Kanal ohne Twitch-Affiliate: Hinweise statt Kanalpunkte (js/affiliate.js)
+  if (document.querySelector('.page[data-page="points"]:not([hidden])')) renderPoints();
   if (!res.platform) return;
   rememberChannel(res.channel && !res.channel.is_default ? res.channel.login || res.channel.id : null);
   // Link zum Teilen in der Adresszeile
@@ -8432,71 +8435,6 @@ function renderWatchImport(info) {
     }
   });
   box.replaceChildren(h('div', { class: 'watch-import-row' }, ...parts, pick), file, msg);
-}
-
-// ============================================================
-// Kanalpunkte: alle Belohnungen auf einen Blick, Kosten im jeweiligen Fenster
-// ============================================================
-const POINTS_OPEN = {
-  wheel: () => openWheelEdit(),
-  prank: () => openPrank(),
-  tts: () => openExtra('tts'),
-  cards: () => openExtra('cards'),
-  bingo: () => openBingo(),
-};
-
-async function renderPoints() {
-  const list = $('#points-list');
-  const t = state.twitch;
-  const rewards = await listRewards().catch(() => []);
-  const byKey = Object.fromEntries((rewards ?? []).map((r) => [r.key, r]));
-  const s = state.prank.settings ?? {};
-  const rows = [
-    { key: 'wheel', icon: '🎡', title: t.reward_title ?? 'Glücksrad', cost: t.reward_cost ?? 10000, on: !!t.reward_active, text: 'Zuschauer drehen das Fortnite-Glücksrad.' },
-    state.prank.on && { key: 'prank', icon: '🍅', title: 'Ärgere den Streamer', cost: s.throw_cost ?? s.reward_cost ?? null, on: s.enabled !== false && !!t.connected, text: 'Werfen und Sounds per Kanalpunkte.' },
-    { key: 'tts', icon: '🔊', title: byKey.tts?.title ?? 'Nachricht vorlesen', cost: byKey.tts?.cost ?? null, on: !!byKey.tts?.enabled && !!byKey.tts?.reward_id, text: 'Eine Nachricht wird im Stream vorgelesen.' },
-    { key: 'cards', icon: '🃏', title: byKey.cards?.title ?? 'Sammelkarten-Pack', cost: byKey.cards?.cost ?? null, on: !!byKey.cards?.enabled && !!byKey.cards?.reward_id, text: 'Zuschauer öffnen ein Pack Stream-Sammelkarten.' },
-    state.bingo.on && { key: 'bingo', icon: '🎯', title: 'Bingo-Tipprunde', cost: null, on: !!t.connected, text: 'Twitch-Vorhersage: Zuschauer setzen eigene Punkte auf eine Bingo-Reihe.', button: 'Bingo öffnen' },
-  ].filter(Boolean);
-  // Titel von Twitch tragen oft schon ein Emoji – das Symbol steht daneben
-  const plain = (text) => String(text ?? '').replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, '');
-  list.replaceChildren(...rows.map((r) => {
-    const card = document.createElement('article');
-    card.className = 'dash-card';
-    const head = document.createElement('header');
-    head.className = 'dash-card-head';
-    const ico = document.createElement('span');
-    ico.className = 'dash-ico';
-    ico.textContent = r.icon;
-    const box = document.createElement('div');
-    const h = document.createElement('h2');
-    h.textContent = plain(r.title);
-    const st = document.createElement('span');
-    st.className = `pt-state${r.on ? ' is-on' : ''}`;
-    st.textContent = r.on ? 'Aktiv auf Twitch' : t.connected ? 'Aus' : 'Twitch nicht verbunden';
-    box.append(h, st);
-    head.append(ico, box);
-    const cost = document.createElement('p');
-    cost.className = 'pt-cost';
-    if (r.cost != null) {
-      cost.textContent = Number(r.cost).toLocaleString('de-DE');
-      const small = document.createElement('small');
-      small.textContent = 'Kanalpunkte';
-      cost.append(small);
-    } else {
-      cost.textContent = r.key === 'bingo' ? 'Eigener Einsatz' : '–';
-    }
-    const text = document.createElement('p');
-    text.className = 'dash-status';
-    text.textContent = r.text;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn--outline btn--sm';
-    btn.dataset.pointsOpen = r.key;
-    btn.textContent = r.button ?? 'Kosten & Einstellungen ›';
-    card.append(head, cost, text, btn);
-    return card;
-  }));
 }
 
 // ============================================================

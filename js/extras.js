@@ -57,3 +57,5 @@ export function obsStatus() {
 }
 // Kanalpunkte-Belohnungen Vorlesen und Karten-Pack (für die Übersicht im Dashboard)
 export const listRewards = async () => (X.api ? X.api.rewards.list() : []);
+// Seite Kanalpunkte (js/points-page.js): alle Stellen, an denen Belohnungen gespeichert sind
+export const extrasApi = () => (X.api ??= createExtrasApi(X.ctx.state.api));
