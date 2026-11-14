@@ -290,6 +290,8 @@ async function createSupabaseApi({ memory = false } = {}) {
     async consoleGet() { return unwrap(await sb.rpc('console_get')); },
     async consoleSave(keys, display) { return unwrap(await sb.rpc('console_save', { p_keys: keys, p_display: display })); },
     async consoleKitSave(kit) { return unwrap(await sb.rpc('console_kit_save', { p_kit: kit })); },
+    // Twitch-Aktion oder Webhook einer gespeicherten Taste (…_console_actions.sql, Edge Function stream-tools)
+    async consoleRun(key, step = null) { return invoke('stream-tools', { action: 'console_run', key, step }); },
     // 3D-Modell im privaten Bucket console-private (…_console_kit.sql); null = noch keins
     async consoleModelGet() {
       const { data, error } = await sb.storage.from('console-private').download('model.obj');
@@ -1747,11 +1749,27 @@ function createLocalApi() {
     async consoleSave(keys, display) {
       await requireAdmin();
       if (!Array.isArray(keys) || keys.length > 9) throw new Error('Die Tasten fehlen oder es sind mehr als 9.');
-      const ok = (k) => k && typeof k === 'object' && /^(none|scene|spin|sound|alert|guard|page)$/.test(k.action ?? '')
-        && String(k.arg ?? '').length <= 64 && String(k.label ?? '').length <= 24 && String(k.icon ?? '').length <= 8 && /^(|#[0-9a-fA-F]{6})$/.test(k.color ?? '');
+      // wie console_key_ok (…_console_actions.sql)
+      const ACT = /^(none|scene|spin|sound|alert|guard|page|obs_scene|obs_mute|obs_stream|obs_record|obs_replay|sb_action|twitch_marker|twitch_clip|twitch_chat|twitch_ad|twitch_poll|webhook|macro)$/;
+      const base = (k) => k && typeof k === 'object' && ACT.test(k.action ?? '') && String(k.arg ?? '').length <= 64
+        && String(k.text ?? '').length <= 300 && /^(|https:\/\/[^\s<>"]{3,292})$/.test(k.url ?? '');
+      const step = (k) => base(k) && !['macro', 'none'].includes(k.action) && (k.wait === undefined || (typeof k.wait === 'number' && k.wait >= 0 && k.wait <= 10000));
+      const ok = (k) => base(k) && String(k.label ?? '').length <= 24 && String(k.icon ?? '').length <= 8 && /^(|#[0-9a-fA-F]{6})$/.test(k.color ?? '')
+        && (k.steps === undefined || (Array.isArray(k.steps) && k.steps.length <= 8 && k.steps.every(step)));
       if (!keys.every(ok)) throw new Error('Eine Taste ist ungültig belegt.');
       store.set('console_config', { ...store.get('console_config', {}), keys, display: display ?? {}, updated_by: this.raw.name(), updated_at: new Date().toISOString() });
       return this.consoleGet();
+    },
+    // Demo: Twitch und Webhooks gibt es hier nicht – so tun, als hätte es geklappt
+    async consoleRun(key, step = null) {
+      await requireAdmin();
+      const k = store.get('console_config', {}).keys?.[key];
+      const one = step === null ? k : k?.steps?.[step];
+      if (!one?.action) throw new Error('Diese Taste ist nicht gespeichert – erst speichern, dann drücken.');
+      const text = { twitch_marker: '📍 Marker gesetzt (Demo)', twitch_clip: '🎬 Clip erstellt (Demo)', twitch_chat: '💬 Nachricht im Chat (Demo)',
+        twitch_ad: '📺 Werbung läuft (Demo)', twitch_poll: '📊 Umfrage läuft (Demo)', webhook: '🔗 Webhook aufgerufen (Demo)' }[one.action];
+      if (!text) throw new Error('Diese Aktion läuft nicht über den Server.');
+      return { ok: true, text };
     },
     async consoleKitSave(kit) {
       await requireAdmin();

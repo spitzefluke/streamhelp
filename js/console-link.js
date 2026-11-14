@@ -73,3 +73,36 @@ export function openLink(api, topic) {
     close() { close(); for (const s of listeners.values()) s.clear(); statusCbs.clear(); },
   };
 }
+
+// Eine Verbindung je Thema und Anmeldung teilen: Laufen in einer Seite mehrere Teile mit Bridge-Zugriff
+// (App console.html: Tasten und Touch-Simulator), würde ein zweiter Beitritt zum selben Realtime-Kanal den
+// ersten schließen. Jeder Teil bekommt eine eigene Hülle; close() löst nur seine Listener, die Verbindung
+// endet mit der letzten Hülle.
+const shared = new WeakMap(); // api → Map(Thema → { link, refs })
+export function shareLink(api, topic) {
+  let byTopic = shared.get(api);
+  if (!byTopic) shared.set(api, (byTopic = new Map()));
+  let entry = byTopic.get(topic);
+  if (!entry) byTopic.set(topic, (entry = { link: openLink(api, topic), refs: 0 }));
+  entry.refs += 1;
+  const base = entry.link;
+  const offs = new Set();
+  let closed = false;
+  const track = (off) => { offs.add(off); return () => { offs.delete(off); off(); }; };
+  return {
+    topic,
+    get status() { return base.status; },
+    onStatus: (cb) => track(base.onStatus(cb)),
+    on: (event, cb) => track(base.on(event, cb)),
+    send: (event, payload) => base.send(event, payload),
+    request: (type, arg, timeout) => base.request(type, arg, timeout),
+    close() {
+      if (closed) return;
+      closed = true;
+      for (const off of offs) off();
+      offs.clear();
+      entry.refs -= 1;
+      if (entry.refs <= 0 && byTopic.get(topic) === entry) { byTopic.delete(topic); base.close(); }
+    },
+  };
+}

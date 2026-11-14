@@ -1,0 +1,22 @@
+{
+  "id": "./console.html",
+  "name": "StreamHelp Console",
+  "short_name": "Console",
+  "description": "Tasten belegen, Touch-Display einstellen und OBS verbinden – die App zur StreamHelp Console.",
+  "lang": "de",
+  "start_url": "./console.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0d13",
+  "theme_color": "#0a0d13",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Tasten", "url": "./console.html#keys" },
+    { "name": "Touch-Display", "url": "./console.html#touch" },
+    { "name": "OBS & Geräte", "url": "./console.html#obs" }
+  ]
+}

@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vojPLBUx1j4/3AVzt8Tv+gDudKcjW3/orqKMfgzkxgs=' 'sha256-hAjAG7/H473f4Bv96TQP7zXp4Re3JI17H4RAmxPVbJA='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bXxgNBB3gMe9Yh0MPuXNslcQ9oufaiIPijZwFMCGyM4=' 'sha256-hAjAG7/H473f4Bv96TQP7zXp4Re3JI17H4RAmxPVbJA='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
@@ -17,11 +17,11 @@
   <script type="importmap">{
     "imports": {
       "./js/a11y.js": "./js/a11y.js?v=2e8e03ec6d",
-      "./js/admin.js": "./js/admin.js?v=878a109e40",
+      "./js/admin.js": "./js/admin.js?v=b6532b3765",
       "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
-      "./js/api.js": "./js/api.js?v=31953ba936",
+      "./js/api.js": "./js/api.js?v=2e2f2c1fc5",
       "./js/app.js": "./js/app.js?v=bb4feb2864",
       "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
       "./js/avatar.js": "./js/avatar.js?v=136eccd608",
@@ -34,25 +34,27 @@
       "./js/channel.js": "./js/channel.js?v=9ca5d517e8",
       "./js/config.js": "./js/config.js?v=9983d070cb",
       "./js/consent.js": "./js/consent.js?v=c698a67e69",
-      "./js/console-bridge-page.js": "./js/console-bridge-page.js?v=3010f23352",
-      "./js/console-bridge.js": "./js/console-bridge.js?v=e39cacfe99",
-      "./js/console-link.js": "./js/console-link.js?v=27b5b54789",
+      "./js/console-app.js": "./js/console-app.js?v=c178b41937",
+      "./js/console-bridge-page.js": "./js/console-bridge-page.js?v=e8b1b05fc2",
+      "./js/console-bridge.js": "./js/console-bridge.js?v=c37aa02f23",
+      "./js/console-light.js": "./js/console-light.js?v=9ed9349100",
+      "./js/console-link.js": "./js/console-link.js?v=3d09046173",
       "./js/console-touch-draw.js": "./js/console-touch-draw.js?v=ffcbfc14e2",
       "./js/console-touch-page.js": "./js/console-touch-page.js?v=07a19c470d",
       "./js/console-touch-saver.js": "./js/console-touch-saver.js?v=793d14eeb4",
       "./js/console-touch.js": "./js/console-touch.js?v=b6eab9539d",
       "./js/dash-artist.js": "./js/dash-artist.js?v=28e15868ab",
       "./js/dash-bot.js": "./js/dash-bot.js?v=bde73c8184",
-      "./js/dash-console-3d.js": "./js/dash-console-3d.js?v=345361bc02",
+      "./js/dash-console-3d.js": "./js/dash-console-3d.js?v=bcfad86578",
       "./js/dash-console-ads.js": "./js/dash-console-ads.js?v=99dc09defa",
-      "./js/dash-console-kit.js": "./js/dash-console-kit.js?v=04a8cff103",
+      "./js/dash-console-kit.js": "./js/dash-console-kit.js?v=e9bb600a42",
       "./js/dash-console-manual.js": "./js/dash-console-manual.js?v=b74d2c0b45",
       "./js/dash-console-rear.js": "./js/dash-console-rear.js?v=13223a0473",
       "./js/dash-console-spec.js": "./js/dash-console-spec.js?v=0dae1af8e8",
       "./js/dash-console-survey.js": "./js/dash-console-survey.js?v=5ab919de44",
       "./js/dash-console-tips.js": "./js/dash-console-tips.js?v=ea2871823b",
-      "./js/dash-console-touch.js": "./js/dash-console-touch.js?v=2a2568ff4d",
-      "./js/dash-console.js": "./js/dash-console.js?v=4b75ec3958",
+      "./js/dash-console-touch.js": "./js/dash-console-touch.js?v=df53ee98fb",
+      "./js/dash-console.js": "./js/dash-console.js?v=62cba325ca",
       "./js/dash-discord.js": "./js/dash-discord.js?v=9526da96a9",
       "./js/dash-money.js": "./js/dash-money.js?v=27c4d95119",
       "./js/dash-network.js": "./js/dash-network.js?v=fec34b21f7",
@@ -135,6 +137,7 @@
       "./js/social-icons.js": "./js/social-icons.js?v=5a363186bc",
       "./js/sponsor-files.js": "./js/sponsor-files.js?v=b7abefe613",
       "./js/sponsoring.js": "./js/sponsoring.js?v=d8e9a77942",
+      "./js/streamerbot-ws.js": "./js/streamerbot-ws.js?v=287dd78a17",
       "./js/supabase-js.js": "./js/supabase-js.js?v=397c32fbeb",
       "./js/theme-packs.js": "./js/theme-packs.js?v=90faabe1ce",
       "./js/ticker.js": "./js/ticker.js?v=f42d43ff2c",
@@ -169,6 +172,7 @@
     <div class="brg-pills">
       <span id="brg-link" class="brg-pill">StreamHelp …</span>
       <span id="brg-obs" class="brg-pill">OBS …</span>
+      <span id="brg-sb-pill" class="brg-pill">Streamer.bot aus</span>
       <span id="brg-device" class="brg-pill">Gerät …</span>
     </div>
     <p id="brg-summary" class="brg-summary">Warte auf OBS …</p>
@@ -186,6 +190,21 @@
         <button type="button" class="brg-btn brg-btn--ghost" id="brg-forget">Gemerktes Passwort löschen</button>
       </div>
       <p id="brg-msg" class="brg-msg" role="alert"></p>
+    </form>
+
+    <form id="brg-sb" class="brg-card" autocomplete="off">
+      <h2>Streamer.bot verbinden <small>(freiwillig)</small></h2>
+      <p class="brg-hint">Damit Console-Tasten Streamer.bot-Aktionen starten – auch Spotify, Musik, Lichter und alles andere, was Streamer.bot kann. In Streamer.bot: Servers/Clients → WebSocket Server → „Auto Start“ und „Start Server“. Port steht dort (Standard 8080), Passwort nur, wenn „Authentication“ an ist.</p>
+      <div class="brg-row">
+        <label>Port<input name="port" inputmode="numeric" maxlength="5" value="8080"></label>
+        <label class="brg-grow">Passwort<input name="password" type="password" autocomplete="off" placeholder="nur bei Authentication"></label>
+      </div>
+      <label class="brg-check"><input type="checkbox" name="remember" checked> Verbindung merken (Passwort verschlüsselt in diesem Browser)</label>
+      <div class="brg-row">
+        <button type="submit" class="brg-btn">Verbinden</button>
+        <button type="button" class="brg-btn brg-btn--ghost" id="brg-sb-off">Trennen und vergessen</button>
+      </div>
+      <p id="brg-sb-msg" class="brg-msg" role="alert"></p>
     </form>
 
     <section id="brg-demo" class="brg-card" hidden>

@@ -239,6 +239,7 @@ export async function mountConsole3d(host, { objText, keys, onKey, onScreen }) {
     if (!host.isConnected) { disposeConsole3d(); return; }
     stepBox();
     stepFly();
+    stepLeds();
     stepPress();
     hoverStep();
     controls.update();
@@ -306,6 +307,37 @@ export function colorKeys(keys) {
       parts.face.material.emissive = empty ? new T.Color(0) : c.clone().multiplyScalar(0.35);
     }
   });
+}
+
+// RGB-Licht (js/console-light.js): fn(now) → { bulb: { color, level }, keys: [{ color, level }] } – jedes Bild neu.
+// null schaltet zurück auf die festen Farben (colorKeys, setConsoleLook).
+export function setConsoleLeds(fn) {
+  if (!view) return;
+  view.leds = fn ?? null;
+}
+function stepLeds() {
+  if (!view?.leds || !T) return;
+  const f = view.leds(performance.now());
+  if (!f) return;
+  const c = (view.ledColor ??= new T.Color());
+  f.keys?.forEach((led, i) => {
+    const p = view.keys.get(i);
+    if (!p || !led) return;
+    c.set(led.color);
+    if (p.face) p.face.material.emissive.copy(c).multiplyScalar(0.12 + 0.6 * led.level);
+    if (p.halo) {
+      p.halo.material.color.copy(c);
+      p.halo.visible = led.level > 0.02;
+      p.halo.material.opacity = view.glowOn ? 0.1 + 0.75 * led.level : 0;
+    }
+  });
+  if (f.bulb) {
+    c.set(f.bulb.color);
+    for (const m of view.look.bulb) {
+      m.material.color.copy(c).lerp(view.bulbOff ??= new T.Color(0x3a3d46), 1 - Math.min(1, 0.35 + f.bulb.level));
+      m.material.emissive.copy(c).multiplyScalar(0.05 + 0.9 * f.bulb.level);
+    }
+  }
 }
 
 // Tastendruck: schnell runter (80 ms), federnd zurück (320 ms), dabei kurz hell aufleuchten

@@ -3,7 +3,7 @@
 // die Tasten-Belegung (keys) und die übrigen Display-Werte bleiben dabei unverändert.
 // OBS und Ton im Simulator: über die Bridge am PC (console-bridge.html), wie auf dem echten Gerät.
 import { h } from './extras-core.js';
-import { linkTopic, openLink } from './console-link.js';
+import { linkTopic, shareLink } from './console-link.js';
 import {
   TOUCH_COLORS, TOUCH_DEFAULT, TOUCH_IDLE, TOUCH_PAGES, TOUCH_SIZES, cleanTile, createTouchRunner, mountTouch,
   normalizeTouch, obsOnline, touchActions, touchMaxTiles,
@@ -48,7 +48,7 @@ export async function renderTouchAdmin(slot, deps) {
   }
   saved = normalizeTouch(raw.display?.touch);
   draft = structuredClone(saved);
-  link = openLink(ctx.api, await linkTopic(ctx.api, ctx.channel?.()?.id ?? null));
+  link = shareLink(ctx.api, await linkTopic(ctx.api, ctx.channel?.()?.id ?? null));
   runner = createTouchRunner({ api: ctx.api, extras: ctx.extras, dry: () => !real, link });
   await runner.loadStatic();
   bridgeBox = h('div', { class: 'tch-adm-bridge', 'aria-live': 'polite' });

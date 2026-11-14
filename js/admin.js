@@ -1935,6 +1935,7 @@ async function openConsole() {
     guardActive: guardOn,
     guardSet: async (on) => { csState.guard = await csState.extras.guard.set(on, 0); return guardOn(); },
     show3d: () => setConsoleTab('view3d'),
+    channel: () => csState.channel, // Bridge am PC (OBS, Streamer.bot) für diesen Kanal
   });
 }
 

@@ -24,6 +24,7 @@ export const KIT_PARTS = [
   ] },
   { id: 'bulb', name: 'Ideen-Knopf', options: [
     { id: 'button', name: 'Taster mit LED', eur: 0.6 },
+    { id: 'rgb', name: 'Taster mit RGB-LED (Farbe und Effekte einstellbar)', eur: 0.9 },
     { id: 'encoder', name: 'Drehregler mit Druckfunktion', eur: 1.8 },
   ] },
   { id: 'power', name: 'Strom', options: [

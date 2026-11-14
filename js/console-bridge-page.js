@@ -8,9 +8,12 @@ import { ObsSocket } from './obs-ws.js';
 import { forgetSecret, loadSecret, saveSecret } from './secret-store.js';
 import { linkTopic, openLink } from './console-link.js';
 import { BRIDGE_COMMANDS, createBridge, createDemoObs } from './console-bridge.js';
+import { StreamerbotSocket, createDemoStreamerbot } from './streamerbot-ws.js';
 
 const SECRET = 'zd_console_bridge_obs';
 const PORT_KEY = 'zd_console_bridge_port';
+const SB_SECRET = 'zd_console_bridge_sb';
+const SB_KEY = 'zd_console_bridge_sb_port'; // Port; vorhanden = beim Start verbinden
 const $ = (s) => document.querySelector(s);
 const gate = $('#brg-gate');
 const app = $('#brg-app');
@@ -57,8 +60,10 @@ async function start() {
     s === 'ok' ? 'StreamHelp verbunden' : s === 'connecting' ? 'StreamHelp …' : 'StreamHelp getrennt'));
 
   let obs = api.demo ? createDemoObs() : new ObsSocket();
+  let sb = api.demo ? createDemoStreamerbot() : new StreamerbotSocket();
   const bridge = createBridge({
     link,
+    sb: { get connected() { return sb.connected; }, getActions: () => sb.getActions(), doAction: (id, name) => sb.doAction(id, name) },
     obs: { get connected() { return obs.connected; }, request: (t, d) => obs.request(t, d), get ws() { return obs.ws; }, set onEvent(fn) { obs.onEvent = fn; }, get onEvent() { return obs.onEvent; } },
     onLog: (e) => { log.unshift(e); log.length = Math.min(log.length, 25); paintLog(); },
     onState: (s, seen) => {
@@ -66,6 +71,7 @@ async function start() {
       $('#brg-summary').textContent = s.obs
         ? `${s.scenes.length} Szenen · ${s.inputs.length} Audioquellen · Szene „${s.scene}“${s.stream?.on ? ` · LIVE ${s.stream.time}` : ''}${s.record?.on ? ' · REC' : ''}`
         : (s.error ?? 'Warte auf OBS …');
+      pill($('#brg-sb-pill'), s.sb?.on ? true : null, s.sb?.on ? `Streamer.bot: ${s.sb.actions.length} Aktionen${sb.demo ? ' (Demo)' : ''}` : 'Streamer.bot aus');
       pill($('#brg-device'), seen ? Date.now() - seen < 120_000 : null, seen ? `Gerät zuletzt ${new Date(seen).toLocaleTimeString('de-DE')}` : 'Gerät noch nicht gemeldet');
     },
   });
@@ -125,7 +131,70 @@ async function start() {
       bridge.obsChanged();
     });
   }
-  addEventListener('pagehide', () => bridge.stop());
+  // ---------- Streamer.bot verbinden (freiwillig) ----------
+  const sbForm = $('#brg-sb');
+  const sbMsg = $('#brg-sb-msg');
+  let sbRetry = 0;
+  let sbWanted = false;
+  async function connectSb(password, port, quiet = false) {
+    clearTimeout(sbRetry);
+    sbWanted = true;
+    try {
+      await sb.connect({ password, port: Number(port) || 8080 });
+      sbMsg.textContent = '';
+      sb.onClose = () => {
+        bridge.sbChanged();
+        if (!sbWanted) return;
+        sbMsg.textContent = 'Streamer.bot getrennt – neuer Versuch in 15 Sekunden …';
+        sbRetry = setTimeout(() => connectSb(password, port, true), 15_000);
+      };
+      bridge.sbChanged();
+      return true;
+    } catch (err) {
+      if (!quiet) sbMsg.textContent = err.message;
+      if (quiet && sbWanted) sbRetry = setTimeout(() => connectSb(password, port, true), 30_000);
+      bridge.sbChanged();
+      return false;
+    }
+  }
+  if (sb.demo) {
+    sbForm.hidden = true;
+    bridge.sbChanged();
+  } else {
+    let sbPort = null;
+    try { sbPort = localStorage.getItem(SB_KEY); } catch { /* nur Komfort */ }
+    if (sbPort) {
+      sbForm.port.value = sbPort;
+      let saved = '';
+      try { saved = (await loadSecret(SB_SECRET)) ?? ''; } catch (err) { console.warn('Streamer.bot-Passwort nicht lesbar:', err.message); }
+      connectSb(saved, sbPort, true);
+    }
+    sbForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = sbForm.querySelector('button[type=submit]');
+      btn.disabled = true;
+      const password = sbForm.password.value;
+      const port = sbForm.port.value;
+      const ok = await connectSb(password, port);
+      if (ok && sbForm.remember.checked) {
+        try { localStorage.setItem(SB_KEY, port); } catch { /* nur Komfort */ }
+        if (password) { try { await saveSecret(SB_SECRET, password); } catch (err) { console.warn('Streamer.bot-Passwort nicht gemerkt:', err.message); } }
+      }
+      if (ok) { sbForm.password.value = ''; sbMsg.textContent = 'Verbunden.'; }
+      btn.disabled = false;
+    });
+    $('#brg-sb-off').addEventListener('click', async () => {
+      sbWanted = false;
+      clearTimeout(sbRetry);
+      sb.close();
+      bridge.sbChanged();
+      try { localStorage.removeItem(SB_KEY); } catch { /* nur Komfort */ }
+      try { await forgetSecret(SB_SECRET); } catch (err) { console.warn('Streamer.bot-Passwort nicht gelöscht:', err.message); }
+      sbMsg.textContent = 'Getrennt und vergessen.';
+    });
+  }
+
+  addEventListener('pagehide', () => { sbWanted = false; sb.close?.(); bridge.stop(); });
 }
 
 start().catch((err) => {

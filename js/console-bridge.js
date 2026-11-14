@@ -16,7 +16,9 @@ export const BRIDGE_COMMANDS = {
   stream: 'Stream starten/stoppen',
   record: 'Aufnahme starten/stoppen',
   replay: 'Replay speichern',
+  sb: 'Streamer.bot-Aktion',
 };
+const SB_REFRESH_MS = 30_000; // Liste der Streamer.bot-Aktionen höchstens alle 30 s neu holen
 
 const clampDb = (v) => Math.max(-60, Math.min(0, Math.round(Number(v) * 10) / 10));
 const dur = (ms) => {
@@ -104,9 +106,20 @@ export async function runCommand(obs, state, { type, arg = {} }) {
   }
 }
 
-// Bridge starten: link = openLink(…), obs = ObsSocket (verbunden oder nicht) bzw. Demo-OBS
-export function createBridge({ link, obs, onLog = () => {}, onState = () => {} }) {
+// Streamer.bot-Aktion starten – nur eine, die Streamer.bot selbst gemeldet hat
+export async function runStreamerbot(sb, actions, arg = {}) {
+  const action = actions?.find((a) => a.id === String(arg.id ?? ''));
+  if (!action) throw new Error('Diese Streamer.bot-Aktion gibt es nicht (mehr) – in Streamer.bot aktiviert?');
+  await sb.doAction(action.id, action.name);
+  return `🤖 ${action.name}`;
+}
+
+// Bridge starten: link = openLink(…), obs = ObsSocket (verbunden oder nicht) bzw. Demo-OBS,
+// sb = Streamer.bot (js/streamerbot-ws.js, optional): { connected, getActions(), doAction(id, name) }
+export function createBridge({ link, obs, sb = null, onLog = () => {}, onState = () => {} }) {
   let state = { obs: false };
+  let sbActions = null;
+  let sbAt = 0;
   let timer = 0;
   let pending = 0;
   let lastSeen = 0;
@@ -120,6 +133,16 @@ export function createBridge({ link, obs, onLog = () => {}, onState = () => {} }
       console.warn('Bridge: OBS-Zustand nicht lesbar', err);
       state = { obs: false, error: err.message };
     }
+    // Streamer.bot: Aktionen zwischenspeichern, im Zustand nur Name und Gruppe mitschicken
+    if (sb?.connected) {
+      if (!sbActions || Date.now() - sbAt > SB_REFRESH_MS) {
+        try { sbActions = await sb.getActions(); sbAt = Date.now(); } catch (err) { console.warn('Bridge: Streamer.bot-Aktionen nicht lesbar', err); }
+      }
+      state.sb = { on: true, actions: sbActions ?? [] };
+    } else {
+      sbActions = null;
+      state.sb = { on: false, actions: [] };
+    }
     onState(state, lastSeen);
     Promise.resolve(link.send('state', { ...state, at: Date.now() })).catch((err) => console.warn('Bridge: Zustand nicht gesendet', err));
   }
@@ -131,8 +154,14 @@ export function createBridge({ link, obs, onLog = () => {}, onState = () => {} }
     let ack;
     try {
       if (!Object.hasOwn(BRIDGE_COMMANDS, type)) throw new Error('Unbekannter Befehl.');
-      if (!obs.connected) throw new Error('OBS ist am PC nicht verbunden.');
-      const text = await runCommand(obs, state, { type, arg: c.arg ?? {} });
+      let text;
+      if (type === 'sb') {
+        if (!sb?.connected) throw new Error('Streamer.bot ist am PC nicht verbunden.');
+        text = await runStreamerbot(sb, sbActions, c.arg ?? {});
+      } else {
+        if (!obs.connected) throw new Error('OBS ist am PC nicht verbunden.');
+        text = await runCommand(obs, state, { type, arg: c.arg ?? {} });
+      }
       ack = { id: c.id, ok: true, text };
     } catch (err) {
       ack = { id: c.id, ok: false, text: err.message };
@@ -158,6 +187,7 @@ export function createBridge({ link, obs, onLog = () => {}, onState = () => {} }
       timer = setInterval(refresh, STATE_MS);
     },
     obsChanged() { if (obs.connected) watchObs(); refresh(); },
+    sbChanged() { sbActions = null; refresh(); },
     stop() {
       clearInterval(timer);
       clearTimeout(pending);
