@@ -1680,7 +1680,7 @@ const VIEWS = {
   channels: ['Streamer-Kanäle', 'Neue Streamer melden sich mit Twitch an und warten, bis du sie freischaltest'],
   users: ['Nutzer', 'Alle registrierten Konten'],
   inbox: ['Postfach', 'Kontaktformular der Startseite'],
-  money: ['Pro, Sponsoring, Spenden', 'Start-Checks – Freischalten Schritt für Schritt in STARTKLAR.md'],
+  money: ['Pro, Sponsoring, Spenden', 'Start-Checks – Freischalten Schritt für Schritt in docs/STARTKLAR.md'],
   artists: ['Artists', 'Bewerbungen freischalten und Uploads prüfen'],
   security: ['Sicherheit', 'Datenbank-Check und Anmelde-Möglichkeiten'],
   console: ['StreamHelp Console', 'Tasten belegen, 3D-Modell, Technik-Baukasten, Release-Check, Anleitung und Werbung'],

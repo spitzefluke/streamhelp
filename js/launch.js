@@ -1,4 +1,4 @@
-// Start-Schalter: Was ist schon offen? Umgelegt wird mit node tools/launch.mjs (siehe STARTKLAR.md) – das Skript
+// Start-Schalter: Was ist schon offen? Umgelegt wird mit node tools/launch.mjs (siehe docs/STARTKLAR.md) – das Skript
 // ändert diese Datei und entfernt auf den Rechtsseiten die Hinweise „Noch nicht in Kraft“.
 //   pro         Pro buchen (pro.html), kündigen (kuendigen.html), Pro-Ideen nur noch mit Pro
 //               – braucht in Supabase die Secrets für Stripe und Mail sowie BILLING_OPEN=1

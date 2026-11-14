@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-T+jY/PrHpnBarFrRwuXHu7Nfqg8s97+GKPw8hegW8/0=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-veOQeHtkCIyZRLxwVHUYEOKxI8shLCE0jmhMYM3bCdA=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,7 +21,7 @@
   <script type="importmap">{
     "imports": {
       "./js/a11y.js": "./js/a11y.js?v=2e8e03ec6d",
-      "./js/admin.js": "./js/admin.js?v=b6532b3765",
+      "./js/admin.js": "./js/admin.js?v=8078c02180",
       "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
@@ -108,7 +108,7 @@
       "./js/intro.js": "./js/intro.js?v=30d2b9efea",
       "./js/kuendigen.js": "./js/kuendigen.js?v=9478ee88ee",
       "./js/landing.js": "./js/landing.js?v=1e86762ef9",
-      "./js/launch.js": "./js/launch.js?v=987cad909a",
+      "./js/launch.js": "./js/launch.js?v=cb96388dfe",
       "./js/library.js": "./js/library.js?v=18de8e88ef",
       "./js/look-builder.js": "./js/look-builder.js?v=7fb22ef480",
       "./js/obs-setup.js": "./js/obs-setup.js?v=3ab00b3752",
@@ -137,7 +137,7 @@
       "./js/rexi-sfx.js": "./js/rexi-sfx.js?v=a1036a43c2",
       "./js/screen-holes.js": "./js/screen-holes.js?v=ebb20f0416",
       "./js/secret-store.js": "./js/secret-store.js?v=086d5c4808",
-      "./js/security.js": "./js/security.js?v=f63e349e70",
+      "./js/security.js": "./js/security.js?v=a1ce6f8be8",
       "./js/shop.js": "./js/shop.js?v=fcc50151a8",
       "./js/social-icons.js": "./js/social-icons.js?v=5a363186bc",
       "./js/sponsor-files.js": "./js/sponsor-files.js?v=b7abefe613",
@@ -508,7 +508,7 @@
           <div class="panel-head">
             <div>
               <h2 id="billing-title">Pro &amp; Bezahlung</h2>
-              <p class="panel-sub">Bezahlte Abos über Stripe, „Verträge hier kündigen“ und die Warteliste fürs StreamHelp Pad. Was vor dem Start zu tun ist, steht Schritt für Schritt in <code>STARTKLAR.md</code>.</p>
+              <p class="panel-sub">Bezahlte Abos über Stripe, „Verträge hier kündigen“ und die Warteliste fürs StreamHelp Pad. Was vor dem Start zu tun ist, steht Schritt für Schritt in <code>docs/STARTKLAR.md</code>.</p>
             </div>
           </div>
           <p id="billing-stats" class="panel-sub"></p>
@@ -544,7 +544,7 @@
           <div class="panel-head">
             <div>
               <h2 id="spons-title">Sponsoring-Börse <span id="spons-count" class="count"></span></h2>
-              <p class="panel-sub">Angebote von Firmen (sponsoring.html) prüfen und freigeben. Erst freigegebene Angebote sehen passende Streamer. Bei „Abrechnung über StreamHelp“ hier den Stand pflegen – Zahlungen laufen noch von Hand. <b>Noch geschlossen</b> (Gewerbe in Anmeldung): Firmen und Streamer sehen nur einen Hinweis. Öffnen: <code>node tools/launch.mjs --sponsoring</code> und das Supabase-Secret <code>SPONSORING_OPEN=1</code> (siehe STARTKLAR.md).</p>
+              <p class="panel-sub">Angebote von Firmen (sponsoring.html) prüfen und freigeben. Erst freigegebene Angebote sehen passende Streamer. Bei „Abrechnung über StreamHelp“ hier den Stand pflegen – Zahlungen laufen noch von Hand. <b>Noch geschlossen</b> (Gewerbe in Anmeldung): Firmen und Streamer sehen nur einen Hinweis. Öffnen: <code>node tools/launch.mjs --sponsoring</code> und das Supabase-Secret <code>SPONSORING_OPEN=1</code> (siehe docs/STARTKLAR.md).</p>
             </div>
             <label class="inbox-filter"><input type="checkbox" id="spons-all"> Alle Angebote zeigen</label>
           </div>

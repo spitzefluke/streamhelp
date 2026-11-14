@@ -155,7 +155,7 @@ async function paintMfa(c) {
       paintMfa(c);
     });
     c.body.replaceChildren(
-      h('p', { class: 'form-hint' }, 'Handy verloren? Melde dich auf einem anderen Gerät an, solange du noch angemeldet bist, und schalte 2FA hier aus. Sonst hilft der Plattform-Admin (siehe NOTFALLPLAN.md).'),
+      h('p', { class: 'form-hint' }, 'Handy verloren? Melde dich auf einem anderen Gerät an, solange du noch angemeldet bist, und schalte 2FA hier aus. Sonst hilft der Plattform-Admin (siehe docs/NOTFALLPLAN.md).'),
       h('div', { class: 'dash-actions' }, off));
     return;
   }
