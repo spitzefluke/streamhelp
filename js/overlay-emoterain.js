@@ -7,11 +7,15 @@
 //   Eigene Emotes                 aus dem Emote-Editor („Im Stream benutzen“, Migration …_channel_emotes.sql): Ihr
 //                                 Code-Wort zählt wie ein Twitch-Emote – „!regen ggstempel“ (auch vom Bot), Combo,
 //                                 einzelne Tropfen. Sie müssen nicht bei Twitch hochgeladen sein.
+//   Gekauft                       mit Kanalpunkten („🌧️ Emote-Regen“) oder Bits im Twitch-Panel (…_emote_rain_shop.sql):
+//                                 kommt über core.emote_rain_events (Realtime, zur Sicherheit alle 15 s nachgesehen)
+//                                 und regnet extra kräftig, mit Namen oben. Ohne gewähltes Emote: die eigenen Emotes
+//                                 des Kanals und die zuletzt im Chat benutzten.
 // Parameter: ercmd=regen  erwho=all|subs|mods  ercool=30 (s)  ercombo=5 (0 = aus)  erall=1  ermax=40  ersize=100
 // Testmodus (test=1): alle paar Sekunden ein Probe-Regen.
 import { EMOTE_URL, connectTwitchChat } from './twitch-chat.js';
 import { CONFIG } from './config.js';
-import { channelHeaders } from './channel.js';
+import { channelHeaders, rtSpec } from './channel.js';
 
 const COMBO_WINDOW_MS = 8000;
 const COMBO_COOLDOWN_MS = 20_000;
@@ -21,6 +25,8 @@ const RECENT = 12;
 const TEST_EMOTES = [{ id: '25', name: 'Kappa' }, { id: '9', name: '<3' }, { id: '30259', name: 'HeyGuys' }, { id: '425618', name: 'LUL' }];
 const FALLBACK = ['💜', '✨', '🎉', '⭐'];
 const CUSTOM_REFRESH_MS = 120_000;
+const BOUGHT_POLL_MS = 15_000;
+const BOUGHT_MAX_AGE_MS = 90_000; // ältere Käufe (Overlay war aus) nicht nachholen
 
 // Eigene Emotes des Kanals: code → Bild-Adresse (Demo-Modus: aus dem Browser-Speicher des Editors)
 async function loadCustomEmotes() {
@@ -54,7 +60,7 @@ export function readEmoteRain({ flag, number, params }) {
   };
 }
 
-export function setupEmoteRain(cfg, { channel, test }) {
+export function setupEmoteRain(cfg, { channel, test, client = null }) {
   const layer = document.createElement('div');
   layer.className = 'ov-erain';
   layer.setAttribute('aria-hidden', 'true');
@@ -144,6 +150,65 @@ export function setupEmoteRain(cfg, { channel, test }) {
     }
   }
 
+  // ---------- Gekaufter Regen (Kanalpunkte, Bits, Probe aus dem Dashboard) ----------
+  const banner = document.createElement('div');
+  banner.className = 'er-buyer';
+  banner.hidden = true;
+  document.body.append(banner);
+  let bannerTimer = 0;
+  function showBuyer(ev) {
+    const who = String(ev.by_name ?? '').slice(0, 40);
+    banner.textContent = `🌧️ ${ev.source === 'test' ? 'Probe-Regen' : who}${ev.source === 'bits' ? ' 💎' : ''}`;
+    banner.hidden = false;
+    banner.classList.remove('is-in');
+    void banner.offsetWidth; // Animation neu starten
+    banner.classList.add('is-in');
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { banner.hidden = true; }, 4500);
+  }
+  const done = new Set();
+  let lastId = 0;
+  function bought(ev) {
+    const id = Number(ev?.id);
+    if (!Number.isFinite(id) || done.has(id)) return;
+    done.add(id);
+    lastId = Math.max(lastId, id);
+    if (Date.now() - (Date.parse(ev.created_at) || Date.now()) > BOUGHT_MAX_AGE_MS) return;
+    const codes = Array.isArray(ev.codes) ? ev.codes.map((c) => String(c).toLowerCase()) : [];
+    let list = codes.map((c) => custom.get(c) ?? recent.find((r) => String(r.name ?? '').toLowerCase() === c)).filter(Boolean);
+    if (!list.length) list = [...custom.values(), ...recent.slice(-6)];
+    if (!list.length) list = TEST_EMOTES;
+    rain(list, Math.min(150, Math.round(cfg.max * 1.5)));
+    showBuyer(ev);
+  }
+  let rt = null;
+  let pollTimer = 0;
+  if (client) {
+    const COLS = 'id, source, by_name, codes, created_at';
+    // Nur, was ab jetzt gekauft wird
+    let ready = false;
+    client.from('emote_rain_events').select('id').order('id', { ascending: false }).limit(1)
+      .then(({ data }) => { lastId = Math.max(lastId, Number(data?.[0]?.id) || 0); ready = true; }, () => { ready = true; });
+    rt = client.channel('overlay-erain')
+      .on('postgres_changes', rtSpec('emote_rain_events', 'INSERT'), (p) => bought(p.new))
+      .subscribe((status) => { if (status === 'CHANNEL_ERROR') console.error('Overlay: Realtime-Kanal für den Emote-Regen fehlgeschlagen'); });
+    pollTimer = setInterval(() => {
+      if (!ready) return;
+      client.from('emote_rain_events').select(COLS).gt('id', lastId).order('id').limit(5)
+        .then(({ data }) => (data ?? []).forEach(bought), () => {});
+    }, BOUGHT_POLL_MS);
+  }
+
+  // Demo-Modus (ohne Supabase): Probe-Regen aus dem Dashboard im selben Browser (localStorage)
+  const onStorage = (e) => {
+    if (e.key !== 'zd_emote_rain_events' || !e.newValue) return;
+    try { (JSON.parse(e.newValue) ?? []).forEach((ev) => { if (Number(ev?.id) > lastId) bought(ev); }); } catch { /* kaputter Eintrag: überspringen */ }
+  };
+  if (!client && !CONFIG.SUPABASE_URL) {
+    try { lastId = Math.max(0, ...(JSON.parse(localStorage.getItem('zd_emote_rain_events')) ?? []).map((ev) => Number(ev?.id) || 0)); } catch { lastId = 0; }
+    window.addEventListener('storage', onStorage);
+  }
+
   const stop = channel ? connectTwitchChat(channel, { message: onMessage }) : () => {};
   let timer = 0;
   if (test) {
@@ -151,5 +216,10 @@ export function setupEmoteRain(cfg, { channel, test }) {
     rain(testList(), Math.round(cfg.max / 2));
     timer = setInterval(() => rain(testList(), Math.round(cfg.max / 2)), 7000);
   }
-  return () => { stop(); clearInterval(timer); clearInterval(customTimer); layer.remove(); };
+  return () => {
+    stop(); clearInterval(timer); clearInterval(customTimer); clearInterval(pollTimer); clearTimeout(bannerTimer);
+    if (rt) client.removeChannel(rt);
+    window.removeEventListener('storage', onStorage);
+    layer.remove(); banner.remove();
+  };
 }

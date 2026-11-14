@@ -324,6 +324,18 @@
   100% { transform: translate3d(var(--er-sway, 0), 128vh, 0) rotate(var(--er-rot, 0deg)); opacity: .2; }
 }
 
+/* Gekaufter Regen: Name oben in der Mitte */
+.er-buyer {
+  position: fixed; top: 4vh; left: 50%; z-index: 61; transform: translateX(-50%); pointer-events: none;
+  padding: .45em 1.1em; border-radius: 999px; font: 800 clamp(18px, 2.6vw, 34px)/1.2 var(--font-display, system-ui, sans-serif);
+  color: #fff; background: linear-gradient(135deg, rgba(124, 92, 255, .92), rgba(53, 199, 255, .88));
+  box-shadow: 0 .4em 1.6em rgba(0, 0, 0, .45); white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+}
+.er-buyer[hidden] { display: none; }
+.er-buyer.is-in { animation: er-buyer-in .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes er-buyer-in { from { opacity: 0; transform: translate(-50%, -60%) scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .er-buyer.is-in { animation: none; } }
+
 /* ---------- Zuschauer-Wette ---------- */
 .ov-x-bet { --c: #ff8c32; font-size: calc(16px * var(--bts, 1)); width: 19em; border-color: rgba(255, 140, 50, .55); }
 .bto-time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: #ffc48f; }

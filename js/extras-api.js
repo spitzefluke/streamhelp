@@ -326,6 +326,15 @@ function liveExtras({ sb, unwrap, invoke }) {
       pause: (on) => rpc('sound_sales_pause', { p_on: on }),
     },
 
+    // ---------- Emote-Regen kaufen: Kanalpunkte und Bits (…_emote_rain_shop.sql) ----------
+    rainShop: {
+      get: () => rpc('emote_rain_shop_get'),
+      set: ({ points, cost, cooldown, bits, sku }) =>
+        rpc('emote_rain_shop_set', { p_points: points, p_cost: cost, p_cooldown: cooldown, p_bits: bits, p_sku: sku }),
+      sync: () => invoke('stream-tools', { action: 'rain_sync' }),
+      test: () => rpc('emote_rain_test'),
+    },
+
     // ---------- Kanalpunkte (Vorlesen, Karten-Pack) ----------
     rewards: {
       list: async () => unwrap(await sb.from('stream_rewards').select('*').order('key')),
@@ -1577,6 +1586,32 @@ function demoExtras({ store, me, name, isAdmin, requireAdmin }) {
           sales_paused_at: keep ? p.sales_paused_at : on ? now() : null,
         });
         return this.status();
+      },
+    },
+
+    // Demo: kein echtes Overlay meldet sich; der Probe-Regen geht übers Overlay im selben Browser
+    rainShop: {
+      async get() {
+        await requireAdmin();
+        return { points: false, points_cost: 1000, points_cooldown: 60, bits: false, bits_sku: 'action_100', reward_id: null, synced_at: null, error: '',
+          ...store.get('emote_rain_shop', {}), live: false };
+      },
+      async set({ points, cost, cooldown, bits, sku }) {
+        await requireAdmin();
+        store.set('emote_rain_shop', {
+          ...store.get('emote_rain_shop', {}),
+          points: !!points, points_cost: Math.min(1000000, Math.max(1, Number(cost) || 1000)),
+          points_cooldown: Math.min(604800, Math.max(0, Number(cooldown) || 0)), bits: !!bits,
+          bits_sku: ['action_50', 'action_100', 'action_250', 'action_500'].includes(sku) ? sku : 'action_100',
+        });
+        return this.get();
+      },
+      async sync() { throw new Error('Im Demo-Modus gibt es keine Kanalpunkte – dafür Supabase und Twitch verbinden.'); },
+      async test() {
+        await requireAdmin();
+        const ev = { id: nextId++, source: 'test', by_name: 'Test', codes: [], created_at: now() };
+        store.set('emote_rain_events', [...store.get('emote_rain_events', []), ev].slice(-10));
+        return { ok: true, live: false };
       },
     },
 

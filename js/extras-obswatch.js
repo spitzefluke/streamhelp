@@ -18,6 +18,8 @@ export const obsWatch = {
         h('b', {}, '🔊 OBS & Soundkäufe'),
         h('small', {}, 'Ohne OBS hört niemand die Sounds, die Zuschauer kaufen. Pausiert: Die Twitch-Erweiterung bietet keine Sounds und keine Bits-Käufe mehr an, Kanalpunkte für Sounds gehen zurück. Das dürfen der Streamer und alle freigegebenen Mods.'),
         h('p', { class: 'x-obswatch-obs', 'data-obswatch-obs': '' }),
+        // Welche Overlay-Ebenen laufen? Ohne laufende Ebene sind die Käufe dazu gesperrt (…_emote_rain_shop.sql)
+        h('p', { class: 'form-hint', 'data-obswatch-layers': '', hidden: true }),
         h('p', { class: 'x-guard-state', 'data-obswatch-state': '' }),
         h('div', { class: 'x-inline' },
           h('button', { class: 'btn btn--primary btn--sm', type: 'button', 'data-obswatch-toggle': '', onclick: (e) => this.toggle(e.currentTarget) }, 'Soundkäufe pausieren')),
@@ -125,6 +127,13 @@ export const obsWatch = {
     box.classList.toggle('is-active', paused);
     box.classList.toggle('is-offline', this.on && !d.online);
     $('[data-obswatch-obs]', box).textContent = this.on ? this.obsText(d) : '';
+    const layers = $('[data-obswatch-layers]', box);
+    layers.hidden = !this.on || !d.layers;
+    if (!layers.hidden) {
+      const mark = (on) => (on ? '✓' : '✗');
+      layers.textContent = `Im Overlay: 🔊 Ärgern ${mark(d.layers.prank)} · 🌧️ Emote-Regen ${mark(d.layers.erain)} · 🦖 Haustier ${mark(d.layers.pet)}`
+        + ' – was nicht läuft, kann gerade niemand kaufen.';
+    }
     $('[data-obswatch-state]', box).textContent = !this.on ? '' : paused
       ? `⏸️ Pausiert seit ${timeOf(d.paused_at)} Uhr${d.paused_by ? ` (${d.paused_by})` : ''}.`
       : 'Soundkäufe laufen normal.';

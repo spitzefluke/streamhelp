@@ -454,6 +454,9 @@ button.xcard:hover { transform: translateY(-3px); }
 .er-hero > :not(.er-sky) { position: relative; z-index: 1; }
 .er-sky { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .75; }
 .er-how { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; color: var(--text-2, var(--muted)); text-align: left; }
+.er-shop-form { display: grid; gap: 10px; }
+.er-shop-form .x-row .field { flex: 1 1 8em; }
+.er-live { margin: 0 0 8px; font-weight: 600; }
 .er-hero > .btn { justify-self: start; }
 .er-preview-drop { position: absolute; top: -40px; font-size: 26px; animation: er-preview-fall linear forwards; }
 @keyframes er-preview-fall { to { transform: translateY(320px) rotate(220deg); opacity: .2; } }

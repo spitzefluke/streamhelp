@@ -468,14 +468,14 @@ async function start() {
   if (opt.chat) setupChat(source);
   setupOverlayExtras({ params, position, flag, number, place, opt, client: source.client ?? null, editTests });
   setupOverlayStage({ params, position, flag, number, text, place, opt, source, streamer: STREAMER, onAlerts: (cb) => onAlerts(source, cb) });
-  // Emote-Regen (js/overlay-emoterain.js): liest den Chat selbst mit
+  // Emote-Regen (js/overlay-emoterain.js): liest den Chat selbst mit; gekaufte Regen kommen aus der Datenbank
   const erain = readEmoteRain({ flag, number, params });
-  if (erain) setupEmoteRain(erain, { channel: STREAMER.login, test: opt.test });
+  if (erain) setupEmoteRain(erain, { channel: STREAMER.login, test: opt.test, client: source.client ?? null });
   if (LIVE) watchOverlayConfig(source);
   watchOverlayGate(); // pausiert oder „Alle neu laden“ im Admin-Bereich
   startWatchtime();
   startUsageReports();
-  startObsPing();
+  startObsPing([opt.prank && 'prank', erain && 'erain', opt.pet && 'pet'].filter(Boolean));
   if (!opt.edit) watchForUpdate();
 }
 
@@ -529,19 +529,30 @@ function startUsageReports() {
   });
 }
 
-// „OBS verbunden“ fürs Dashboard (Migration …_obs_sound_pause.sql): Nur eine echte Browserquelle in OBS
-// (window.obsstudio) meldet sich – die Vorschau auf der Webseite nicht. Ohne Meldung sehen Streamer und
-// Mods im Dashboard „OBS nicht verbunden“ und können die Soundkäufe pausieren.
+// „OBS verbunden“ fürs Dashboard (Migration …_obs_sound_pause.sql) und „welche Ebenen laufen“ für die Kauf-Sperre
+// (…_emote_rain_shop.sql): Sounds und Würfe (prank), Emote-Regen (erain) und Haustier (pet) lassen sich nur kaufen,
+// solange ein Overlay mit dieser Ebene läuft. Es meldet sich alle 30 Sekunden – Vorschau, Testmodus und
+// Aufnahme-Studio nicht. „OBS verbunden“ zählt nur eine echte Browserquelle in OBS (window.obsstudio).
+// Ist eine Ebene gerade wieder da, gibt die Edge Function die Kanalpunkte-Belohnungen auf Twitch frei.
 const OBS_PING_MS = 30_000;
-function startObsPing() {
-  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY || !window.obsstudio || opt.edit || opt.test || REC) return;
-  const ping = () => fetch(`${CONFIG.SUPABASE_URL}/rest/v1/rpc/obs_ping`, {
-    method: 'POST',
-    headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', ...channelHeaders() },
-    body: JSON.stringify({ p_version: String(window.obsstudio.pluginVersion ?? '') }),
-  }).catch(() => {});
-  ping();
-  setInterval(ping, OBS_PING_MS);
+function startObsPing(layers) {
+  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY || opt.edit || opt.test || REC) return;
+  const obs = !!window.obsstudio;
+  if (!obs && !layers.length) return;
+  const version = String(window.obsstudio?.pluginVersion ?? '');
+  const headers = { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${CONFIG.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', ...channelHeaders() };
+  const post = (path, body) => fetch(`${CONFIG.SUPABASE_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  let legacy = false; // Migration …_emote_rain_shop.sql fehlt noch: nur „OBS verbunden“ wie bisher
+  const ping = async () => {
+    if (legacy) { if (obs) await post('/rest/v1/rpc/obs_ping', { p_version: version }); return; }
+    const res = await post('/rest/v1/rpc/overlay_ping', { p_version: version, p_layers: layers, p_obs: obs });
+    if (res.status === 404) { legacy = true; await ping(); return; }
+    const out = res.ok ? await res.json().catch(() => null) : null;
+    if (out?.came_online) await post('/functions/v1/stream-tools', { action: 'gate_sync' });
+  };
+  const tick = () => { ping().catch(() => {}); }; // offline: in 30 Sekunden noch mal
+  tick();
+  setInterval(tick, OBS_PING_MS);
 }
 
 function watchOverlayConfig(source) {
