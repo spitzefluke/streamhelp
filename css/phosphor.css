@@ -185,3 +185,10 @@
 .ph.ph-stack-simple:before { content: "\e468"; }
 .ph.ph-shuffle:before { content: "\e422"; }
 .ph.ph-stack:before { content: "\e466"; }
+.ph.ph-arrow-bend-up-left:before { content: "\e024"; }
+.ph.ph-brackets-curly:before { content: "\e860"; }
+.ph.ph-broom:before { content: "\ec54"; }
+.ph.ph-circle-dashed:before { content: "\e602"; }
+.ph.ph-clock-counter-clockwise:before { content: "\e1a0"; }
+.ph.ph-funnel-simple:before { content: "\e268"; }
+.ph.ph-user-circle:before { content: "\e4c4"; }

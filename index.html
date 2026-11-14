@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bXxgNBB3gMe9Yh0MPuXNslcQ9oufaiIPijZwFMCGyM4=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-6cASMUnGnMV34vplInCJB4a2XxExbSexhgp4XrFfD88=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -103,11 +103,11 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
   <link rel="stylesheet" href="css/style.css?v=9fcc6af92f">
-  <link rel="stylesheet" href="css/phosphor.css?v=b5fbb9a9fb">
+  <link rel="stylesheet" href="css/phosphor.css?v=d5bcecce11">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
   <link rel="stylesheet" href="css/landing.css?v=92e9c75f79">
   <link rel="stylesheet" href="css/yami.css?v=414a6010cd">
-  <link rel="stylesheet" href="css/shell.css?v=5484717141">
+  <link rel="stylesheet" href="css/shell.css?v=b21ae3e42b">
   <link rel="stylesheet" href="css/prank-fx.css?v=82d09df5b9">
   <link rel="stylesheet" href="css/bingo.css?v=41f5ca23ab">
   <link rel="stylesheet" href="css/pet.css?v=810a0995fc">
@@ -129,7 +129,7 @@
       "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
       "./js/bot-plus.js": "./js/bot-plus.js?v=06b4a57909",
       "./js/bot-reasons.js": "./js/bot-reasons.js?v=e2e03e6022",
-      "./js/bot-studio.js": "./js/bot-studio.js?v=d0b5032fbb",
+      "./js/bot-studio.js": "./js/bot-studio.js?v=43be57caf9",
       "./js/brand-colors.js": "./js/brand-colors.js?v=4cadf11bf4",
       "./js/challenge.js": "./js/challenge.js?v=e9003437a5",
       "./js/channel.js": "./js/channel.js?v=9ca5d517e8",
@@ -892,9 +892,51 @@
         <section class="page" data-page="bot" hidden>
           <!-- Bot & Chat als Editor: Liste · Bearbeiten · Chat-Vorschau (js/bot-studio.js) -->
           <div class="bot-wrap">
-            <div class="bot-studio" id="bot-studio">
-              <nav class="bs-list" aria-label="Bot-Bereiche">
-                <label class="bs-search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="bs-q" type="search" placeholder="Befehl oder Text suchen" aria-label="Befehl oder Text suchen" autocomplete="off"></label>
+            <!-- Was der Bot gerade tut (js/bot-studio.js paintOverview) -->
+            <section class="bs-overview" id="bs-overview" aria-label="Was der Bot gerade tut">
+              <div class="bs-ov bs-ov--bot">
+                <span class="bs-ov-ico" aria-hidden="true"><i class="ph ph-robot"></i><span class="bs-ov-pulse" id="bs-ov-pulse"></span></span>
+                <span class="bs-ov-who"><b id="bs-ov-bot">Bot</b><small id="bs-ov-bot-sub">Wird geladen …</small></span>
+              </div>
+              <div class="bs-ov">
+                <p class="bs-ov-k">Letzte 24 Std</p>
+                <p class="bs-ov-v"><span id="bs-ov-sent">–</span> <small>gesendet</small></p>
+                <button type="button" class="bs-ov-link" id="bs-ov-failed">Protokoll ansehen</button>
+              </div>
+              <div class="bs-ov">
+                <p class="bs-ov-k">Regeln an</p>
+                <p class="bs-ov-v"><span id="bs-ov-on">–</span> <small id="bs-ov-total"></small></p>
+                <p class="bs-ov-sub" id="bs-ov-ms"></p>
+              </div>
+              <div class="bs-ov">
+                <p class="bs-ov-k">Nächste Auto-Nachricht</p>
+                <p class="bs-ov-v bs-ov-num" id="bs-ov-next">–</p>
+                <button type="button" class="bs-ov-link" id="bs-ov-timer" hidden></button>
+              </div>
+              <div class="bs-ov bs-ov--feed">
+                <p class="bs-ov-k">Gerade eben</p>
+                <div class="bs-ov-feed" id="bs-ov-feed"></div>
+              </div>
+            </section>
+
+            <!-- Schmal: Liste · Regel · Vorschau als Reiter -->
+            <div class="bs-tabs" id="bs-tabs" role="radiogroup" aria-label="Ansicht">
+              <label data-view="list"><input type="radio" name="bs-view" value="list"><i class="ph ph-list-bullets" aria-hidden="true"></i>Liste</label>
+              <label data-view="editor"><input type="radio" name="bs-view" value="editor" checked><i class="ph ph-pencil-simple" aria-hidden="true"></i>Regel</label>
+              <label data-view="side"><input type="radio" name="bs-view" value="side"><i class="ph ph-chat-teardrop-text" aria-hidden="true"></i>Vorschau &amp; Werkzeuge</label>
+            </div>
+
+            <!-- Bot & Chat als Editor: Liste · Regel (Wenn → Und nur wenn → Dann) · Vorschau, Variablen, Verlauf (js/bot-studio.js) -->
+            <div class="bot-studio" id="bot-studio" data-view="editor">
+              <nav class="bs-list" aria-label="Regeln">
+                <div class="bs-list-top">
+                  <label class="bs-search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="bs-q" type="search" placeholder="Befehl oder Text suchen" aria-label="Befehl oder Text suchen" autocomplete="off"></label>
+                  <div class="bs-seg" id="bs-filter" role="radiogroup" aria-label="Filter">
+                    <label><input type="radio" name="bs-flt" value="all" checked>Alle</label>
+                    <label><input type="radio" name="bs-flt" value="on">An</label>
+                    <label><input type="radio" name="bs-flt" value="off">Aus</label>
+                  </div>
+                </div>
                 <div class="bs-groups" id="bs-groups"></div>
               </nav>
 
@@ -902,42 +944,72 @@
                 <header class="bs-head" id="bs-head" hidden>
                   <span class="bs-ico" aria-hidden="true"><i class="ph ph-terminal" id="bs-ico"></i></span>
                   <div class="bs-head-text"><h2 id="bs-title"></h2><p id="bs-sub"></p></div>
-                  <label class="toggle bs-on"><input type="checkbox" id="bs-on" form="bs-form"><span class="toggle-ui" aria-hidden="true"></span>Aktiv</label>
+                  <span class="bs-uses" id="bs-uses"></span>
+                  <button type="button" class="bs-switch" id="bs-on" role="switch" aria-checked="true"><span class="bs-switch-ui" aria-hidden="true"><span></span></span><span id="bs-on-label">An</span></button>
+                  <span class="bs-head-tools">
+                    <button type="button" class="bs-icon-btn" id="bs-undo" title="Rückgängig (Strg+Z)" aria-label="Rückgängig" disabled><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i></button>
+                    <button type="button" class="bs-icon-btn" id="bs-redo" title="Wiederholen (Strg+Umschalt+Z)" aria-label="Wiederholen" disabled><i class="ph ph-arrow-clockwise" aria-hidden="true"></i></button>
+                    <button type="button" class="bs-icon-btn bs-icon-btn--danger" id="bs-del" title="Löschen" aria-label="Löschen"><i class="ph ph-trash" aria-hidden="true"></i></button>
+                  </span>
                 </header>
                 <div class="bs-body">
                   <form class="bs-form" id="bs-form" novalidate hidden>
-                    <div class="bs-row" data-for-kind="cmd">
-                      <label class="field bs-grow"><span>Befehl</span><input name="command" maxlength="26" placeholder="!discord" autocomplete="off" class="bs-mono"></label>
-                      <label class="field bs-small"><span>Pause</span><span class="bp-unit"><input type="number" name="cooldown" min="0" max="3600" inputmode="numeric"><em>Sek.</em></span></label>
-                    </div>
-                    <label class="field">
-                      <span class="bs-label-row"><span id="bs-text-label">Antwort vom Bot</span><small class="bs-count" id="bs-count">0/400</small></span>
-                      <textarea name="text" maxlength="400" rows="4" id="bs-text"></textarea>
-                    </label>
-                    <div class="bs-chips" data-for-kind="cmd"><span>Einfügen:</span><button type="button" class="bs-chip" data-ph="{user}">{user}</button><button type="button" class="bs-chip" data-ph="{touser}">{touser}</button><button type="button" class="bs-chip" data-ph="{count}">{count}</button><button type="button" class="bs-chip" data-ph="{watchtime}">{watchtime}</button><button type="button" class="bs-chip" data-ph="{followage}">{followage}</button><button type="button" class="bs-chip" data-ph="{uptime}">{uptime}</button><button type="button" class="bs-chip" data-ph="{game}">{game}</button><button type="button" class="bs-chip" data-ph="{title}">{title}</button><button type="button" class="bs-chip" data-ph="{streamer}">{streamer}</button><button type="button" class="bs-chip" data-ph="{random:1-6}">{random:1-6}</button></div>
-                    <div class="bs-row" data-for-kind="timer">
-                      <label class="field"><span>Frühestens alle</span><span class="bp-unit"><input type="number" name="interval_min" min="5" max="240" inputmode="numeric"><em>Min</em></span></label>
-                      <label class="field"><span>Erst nach</span><span class="bp-unit"><input type="number" name="min_lines" min="0" max="200" inputmode="numeric"><em>Nachrichten</em></span></label>
-                    </div>
-                    <fieldset class="bs-box" data-for-kind="cmd">
-                      <legend>Wer darf den Befehl nutzen?</legend>
-                      <div class="bs-pills" id="bs-perm"><button type="button" data-perm="everyone" aria-pressed="false">Alle</button><button type="button" data-perm="sub" aria-pressed="false">Abonnenten</button><button type="button" data-perm="vip" aria-pressed="false">VIPs</button><button type="button" data-perm="mod" aria-pressed="false">Nur Mods</button><button type="button" data-perm="streamer" aria-pressed="false">Streamer</button></div>
-                    </fieldset>
-                    <div class="bs-row" data-for-kind="cmd">
-                      <label class="field bs-grow"><span>Weitere Namen (Alias)</span><input name="aliases" maxlength="140" placeholder="!dc, !disc" autocomplete="off" class="bs-mono"></label>
-                      <div class="field bs-stat"><span>Benutzt</span><p><b id="bs-uses">0×</b> seit Anlegen</p></div>
-                    </div>
-                    <details class="bs-more" data-for-kind="cmd">
-                      <summary>Mehr Einstellungen</summary>
-                      <div class="bs-row">
-                        <label class="field"><span>Pause je Zuschauer</span><span class="bp-unit"><input type="number" name="user_cooldown" min="0" max="3600" inputmode="numeric"><em>Sek.</em></span></label>
-                        <label class="field bs-grow"><span>Antwort</span><select name="reply_type"><option value="say">Normal in den Chat</option><option value="reply">Als Antwort auf die Nachricht</option><option value="mention">Mit @Name davor</option></select></label>
+                    <!-- Wenn -->
+                    <div class="bs-step">
+                      <div class="bs-rail"><span class="bs-node is-acc"><i class="ph ph-lightning" aria-hidden="true"></i></span><span class="bs-line is-acc"></span></div>
+                      <div class="bs-step-body">
+                        <p class="bs-step-k is-acc">Wenn</p>
+                        <div class="bs-card">
+                          <p class="bs-trig" id="bs-trig"></p>
+                          <div class="bs-row" data-for-kind="cmd">
+                            <label class="field bs-grow"><span>Befehl</span><input name="command" maxlength="26" placeholder="!discord" autocomplete="off" class="bs-mono"></label>
+                            <label class="field bs-grow"><span>Weitere Namen (Alias)</span><input name="aliases" maxlength="140" placeholder="!dc, !disc" autocomplete="off" class="bs-mono"></label>
+                          </div>
+                          <div class="bs-row" data-for-kind="timer">
+                            <label class="field"><span>Frühestens alle</span><span class="bp-unit"><input type="number" name="interval_min" min="5" max="240" inputmode="numeric"><em>Min</em></span></label>
+                            <label class="field"><span>Und erst nach</span><span class="bp-unit"><input type="number" name="min_lines" min="0" max="200" inputmode="numeric"><em>Chat-Nachrichten</em></span></label>
+                          </div>
+                        </div>
                       </div>
-                      <label class="toggle"><input type="checkbox" name="live_only"><span class="toggle-ui" aria-hidden="true"></span>Nur während des Streams</label>
-                    </details>
-                    <div class="bs-stat-line" data-for-kind="timer"><b id="bs-sent">0×</b> gesendet · Platzhalter: <code>{streamer}</code> · Im Raid-Schutz pausieren Auto-Nachrichten.</div>
-                    <div class="bs-gap" id="bs-gap" data-for-kind="timer"></div>
+                    </div>
+                    <!-- Und nur wenn -->
+                    <div class="bs-step">
+                      <div class="bs-rail"><span class="bs-node"><i class="ph ph-funnel-simple" aria-hidden="true"></i></span><span class="bs-line"></span></div>
+                      <div class="bs-step-body">
+                        <p class="bs-step-k">Und nur wenn</p>
+                        <div class="bs-conds" id="bs-conds"></div>
+                        <div data-for-kind="cmd">
+                          <button type="button" class="bs-add-btn" id="bs-cond-add" aria-expanded="false"><i class="ph ph-plus" aria-hidden="true"></i>Bedingung</button>
+                          <div class="bs-presets" id="bs-cond-presets" hidden></div>
+                        </div>
+                        <div class="bs-gap" id="bs-gap" data-for-kind="timer"></div>
+                      </div>
+                    </div>
+                    <!-- Dann -->
+                    <div class="bs-step">
+                      <div class="bs-rail"><span class="bs-node is-acc"><i class="ph ph-play" aria-hidden="true"></i></span><span class="bs-line is-fade"></span></div>
+                      <div class="bs-step-body">
+                        <p class="bs-step-k is-acc">Dann</p>
+                        <div class="bs-card bs-action">
+                          <div class="bs-action-head"><span class="bs-num">1</span><i class="ph ph-chat-teardrop-text" aria-hidden="true"></i><b id="bs-text-label">Antwort senden</b></div>
+                          <div class="bs-text-wrap">
+                            <textarea name="text" maxlength="400" rows="3" id="bs-text" aria-labelledby="bs-text-label"></textarea>
+                            <small class="bs-count" id="bs-count">0/400</small>
+                          </div>
+                          <div class="bs-chips" id="bs-chips">
+                            <span class="bs-chip-list" id="bs-chip-list"></span>
+                            <button type="button" class="bs-link" id="bs-all-vars">Alle Variablen</button>
+                            <div class="bs-seg bs-seg--sm" data-for-kind="cmd" role="radiogroup" aria-label="Wie antworten?">
+                              <label><input type="radio" name="reply_type" value="say">Normal</label>
+                              <label><input type="radio" name="reply_type" value="reply">Als Antwort</label>
+                              <label><input type="radio" name="reply_type" value="mention">@Name</label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <p class="form-hint" data-for-kind="cmd">Eingebaute Befehle wie <code>!join</code> oder <code>!watchtime</code> lassen sich nicht überschreiben. <code>!befehle</code> listet alle aktiven Befehle im Chat.</p>
+                    <p class="form-hint" data-for-kind="timer">Auto-Nachrichten kommen nur, wenn im Chat etwas los ist, und pausieren im Raid-Schutz.</p>
                   </form>
                   <div class="bs-panes" id="bs-panes">
                 <article class="dash-card" id="bot-card" data-pane="account" hidden>
@@ -997,21 +1069,48 @@
                   </div>
                 </div>
                 <footer class="bs-foot" id="bs-foot" hidden>
-                  <button type="button" class="bs-del" id="bs-del"><i class="ph ph-trash" aria-hidden="true"></i>Löschen</button>
-                  <span class="bs-state" id="bs-state" role="status">Alles gespeichert</span>
+                  <span class="bs-state" id="bs-state" role="status"><i class="ph ph-check-circle" aria-hidden="true"></i><span>Alles gespeichert</span></span>
                   <button type="button" class="btn btn--ghost" id="bs-discard">Verwerfen</button>
                   <button type="submit" class="btn btn--primary" id="bs-save" form="bs-form">Speichern</button>
                 </footer>
               </div>
 
-              <aside class="bs-chat" aria-label="Chat-Vorschau">
-                <header class="bs-chat-head"><i class="ph ph-chat-teardrop-text" aria-hidden="true"></i><b>Chat-Vorschau</b><span id="bs-chat-mode"></span></header>
-                <ol class="bs-log" id="bs-log" aria-live="polite"></ol>
-                <form class="bs-test" id="bs-test" novalidate>
-                  <input name="msg" maxlength="200" placeholder="Als Zuschauer schreiben, z. B. !lurk" aria-label="Als Zuschauer schreiben" autocomplete="off">
-                  <button type="submit" aria-label="Senden"><i class="ph ph-paper-plane-right" aria-hidden="true"></i></button>
-                </form>
-                <p class="bs-chat-hint">Nur hier – nichts landet im echten Twitch-Chat.</p>
+              <aside class="bs-side" aria-label="Vorschau und Werkzeuge">
+                <div class="bs-side-tabs" role="tablist">
+                  <button type="button" role="tab" data-side="preview" aria-selected="true"><i class="ph ph-chat-teardrop-text" aria-hidden="true"></i>Vorschau</button>
+                  <button type="button" role="tab" data-side="vars" aria-selected="false"><i class="ph ph-brackets-curly" aria-hidden="true"></i>Variablen</button>
+                  <button type="button" role="tab" data-side="hist" aria-selected="false"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>Verlauf</button>
+                </div>
+                <div class="bs-side-pane" data-side-pane="preview">
+                  <div class="bs-as">
+                    <span>Testen als</span>
+                    <div class="bs-seg bs-seg--sm" id="bs-role" role="radiogroup" aria-label="Testen als">
+                      <label><input type="radio" name="bs-role" value="0" checked>Zuschauer</label>
+                      <label><input type="radio" name="bs-role" value="1">Abo</label>
+                      <label><input type="radio" name="bs-role" value="3">Mod</label>
+                    </div>
+                    <button type="button" class="bs-icon-btn" id="bs-clear" title="Verlauf leeren" aria-label="Verlauf leeren"><i class="ph ph-broom" aria-hidden="true"></i></button>
+                  </div>
+                  <ol class="bs-log" id="bs-log" aria-live="polite"></ol>
+                  <form class="bs-test" id="bs-test" novalidate>
+                    <input name="msg" maxlength="200" placeholder="Als Zuschauer schreiben, z. B. !lurk" aria-label="Als Zuschauer schreiben" autocomplete="off">
+                    <button type="submit" aria-label="Senden"><i class="ph ph-paper-plane-right" aria-hidden="true"></i></button>
+                  </form>
+                  <p class="bs-chat-hint">Simulation – nichts landet im echten Twitch-Chat. Ungespeicherte Änderungen zählen schon mit.</p>
+                </div>
+                <div class="bs-side-pane bs-vars" data-side-pane="vars" hidden>
+                  <p class="bs-vars-hint" id="bs-vars-hint"></p>
+                  <div id="bs-vars"></div>
+                </div>
+                <div class="bs-side-pane bs-hist" data-side-pane="hist" hidden>
+                  <div class="bs-hist-btns">
+                    <button type="button" class="btn btn--ghost btn--sm" id="bs-undo2" disabled><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>Rückgängig</button>
+                    <button type="button" class="btn btn--ghost btn--sm" id="bs-redo2" disabled><i class="ph ph-arrow-clockwise" aria-hidden="true"></i>Wiederholen</button>
+                  </div>
+                  <p class="bs-hist-steps" id="bs-hist-steps"></p>
+                  <p class="bs-step-k" id="bs-hist-name">Versionen</p>
+                  <ol class="bs-versions" id="bs-versions"></ol>
+                </div>
               </aside>
             </div>
           </div>
