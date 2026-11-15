@@ -1,94 +1,6 @@
-// Console (Entwurf) – Lastenheft (nur Plattform-Admins, js/dash-console.js).
-// Fasst Baukasten, Abfragen, Vorschläge, Kosten und Pflichten zu einem eigenständigen HTML-Dokument zusammen
-// (ohne Skripte, nur eingebettetes CSS) – zum Ansehen/Drucken in einem neuen Tab oder zum Herunterladen,
-// z. B. für Angebote bei Herstellern. Alle Texte aus Eingaben werden maskiert.
-import { h } from './extras-core.js';
-import {
-  DESIGN, FEATURES, KIT_PARTS, MORE_QUESTIONS, PACK, PACK_DEFAULT, REAR, RELEASE_CHECKS,
-  eur, kitBoxSpec, kitPorts, kitTotals, option, packOpt, rearOpt,
-} from './dash-console-kit.js';
-import { TIPS } from './dash-console-tips.js';
-
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ACTION_NAMES = { none: 'frei', scene: 'Szene wechseln', spin: 'Glücksrad drehen', sound: 'Sound abspielen', alert: 'Test-Alert', guard: 'Raid-Schutz an/aus', page: 'Dashboard-Seite öffnen' };
-const FEATURE_NAMES = { v1: 'Version 1', later: 'Später', no: 'Nicht geplant', open: 'Offen' };
-const SIDE_NAMES = { left: 'links', back: 'hinten', front: 'vorn' };
-
-const table = (head, rows) => `<table><thead><tr>${head.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${
-  rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-const list = (items) => (items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>` : '<p class="muted">–</p>');
-
-// ctx: { kit, keys, by, at }
-export function buildSpecHtml({ kit, keys, by, at }) {
-  const t = kitTotals(kit);
-  const box = kitBoxSpec(kit, keys);
-  const date = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' });
-  const answer = (q) => q.options.find(([v]) => v === kit.answers[q.id])?.[1];
-  const open = [];
-
-  // 1. Produkt
-  const product = list([
-    '<b>Capture Card mit Tastenpult</b>: nimmt Bild und Ton per HDMI auf (USB zum PC) und steuert den Stream mit 9 Tasten, Display und Ideen-Knopf.',
-    ...MORE_QUESTIONS.map((q) => {
-      const a = answer(q);
-      if (!a) open.push(`Frage offen: ${esc(q.name)}`);
-      return `${esc(q.name)} <b>${esc(a ?? 'offen')}</b>`;
-    }),
-    ...(kit.answers.note ? [`Notiz: ${esc(kit.answers.note)}`] : []),
-  ]);
-
-  // 2. Funktionsumfang
-  const featRows = FEATURES.flatMap((g) => g.items.map((f) => {
-    const st = kit.features[f.id] ?? 'open';
-    if (st === 'open') open.push(`Funktion nicht entschieden: ${esc(f.name)}`);
-    return [esc(g.group), esc(f.name) + (f.note ? `<br><small>${esc(f.note)}</small>` : ''), `<span class="st st-${st}">${FEATURE_NAMES[st]}</span>`];
-  }));
-
-  // 3. Bauteile
-  const partRows = KIT_PARTS.map((cat) => {
-    const o = option(cat.id, kit.parts[cat.id]);
-    const price = kit.prices[`${cat.id}.${o.id}`] ?? o.eur;
-    return [esc(cat.name), esc(o.name), eur(price), o.tool ? eur(o.tool) : '–'];
-  });
-  const extraRows = [
-    ...DESIGN.map((d) => { const o = d.options.find((x) => x.id === kit.design[d.id]); return o?.eur ? [`Design: ${esc(d.name)}`, esc(o.name), eur(o.eur), '–'] : null; }),
-    ...REAR.map((q) => { const o = rearOpt(q.id, kit.rear[q.id]); return o?.eur ? [`Rückseite: ${esc(q.name)}`, esc(o.name), eur(o.eur), '–'] : null; }),
-    ...PACK.map((q) => { const o = packOpt(q.id, kit.pack[q.id] ?? PACK_DEFAULT[q.id]); return o?.eur ? [`Verpackung: ${esc(q.name)}`, esc(o.name), eur(o.eur), '–'] : null; }),
-  ].filter(Boolean);
-  if (kit.design.combojack) extraRows.push(['Anschlüsse', 'Eine Headset-Buchse statt zwei Klinken', eur(-0.4), '–']);
-
-  // 4. Anschlüsse und Rückseite
-  const ports = kitPorts(kit).map((p) => `${esc(p.label || (p.kind === 'power' ? 'Ein-/Aus-Taste' : 'Status-LED'))}${p.recessed ? ' (versenkt)' : ''} – ${SIDE_NAMES[p.side ?? 'left']}`);
-  const rear = REAR.map((q) => {
-    const o = rearOpt(q.id, kit.rear[q.id]);
-    if (!o) open.push(`Rückseite offen: ${esc(q.name)}`);
-    return `${esc(q.name)}: <b>${esc(o?.name ?? 'offen (wie im Entwurf)')}</b>`;
-  });
-
-  // 5. Design, Tasten, Verpackung
-  const design = DESIGN.map((d) => `${esc(d.name)}: <b>${esc(d.options.find((x) => x.id === kit.design[d.id])?.name ?? '–')}</b>`);
-  const keyRows = (keys ?? []).map((k, i) => [String(i + 1), esc(`${k.icon ?? ''} ${k.label ?? ''}`.trim() || '–'), esc(ACTION_NAMES[k.action] ?? k.action), k.color ? `<span class="sw" style="background:${/^#[0-9a-f]{6}$/i.test(k.color) ? k.color : '#888'}"></span> ${esc(k.color)}` : '–']);
-  const pack = [
-    `Karton: <b>${esc(option('box', kit.parts.box)?.name)}</b>`,
-    ...PACK.map((q) => `${esc(q.name)}: <b>${esc(packOpt(q.id, kit.pack[q.id] ?? PACK_DEFAULT[q.id])?.name)}</b>`),
-    `Inhalt: ${esc(box.contents.join(', '))}`,
-  ];
-
-  // 6. Vorschläge
-  const tipLine = (tp) => `${esc(tp.title)}${tp.est ? ` <small>(${tp.est > 0 ? 'spart' : 'kostet'} ca. ${eur(Math.abs(tp.est))} je Gerät${tp.est > 0 ? '' : ' mehr'})</small>` : ''}`;
-  const taken = TIPS.filter((tp) => kit.tips[tp.id] === 'yes').map(tipLine);
-  const check = TIPS.filter((tp) => kit.tips[tp.id] === 'check').map(tipLine);
-  for (const c of check) open.push(`Vorschlag prüfen: ${c}`);
-
-  // 7. Release-Check
-  const rel = RELEASE_CHECKS.map(([id, text]) => `${kit.checks[id] ? '☑' : '☐'} ${esc(text)}`);
-  for (const [id, text] of RELEASE_CHECKS) if (!kit.checks[id]) open.push(`Release-Check: ${esc(text)}`);
-  const ideas = kit.ideas.filter((i) => i.status === 'planned' || i.status === 'new')
-    .map((i) => `${esc(i.text)} <small>(${i.status === 'planned' ? 'geplant' : 'neu'}${i.by ? `, ${esc(i.by)}` : ''})</small>`);
-
-  return `<!doctype html>
+import{h as i}from"./extras-core.js";import{DESIGN as x,FEATURES as V,KIT_PARTS as H,MORE_QUESTIONS as K,PACK as k,PACK_DEFAULT as w,REAR as S,RELEASE_CHECKS as v,eur as s,kitBoxSpec as _,kitPorts as N,kitTotals as M,option as E,packOpt as R,rearOpt as y}from"./dash-console-kit.js";import{TIPS as A}from"./dash-console-tips.js";const n=a=>String(a??"").replace(/[&<>"']/g,o=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[o]),G={none:"frei",scene:"Szene wechseln",spin:"Glücksrad drehen",sound:"Sound abspielen",alert:"Test-Alert",guard:"Raid-Schutz an/aus",page:"Dashboard-Seite öffnen"},Q={v1:"Version 1",later:"Später",no:"Nicht geplant",open:"Offen"},W={left:"links",back:"hinten",front:"vorn"},b=(a,o)=>`<table><thead><tr>${a.map(d=>`<th>${n(d)}</th>`).join("")}</tr></thead><tbody>${o.map(d=>`<tr>${d.map(m=>`<td>${m}</td>`).join("")}</tr>`).join("")}</tbody></table>`,r=a=>a.length?`<ul>${a.map(o=>`<li>${o}</li>`).join("")}</ul>`:'<p class="muted">–</p>';export function buildSpecHtml({kit:a,keys:o,by:d,at:m}){const c=M(a),l=_(a,o),p=new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"}),z=e=>e.options.find(([t])=>t===a.answers[e.id])?.[1],h=[],D=r(["<b>Capture Card mit Tastenpult</b>: nimmt Bild und Ton per HDMI auf (USB zum PC) und steuert den Stream mit 9 Tasten, Display und Ideen-Knopf.",...K.map(e=>{const t=z(e);return t||h.push(`Frage offen: ${n(e.name)}`),`${n(e.name)} <b>${n(t??"offen")}</b>`}),...a.answers.note?[`Notiz: ${n(a.answers.note)}`]:[]]),T=V.flatMap(e=>e.items.map(t=>{const u=a.features[t.id]??"open";return u==="open"&&h.push(`Funktion nicht entschieden: ${n(t.name)}`),[n(e.group),n(t.name)+(t.note?`<br><small>${n(t.note)}</small>`:""),`<span class="st st-${u}">${Q[u]}</span>`]})),P=H.map(e=>{const t=E(e.id,a.parts[e.id]),u=a.prices[`${e.id}.${t.id}`]??t.eur;return[n(e.name),n(t.name),s(u),t.tool?s(t.tool):"–"]}),f=[...x.map(e=>{const t=e.options.find(u=>u.id===a.design[e.id]);return t?.eur?[`Design: ${n(e.name)}`,n(t.name),s(t.eur),"–"]:null}),...S.map(e=>{const t=y(e.id,a.rear[e.id]);return t?.eur?[`Rückseite: ${n(e.name)}`,n(t.name),s(t.eur),"–"]:null}),...k.map(e=>{const t=R(e.id,a.pack[e.id]??w[e.id]);return t?.eur?[`Verpackung: ${n(e.name)}`,n(t.name),s(t.eur),"–"]:null})].filter(Boolean);a.design.combojack&&f.push(["Anschlüsse","Eine Headset-Buchse statt zwei Klinken",s(-.4),"–"]);const L=N(a).map(e=>`${n(e.label||(e.kind==="power"?"Ein-/Aus-Taste":"Status-LED"))}${e.recessed?" (versenkt)":""} – ${W[e.side??"left"]}`),j=S.map(e=>{const t=y(e.id,a.rear[e.id]);return t||h.push(`Rückseite offen: ${n(e.name)}`),`${n(e.name)}: <b>${n(t?.name??"offen (wie im Entwurf)")}</b>`}),B=x.map(e=>`${n(e.name)}: <b>${n(e.options.find(t=>t.id===a.design[e.id])?.name??"–")}</b>`),U=(o??[]).map((e,t)=>[String(t+1),n(`${e.icon??""} ${e.label??""}`.trim()||"–"),n(G[e.action]??e.action),e.color?`<span class="sw" style="background:${/^#[0-9a-f]{6}$/i.test(e.color)?e.color:"#888"}"></span> ${n(e.color)}`:"–"]),C=[`Karton: <b>${n(E("box",a.parts.box)?.name)}</b>`,...k.map(e=>`${n(e.name)}: <b>${n(R(e.id,a.pack[e.id]??w[e.id])?.name)}</b>`),`Inhalt: ${n(l.contents.join(", "))}`],g=e=>`${n(e.title)}${e.est?` <small>(${e.est>0?"spart":"kostet"} ca. ${s(Math.abs(e.est))} je Gerät${e.est>0?"":" mehr"})</small>`:""}`,F=A.filter(e=>a.tips[e.id]==="yes").map(g),$=A.filter(e=>a.tips[e.id]==="check").map(g);for(const e of $)h.push(`Vorschlag prüfen: ${e}`);const I=v.map(([e,t])=>`${a.checks[e]?"☑":"☐"} ${n(t)}`);for(const[e,t]of v)a.checks[e]||h.push(`Release-Check: ${n(t)}`);const O=a.ideas.filter(e=>e.status==="planned"||e.status==="new").map(e=>`${n(e.text)} <small>(${e.status==="planned"?"geplant":"neu"}${e.by?`, ${n(e.by)}`:""})</small>`);return`<!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lastenheft StreamHelp Console – ${esc(date)}</title>
+<title>Lastenheft StreamHelp Console – ${n(p)}</title>
 <style>
   :root { --ink: #16171d; --muted: #5d6170; --line: #dfe1e8; --acc: #7c3aed; }
   * { box-sizing: border-box; }
@@ -111,74 +23,44 @@ export function buildSpecHtml({ kit, keys, by, at }) {
 <body><main>
 <header>
   <h1>Lastenheft: StreamHelp Console</h1>
-  <p class="meta">Stand ${esc(date)}${at ? ` · zuletzt geändert ${esc(new Date(at).toLocaleString('de-DE'))}${by ? ` von ${esc(by)}` : ''}` : ''}</p>
+  <p class="meta">Stand ${n(p)}${m?` · zuletzt geändert ${n(new Date(m).toLocaleString("de-DE"))}${d?` von ${n(d)}`:""}`:""}</p>
   <span class="conf">Vertraulich – Entwurf</span>
 </header>
 
-<h2>1. Produkt</h2>${product}
+<h2>1. Produkt</h2>${D}
 
-<h2>2. Funktionsumfang</h2>${table(['Bereich', 'Funktion', 'Entscheidung'], featRows)}
+<h2>2. Funktionsumfang</h2>${b(["Bereich","Funktion","Entscheidung"],T)}
 
-<h2>3. Bauteile (Schätzpreise je Stück)</h2>${table(['Bereich', 'Auswahl', 'Preis je Stück', 'Einmalig'], [...partRows, ...extraRows])}
+<h2>3. Bauteile (Schätzpreise je Stück)</h2>${b(["Bereich","Auswahl","Preis je Stück","Einmalig"],[...P,...f])}
 
-<h2>4. Anschlüsse und Rückseite</h2>${list(ports)}${list(rear)}
+<h2>4. Anschlüsse und Rückseite</h2>${r(L)}${r(j)}
 
-<h2>5. Design und Tastenbelegung</h2>${list(design)}${table(['Taste', 'Beschriftung', 'Aktion', 'Farbe'], keyRows)}
+<h2>5. Design und Tastenbelegung</h2>${r(B)}${b(["Taste","Beschriftung","Aktion","Farbe"],U)}
 
-<h2>6. Verpackung</h2>${list(pack)}
+<h2>6. Verpackung</h2>${r(C)}
 
 <h2>7. Menge, Kosten und Preis</h2>
 <div class="sum">
-  <div>Erste Serie<b>${esc(kit.qty)} Stück</b></div>
-  <div>Bauteile je Gerät<b>${eur(t.unit)}</b></div>
-  <div>Prüfungen (einmalig, Schätzung)<b>${eur(t.tests)}</b></div>
-  <div>Werkzeug (einmalig)<b>${eur(t.tool)}</b></div>
-  <div>Kosten je Gerät<b>${eur(t.perDevice)}</b></div>
-  <div>Endpreis-Vorschlag (× ${esc(String(kit.factor).replace('.', ','))}, inkl. 19 % USt)<b>${eur(t.price)}</b></div>
+  <div>Erste Serie<b>${n(a.qty)} Stück</b></div>
+  <div>Bauteile je Gerät<b>${s(c.unit)}</b></div>
+  <div>Prüfungen (einmalig, Schätzung)<b>${s(c.tests)}</b></div>
+  <div>Werkzeug (einmalig)<b>${s(c.tool)}</b></div>
+  <div>Kosten je Gerät<b>${s(c.perDevice)}</b></div>
+  <div>Endpreis-Vorschlag (× ${n(String(a.factor).replace(".",","))}, inkl. 19 % USt)<b>${s(c.price)}</b></div>
 </div>
 
-<h2>8. Normen und Pflichten für den Verkauf</h2>${list(t.duties.map((d) => esc(d.text)))}
+<h2>8. Normen und Pflichten für den Verkauf</h2>${r(c.duties.map(e=>n(e.text)))}
 
 <h2>9. Vorschläge</h2>
-<p><b>Übernommen</b></p>${list(taken)}
-<p><b>Später prüfen</b></p>${list(check)}
+<p><b>Übernommen</b></p>${r(F)}
+<p><b>Später prüfen</b></p>${r($)}
 
-<h2>10. Release-Check</h2>${list(rel)}
+<h2>10. Release-Check</h2>${r(I)}
 
-<h2>11. Ideen (neu und geplant)</h2>${list(ideas)}
+<h2>11. Ideen (neu und geplant)</h2>${r(O)}
 
-<h2>12. Offene Punkte</h2>${list(open)}
+<h2>12. Offene Punkte</h2>${r(h)}
 
 <p class="note">Alle Preise sind Schätzwerte zum Start und ersetzen keine Angebote. Die Pflichten sind ein Überblick ohne Gewähr und keine Rechtsberatung.
 Erstellt mit dem Technik-Baukasten von StreamHelp.</p>
-</main></body></html>`;
-}
-
-// Karte im Baukasten: ansehen (neuer Tab, dort drucken oder als PDF speichern) oder herunterladen
-export function renderSpecCard(ctx) {
-  const make = () => new Blob([buildSpecHtml(ctx)], { type: 'text/html;charset=utf-8' });
-  const file = `lastenheft-streamhelp-console-${new Date().toISOString().slice(0, 10)}.html`;
-  const open = () => {
-    const url = URL.createObjectURL(make());
-    const win = window.open(url, '_blank'); // ohne „noopener“: sonst liefert open() immer null
-    if (!win) ctx.toast?.('Der Browser hat das neue Fenster blockiert – „Herunterladen“ geht immer.', 'info');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
-  const download = () => {
-    const url = URL.createObjectURL(make());
-    const a = h('a', { href: url, download: file });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  };
-  return h('section', { class: 'dash-card dash-card--wide ck-card ck-spec' },
-    h('header', { class: 'cs-head' },
-      h('div', {},
-        h('h2', {}, 'Lastenheft'),
-        h('p', { class: 'dash-status' }, 'Alles aus Baukasten, Abfragen und Vorschlägen in einem Dokument – für Angebote bei Herstellern und Platinen-Fertigern.')),
-      h('div', { class: 'cs-head-btns' },
-        h('button', { class: 'btn btn--ghost btn--sm', type: 'button', id: 'ck-spec-open', onclick: open }, 'Ansehen / drucken'),
-        h('button', { class: 'btn btn--primary btn--sm', type: 'button', id: 'ck-spec-download', onclick: download }, 'Herunterladen (.html)'))),
-    h('p', { class: 'form-hint' }, 'Enthält Funktionsumfang, Bauteile mit Schätzpreisen, Anschlüsse, Rückseite, Design, Tastenbelegung, Verpackung, Kosten, Pflichten, Release-Check und alle offenen Punkte. Als PDF: im neuen Tab drucken und „Als PDF speichern“ wählen. Vertraulich – nicht öffentlich teilen.'));
-}
+</main></body></html>`}export function renderSpecCard(a){const o=()=>new Blob([buildSpecHtml(a)],{type:"text/html;charset=utf-8"}),d=`lastenheft-streamhelp-console-${new Date().toISOString().slice(0,10)}.html`,m=()=>{const l=URL.createObjectURL(o());window.open(l,"_blank")||a.toast?.("Der Browser hat das neue Fenster blockiert – „Herunterladen“ geht immer.","info"),setTimeout(()=>URL.revokeObjectURL(l),6e4)},c=()=>{const l=URL.createObjectURL(o()),p=i("a",{href:l,download:d});document.body.append(p),p.click(),p.remove(),setTimeout(()=>URL.revokeObjectURL(l),1e4)};return i("section",{class:"dash-card dash-card--wide ck-card ck-spec"},i("header",{class:"cs-head"},i("div",{},i("h2",{},"Lastenheft"),i("p",{class:"dash-status"},"Alles aus Baukasten, Abfragen und Vorschlägen in einem Dokument – für Angebote bei Herstellern und Platinen-Fertigern.")),i("div",{class:"cs-head-btns"},i("button",{class:"btn btn--ghost btn--sm",type:"button",id:"ck-spec-open",onclick:m},"Ansehen / drucken"),i("button",{class:"btn btn--primary btn--sm",type:"button",id:"ck-spec-download",onclick:c},"Herunterladen (.html)"))),i("p",{class:"form-hint"},"Enthält Funktionsumfang, Bauteile mit Schätzpreisen, Anschlüsse, Rückseite, Design, Tastenbelegung, Verpackung, Kosten, Pflichten, Release-Check und alle offenen Punkte. Als PDF: im neuen Tab drucken und „Als PDF speichern“ wählen. Vertraulich – nicht öffentlich teilen."))}

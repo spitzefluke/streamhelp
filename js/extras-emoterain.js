@@ -1,21 +1,4 @@
-// Emote-Regen: Kachel mit Erklärung. Das Overlay liest den Chat selbst mit (js/overlay-emoterain.js) –
-// kein Bot nötig. Eigene Emotes aus dem Emote-Editor kommen aus core.channel_emotes (…_channel_emotes.sql). Eingeschaltet und eingestellt wird es im OBS-Editor (Ebene „Emote-Regen“).
-// Kaufen (…_emote_rain_shop.sql): Streamer und Mods schalten hier die Kanalpunkte-Belohnung „🌧️ Emote-Regen“ und
-// Bits im Twitch-Panel ein. Gekauft werden kann nur, solange ein Overlay mit der Ebene Emote-Regen läuft.
-import { $, X, act, h, isAdmin, makeDialog, onSubmit, openFeature, paintTile, toast } from './extras-core.js';
-
-const BITS = [['action_50', 50], ['action_100', 100], ['action_250', 250], ['action_500', 500]];
-
-const DEMO_EMOTES = ['💜', '🎉', '😂', '🔥', '✨', '👑', '🐸', '💥'];
-
-export const emoterain = {
-  kind: 'emoterain', icon: '🌧️', cta: 'So geht’s →',
-  on: true, dialog: null,
-
-  setup() {
-    this.dialog = makeDialog({
-      id: 'x-emoterain', cls: 'x-emoterain', eyebrow: 'Chat · Overlay', title: 'Emote-Regen',
-      body: `
+import{$ as n,X as i,act as l,h as d,isAdmin as o,makeDialog as h,onSubmit as c,openFeature as p,paintTile as u,toast as a}from"./extras-core.js";const m=[["action_50",50],["action_100",100],["action_250",250],["action_500",500]],r=["💜","🎉","😂","🔥","✨","👑","🐸","💥"];export const emoterain={kind:"emoterain",icon:"🌧️",cta:"So geht’s →",on:!0,dialog:null,setup(){this.dialog=h({id:"x-emoterain",cls:"x-emoterain",eyebrow:"Chat · Overlay",title:"Emote-Regen",body:`
       <div class="x-layout">
         <div class="x-main">
           <div class="x-hero er-hero">
@@ -48,7 +31,7 @@ export const emoterain = {
                 <label class="field"><span>Pause (Sekunden)</span><input type="number" name="cooldown" min="0" max="604800" step="1" inputmode="numeric" required></label>
               </div>
               <label class="toggle"><input type="checkbox" name="bits"><span class="toggle-ui" aria-hidden="true"></span>Mit Bits im Twitch-Panel</label>
-              <label class="field"><span>Preis</span><select name="sku">${BITS.map(([v, n]) => `<option value="${v}">${n} Bits</option>`).join('')}</select></label>
+              <label class="field"><span>Preis</span><select name="sku">${m.map(([e,t])=>`<option value="${e}">${t} Bits</option>`).join("")}</select></label>
               <div class="x-row">
                 <button class="btn btn--primary btn--sm" type="submit">💾 Speichern</button>
                 <button class="btn btn--ghost btn--sm" type="button" data-shop-test>🌧️ Probe-Regen im Overlay</button>
@@ -59,100 +42,4 @@ export const emoterain = {
             <p class="form-hint">Gekaufter Regen fällt extra kräftig, mit dem Namen oben im Bild. Ohne laufendes Overlay mit „Emote-Regen“ ist die Belohnung auf Twitch pausiert, Kanalpunkte gibt es zurück und das Panel bietet nichts an.</p>
           </section>
         </div>
-      </div>`,
-    });
-    $('[data-rain]', this.dialog).addEventListener('click', () => this.rain());
-    onSubmit($('[data-shop-form]', this.dialog), (form) => this.saveShop(form));
-    $('[data-shop-test]', this.dialog).addEventListener('click', (e) => act(e.currentTarget, async () => {
-      const r = await X.api.rainShop.test();
-      if (r?.reason === 'cooldown') toast('Kurz warten – der letzte Probe-Regen läuft noch.', 'info');
-      else toast(r?.live ? 'Probe-Regen ist unterwegs.' : 'Probe-Regen geschickt – im Moment läuft aber kein Overlay mit „Emote-Regen“.', r?.live ? 'ok' : 'info');
-    }));
-  },
-
-  shop: null,
-
-  async loadShop() {
-    if (!isAdmin()) return;
-    try {
-      this.shop = await X.api.rainShop.get();
-    } catch {
-      this.shop = null; // Migration fehlt
-    }
-    this.paintShop();
-  },
-
-  paintShop() {
-    const d = this.shop;
-    const form = $('[data-shop-form]', this.dialog);
-    $('[data-shop-note]', this.dialog).hidden = !!d;
-    form.hidden = !d;
-    $('[data-shop-live]', this.dialog).textContent = !d ? ''
-      : d.live ? '🟢 Ein Overlay mit Emote-Regen läuft – kaufen geht.'
-        : '⚪ Gerade läuft kein Overlay mit Emote-Regen – kaufen ist gesperrt.';
-    if (!d) { $('[data-shop-state]', this.dialog).textContent = ''; return; }
-    form.points.checked = !!d.points;
-    form.cost.value = d.points_cost;
-    form.cooldown.value = d.points_cooldown;
-    form.bits.checked = !!d.bits;
-    form.sku.value = d.bits_sku;
-    $('[data-shop-state]', this.dialog).textContent = d.error ? `⚠️ Twitch: ${d.error}`
-      : d.reward_id && d.points ? '✓ Belohnung ist auf Twitch angelegt.' : '';
-  },
-
-  async saveShop(form) {
-    const next = await X.api.rainShop.set({
-      points: form.points.checked, cost: Number(form.cost.value), cooldown: Number(form.cooldown.value),
-      bits: form.bits.checked, sku: form.sku.value,
-    });
-    this.shop = next;
-    // Kanalpunkte: Belohnung auf Twitch anlegen bzw. abgleichen (auch zum Ausschalten)
-    if (next.points || next.reward_id) {
-      if (!X.ctx.state.twitch?.connected) {
-        toast('Gespeichert. Für Kanalpunkte zuerst Twitch verbinden.', 'info');
-      } else {
-        try {
-          await X.api.rainShop.sync();
-          this.shop = await X.api.rainShop.get();
-          toast(next.points ? 'Gespeichert – die Belohnung ist auf Twitch.' : 'Gespeichert – die Belohnung ist auf Twitch aus.', 'ok');
-        } catch (err) {
-          this.shop = await X.api.rainShop.get().catch(() => next);
-          toast(X.ctx.germanError(err), 'error');
-        }
-      }
-    } else toast('Gespeichert.', 'ok');
-    this.paintShop();
-  },
-
-  // Kleine Vorschau im Dialog (Emojis statt Twitch-Emotes)
-  rain() {
-    const sky = $('[data-sky]', this.dialog);
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    for (let i = 0; i < 24; i++) {
-      const drop = h('span', {
-        class: 'er-preview-drop',
-        style: { left: `${Math.random() * 94}%`, animationDelay: `${Math.random() * 1.4}s`, animationDuration: `${1.8 + Math.random() * 1.4}s` },
-      }, DEMO_EMOTES[i % DEMO_EMOTES.length]);
-      drop.addEventListener('animationend', () => drop.remove(), { once: true });
-      sky.append(drop);
-    }
-  },
-
-  async load() { paintTile(this); },
-
-  render() {
-    const admin = isAdmin();
-    $('[data-admin]', this.dialog).hidden = !admin;
-    this.dialog.classList.toggle('has-side', admin);
-    $('[data-note]', this.dialog).hidden = true;
-  },
-
-  tileStatus() { return '🌧️ !regen im Chat'; },
-
-  async open() {
-    if (!openFeature(this)) return;
-    this.render();
-    this.rain();
-    this.loadShop();
-  },
-};
+      </div>`}),n("[data-rain]",this.dialog).addEventListener("click",()=>this.rain()),c(n("[data-shop-form]",this.dialog),e=>this.saveShop(e)),n("[data-shop-test]",this.dialog).addEventListener("click",e=>l(e.currentTarget,async()=>{const t=await i.api.rainShop.test();t?.reason==="cooldown"?a("Kurz warten – der letzte Probe-Regen läuft noch.","info"):a(t?.live?"Probe-Regen ist unterwegs.":"Probe-Regen geschickt – im Moment läuft aber kein Overlay mit „Emote-Regen“.",t?.live?"ok":"info")}))},shop:null,async loadShop(){if(o()){try{this.shop=await i.api.rainShop.get()}catch{this.shop=null}this.paintShop()}},paintShop(){const e=this.shop,t=n("[data-shop-form]",this.dialog);if(n("[data-shop-note]",this.dialog).hidden=!!e,t.hidden=!e,n("[data-shop-live]",this.dialog).textContent=e?e.live?"🟢 Ein Overlay mit Emote-Regen läuft – kaufen geht.":"⚪ Gerade läuft kein Overlay mit Emote-Regen – kaufen ist gesperrt.":"",!e){n("[data-shop-state]",this.dialog).textContent="";return}t.points.checked=!!e.points,t.cost.value=e.points_cost,t.cooldown.value=e.points_cooldown,t.bits.checked=!!e.bits,t.sku.value=e.bits_sku,n("[data-shop-state]",this.dialog).textContent=e.error?`⚠️ Twitch: ${e.error}`:e.reward_id&&e.points?"✓ Belohnung ist auf Twitch angelegt.":""},async saveShop(e){const t=await i.api.rainShop.set({points:e.points.checked,cost:Number(e.cost.value),cooldown:Number(e.cooldown.value),bits:e.bits.checked,sku:e.sku.value});if(this.shop=t,t.points||t.reward_id)if(!i.ctx.state.twitch?.connected)a("Gespeichert. Für Kanalpunkte zuerst Twitch verbinden.","info");else try{await i.api.rainShop.sync(),this.shop=await i.api.rainShop.get(),a(t.points?"Gespeichert – die Belohnung ist auf Twitch.":"Gespeichert – die Belohnung ist auf Twitch aus.","ok")}catch(s){this.shop=await i.api.rainShop.get().catch(()=>t),a(i.ctx.germanError(s),"error")}else a("Gespeichert.","ok");this.paintShop()},rain(){const e=n("[data-sky]",this.dialog);if(!matchMedia("(prefers-reduced-motion: reduce)").matches)for(let t=0;t<24;t++){const s=d("span",{class:"er-preview-drop",style:{left:`${Math.random()*94}%`,animationDelay:`${Math.random()*1.4}s`,animationDuration:`${1.8+Math.random()*1.4}s`}},r[t%r.length]);s.addEventListener("animationend",()=>s.remove(),{once:!0}),e.append(s)}},async load(){u(this)},render(){const e=o();n("[data-admin]",this.dialog).hidden=!e,this.dialog.classList.toggle("has-side",e),n("[data-note]",this.dialog).hidden=!0},tileStatus(){return"🌧️ !regen im Chat"},async open(){p(this)&&(this.render(),this.rain(),this.loadShop())}};

@@ -1,15 +1,5 @@
-// Webseite: Vorlesen (Text-to-Speech) und Sammelkarten
-import {
-  $, $$, RARITY_LABEL, X, act, fill, h, isAdmin, makeDialog, onSubmit, openFeature, paintNote, paintTile, timeOf, toast,
-} from './extras-core.js';
-import { RARITY_ORDER } from './extras-api.js';
-import { TTS_VOICES, speak, stopSpeaking, ttsAvailable } from './tts-voice.js';
-import { shrinkImage } from './bingo.js';
-
-// Kanalpunkte-Belohnung (Kosten, Abklingzeit, an/aus, zu Twitch übernehmen) – nur Admins der Seite
-function rewardBox(key) {
-  return `
-  <section class="bingo-box x-reward" data-reward="${key}" data-affiliate="Kanalpunkte">
+import{$ as l,$$ as y,RARITY_LABEL as f,X as r,act as h,fill as p,h as s,isAdmin as b,makeDialog as x,onSubmit as k,openFeature as $,paintNote as T,paintTile as v,timeOf as _,toast as m}from"./extras-core.js";import{RARITY_ORDER as u}from"./extras-api.js";import{TTS_VOICES as w,speak as S,stopSpeaking as K,ttsAvailable as A}from"./tts-voice.js";import{shrinkImage as N}from"./bingo.js";function P(a){return`
+  <section class="bingo-box x-reward" data-reward="${a}" data-affiliate="Kanalpunkte">
     <h3 class="prank-h3">Kanalpunkte <small data-reward-state></small></h3>
     <form class="x-form" data-reward-form>
       <div class="x-grid2">
@@ -20,50 +10,7 @@ function rewardBox(key) {
       <button class="btn btn--outline btn--sm" type="submit">Speichern &amp; zu Twitch übernehmen</button>
     </form>
     <p class="form-hint">Legt die Belohnung im Twitch-Kanal an (nur Affiliates und Partner). Vor dem Starttermin der Kachel bleibt sie aus.</p>
-  </section>`;
-}
-
-async function wireReward(dlg, key) {
-  const box = $(`[data-reward="${key}"]`, dlg);
-  const paint = (r) => {
-    if (!r) return;
-    const form = $('[data-reward-form]', box);
-    if (!form.contains(document.activeElement)) {
-      form.cost.value = r.cost;
-      form.cooldown.value = r.cooldown;
-      form.enabled.checked = r.enabled;
-    }
-    $('[data-reward-state]', box).textContent = r.error ? `· ⚠ ${r.error}` : r.reward_id ? '· ✓ bei Twitch angelegt' : '· noch nicht bei Twitch';
-  };
-  onSubmit($('[data-reward-form]', box), async (form) => {
-    const r = await X.api.rewards.set(key, { cost: Number(form.cost.value), cooldown: Number(form.cooldown.value), enabled: form.enabled.checked });
-    paint(r);
-    try {
-      await X.api.rewards.sync(key);
-      toast('Bei Twitch übernommen.', 'ok');
-    } catch (err) {
-      toast(`Gespeichert, aber nicht bei Twitch: ${X.ctx.germanError(err)}`, 'error', 8000);
-    }
-    paint((await X.api.rewards.list().catch(() => [])).find((x) => x.key === key));
-  });
-  return async () => {
-    // Kanalpunkte-Kosten: Streamer, Admins und freigegebene Mods
-    box.hidden = !isAdmin();
-    if (!box.hidden) paint((await X.api.rewards.list().catch(() => [])).find((x) => x.key === key));
-  };
-}
-
-// ============================================================
-// Vorlesen (Text-to-Speech)
-// ============================================================
-export const tts = {
-  kind: 'tts', icon: '🔊', cta: 'Zum Vorlesen →',
-  on: false, error: '', settings: null, state: null, messages: [], subscribed: false, dialog: null, paintReward: null,
-
-  setup() {
-    this.dialog = makeDialog({
-      id: 'x-tts', cls: 'x-tts', eyebrow: 'Kanalpunkte · im Stream vorgelesen', title: 'Vorlesen lassen',
-      body: `
+  </section>`}async function E(a,t){const i=l(`[data-reward="${t}"]`,a),c=d=>{if(!d)return;const n=l("[data-reward-form]",i);n.contains(document.activeElement)||(n.cost.value=d.cost,n.cooldown.value=d.cooldown,n.enabled.checked=d.enabled),l("[data-reward-state]",i).textContent=d.error?`· ⚠ ${d.error}`:d.reward_id?"· ✓ bei Twitch angelegt":"· noch nicht bei Twitch"};return k(l("[data-reward-form]",i),async d=>{const n=await r.api.rewards.set(t,{cost:Number(d.cost.value),cooldown:Number(d.cooldown.value),enabled:d.enabled.checked});c(n);try{await r.api.rewards.sync(t),m("Bei Twitch übernommen.","ok")}catch(e){m(`Gespeichert, aber nicht bei Twitch: ${r.ctx.germanError(e)}`,"error",8e3)}c((await r.api.rewards.list().catch(()=>[])).find(e=>e.key===t))}),async()=>{i.hidden=!b(),i.hidden||c((await r.api.rewards.list().catch(()=>[])).find(d=>d.key===t))}}export const tts={kind:"tts",icon:"🔊",cta:"Zum Vorlesen →",on:!1,error:"",settings:null,state:null,messages:[],subscribed:!1,dialog:null,paintReward:null,setup(){this.dialog=x({id:"x-tts",cls:"x-tts",eyebrow:"Kanalpunkte · im Stream vorgelesen",title:"Vorlesen lassen",body:`
       <div class="x-layout">
         <div class="x-main">
           <div class="x-hero tt-hero">
@@ -94,7 +41,7 @@ export const tts = {
             <form class="x-form" data-web>
               <label class="field"><span>Text</span><input type="text" name="text" maxlength="500" required></label>
               <div class="x-inline">
-                <select name="voice" aria-label="Stimme">${TTS_VOICES.map((v) => `<option value="${v.id}">${v.name}</option>`).join('')}</select>
+                <select name="voice" aria-label="Stimme">${w.map(t=>`<option value="${t.id}">${t.name}</option>`).join("")}</select>
                 <button class="btn btn--primary btn--sm" type="submit">🔊 Im Stream vorlesen</button>
               </div>
             </form>
@@ -113,116 +60,11 @@ export const tts = {
               <button class="btn btn--outline btn--sm" type="submit">Speichern</button>
             </form>
           </section>
-          ${rewardBox('tts')}
+          ${P("tts")}
         </div>
-      </div>`,
-    });
-    const d = this.dialog;
-    $('[data-voices]', d).replaceChildren(...TTS_VOICES.map((v) => h('button', {
-      class: 'btn btn--ghost btn--sm', type: 'button',
-      onclick: () => { stopSpeaking(); speak(`Hallo, ich bin die Stimme ${v.name}.`, v.id); },
-    }, `▶ ${v.name}`)));
-    $('[data-no-tts]', d).hidden = ttsAvailable();
-    $('[data-skip]', d).addEventListener('click', (e) => act(e.currentTarget, async () => { this.state = await X.api.tts.skip(); }, 'Abgebrochen.'));
-    $('[data-mute]', d).addEventListener('change', (e) => act(null, async () => { this.state = await X.api.tts.skip(e.target.checked); }));
-    $('[data-simulate]', d).addEventListener('click', () => X.api.tts.simulate?.('NightOwl_Mia', 'Hallo zusammen, das ist eine Probe!', 'oma').then(() => this.reload()));
-    onSubmit($('[data-web]', d), async (form) => {
-      await X.api.tts.web(form.text.value, form.voice.value);
-      form.text.value = '';
-      toast('Wird im Stream vorgelesen.', 'ok');
-      this.reload();
-    });
-    onSubmit($('[data-settings]', d), async (form) => {
-      this.settings = await X.api.tts.save({ approval: form.approval.checked, max: Number(form.max.value), blocked: form.blocked.value.split('\n') });
-      toast('Gespeichert.', 'ok');
-      this.render();
-    });
-    wireReward(d, 'tts').then((fn) => { this.paintReward = fn; });
-  },
-
-  async load() {
-    try {
-      this.state = await X.api.tts.state();
-      this.on = !!this.state;
-      if (isAdmin()) {
-        [this.settings, this.messages] = await Promise.all([X.api.tts.settings(), X.api.tts.messages()]);
-      }
-    } catch (err) {
-      Object.assign(this, { on: false, error: err.message });
-    }
-    if (this.on && !this.subscribed && isAdmin()) {
-      this.subscribed = true;
-      X.api.on('tts_messages', () => this.reload());
-    }
-    paintTile(this);
-  },
-
-  async reload() {
-    if (!isAdmin()) return;
-    this.messages = await X.api.tts.messages().catch(() => this.messages);
-    paintTile(this);
-    if (this.dialog.open) this.render();
-  },
-
-  render() {
-    const d = this.dialog;
-    paintNote(d, this);
-    const admin = isAdmin() && this.on;
-    $('[data-admin]', d).hidden = !admin;
-    d.classList.toggle('has-side', admin);
-    $('[data-rules]', d).textContent = `Stimmen: ${TTS_VOICES.map((v) => v.name).join(', ')}. Keine Links, keine Beleidigungen – sonst gibt es die Punkte zurück und nichts wird vorgelesen.`;
-    if (!admin) return;
-    $('[data-simulate]', d).hidden = !X.api.demo;
-    $('[data-mute]', d).checked = !!this.state?.muted;
-    const pending = this.messages.filter((m) => m.status === 'pending');
-    $('[data-pending-count]', d).textContent = pending.length ? `· ${pending.length}` : '';
-    const voice = (id) => TTS_VOICES.find((v) => v.id === id)?.name ?? id;
-    fill($('[data-pending]', d), pending, (m) => h('li', { class: 'x-item tt-msg' },
-      h('span', { class: 'x-item-main' }, h('b', {}, `${m.who} · ${voice(m.voice)}`), h('span', { class: 'tt-text' }, m.text)),
-      h('span', { class: 'x-item-actions' },
-        h('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'Hier anhören', onclick: () => { stopSpeaking(); speak(m.text, m.voice); } }, '👂'),
-        h('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: (e) => act(e.currentTarget, async () => { await X.api.tts.review(m.id, 'approve'); this.reload(); }) }, '✅'),
-        h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: (e) => act(e.currentTarget, async () => { await X.api.tts.review(m.id, 'reject'); this.reload(); }) }, '❌'))),
-    'Nichts wartet.');
-    const recent = this.messages.filter((m) => m.status !== 'pending').slice(0, 10);
-    fill($('[data-recent]', d), recent, (m) => h('li', { class: 'x-item' },
-      h('span', { class: 'x-item-main' }, h('b', {}, `${m.status === 'approved' ? '🔊' : '🚫'} ${m.who}`), h('small', { class: 'tt-text' }, m.text)),
-      m.status === 'approved' ? h('button', { class: 'btn btn--ghost btn--sm', type: 'button', title: 'Nochmal vorlesen', onclick: (e) => act(e.currentTarget, async () => { await X.api.tts.review(m.id, 'replay'); }) }, '🔁') : null),
-    'Noch nichts vorgelesen.');
-    const form = $('[data-settings]', d);
-    if (this.settings && !form.contains(document.activeElement)) {
-      form.approval.checked = this.settings.need_approval;
-      form.max.value = this.settings.max_chars;
-      form.blocked.value = (this.settings.blocked_words ?? []).join('\n');
-    }
-    this.paintReward?.();
-  },
-
-  tileStatus() {
-    const pending = isAdmin() ? this.messages.filter((m) => m.status === 'pending').length : 0;
-    return pending ? `📝 ${pending} warten auf Freigabe` : '🔊 Deine Nachricht im Stream';
-  },
-
-  async open() {
-    if (!openFeature(this)) return;
-    this.render();
-    await this.load();
-    this.render();
-  },
-};
-
-// ============================================================
-// Sammelkarten
-// ============================================================
-export const cards = {
-  kind: 'cards', icon: '🃏', cta: 'Zu den Karten →',
-  on: false, error: '', defs: [], me: null, settings: null, board: [], trades: [], view: null, tab: 'packs', editing: null,
-  subscribed: false, dialog: null, paintReward: null,
-
-  setup() {
-    this.dialog = makeDialog({
-      id: 'x-cards', cls: 'x-cards', eyebrow: 'Jeden Tag ein Gratis-Pack · Packs auch per Kanalpunkte', title: 'Sammelkarten',
-      body: `
+      </div>`});const a=this.dialog;l("[data-voices]",a).replaceChildren(...w.map(t=>s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:()=>{K(),S(`Hallo, ich bin die Stimme ${t.name}.`,t.id)}},`▶ ${t.name}`))),l("[data-no-tts]",a).hidden=A(),l("[data-skip]",a).addEventListener("click",t=>h(t.currentTarget,async()=>{this.state=await r.api.tts.skip()},"Abgebrochen.")),l("[data-mute]",a).addEventListener("change",t=>h(null,async()=>{this.state=await r.api.tts.skip(t.target.checked)})),l("[data-simulate]",a).addEventListener("click",()=>r.api.tts.simulate?.("NightOwl_Mia","Hallo zusammen, das ist eine Probe!","oma").then(()=>this.reload())),k(l("[data-web]",a),async t=>{await r.api.tts.web(t.text.value,t.voice.value),t.text.value="",m("Wird im Stream vorgelesen.","ok"),this.reload()}),k(l("[data-settings]",a),async t=>{this.settings=await r.api.tts.save({approval:t.approval.checked,max:Number(t.max.value),blocked:t.blocked.value.split(`
+`)}),m("Gespeichert.","ok"),this.render()}),E(a,"tts").then(t=>{this.paintReward=t})},async load(){try{this.state=await r.api.tts.state(),this.on=!!this.state,b()&&([this.settings,this.messages]=await Promise.all([r.api.tts.settings(),r.api.tts.messages()]))}catch(a){Object.assign(this,{on:!1,error:a.message})}this.on&&!this.subscribed&&b()&&(this.subscribed=!0,r.api.on("tts_messages",()=>this.reload())),v(this)},async reload(){b()&&(this.messages=await r.api.tts.messages().catch(()=>this.messages),v(this),this.dialog.open&&this.render())},render(){const a=this.dialog;T(a,this);const t=b()&&this.on;if(l("[data-admin]",a).hidden=!t,a.classList.toggle("has-side",t),l("[data-rules]",a).textContent=`Stimmen: ${w.map(e=>e.name).join(", ")}. Keine Links, keine Beleidigungen – sonst gibt es die Punkte zurück und nichts wird vorgelesen.`,!t)return;l("[data-simulate]",a).hidden=!r.api.demo,l("[data-mute]",a).checked=!!this.state?.muted;const i=this.messages.filter(e=>e.status==="pending");l("[data-pending-count]",a).textContent=i.length?`· ${i.length}`:"";const c=e=>w.find(o=>o.id===e)?.name??e;p(l("[data-pending]",a),i,e=>s("li",{class:"x-item tt-msg"},s("span",{class:"x-item-main"},s("b",{},`${e.who} · ${c(e.voice)}`),s("span",{class:"tt-text"},e.text)),s("span",{class:"x-item-actions"},s("button",{class:"btn btn--ghost btn--sm",type:"button",title:"Hier anhören",onclick:()=>{K(),S(e.text,e.voice)}},"👂"),s("button",{class:"btn btn--primary btn--sm",type:"button",onclick:o=>h(o.currentTarget,async()=>{await r.api.tts.review(e.id,"approve"),this.reload()})},"✅"),s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:o=>h(o.currentTarget,async()=>{await r.api.tts.review(e.id,"reject"),this.reload()})},"❌"))),"Nichts wartet.");const d=this.messages.filter(e=>e.status!=="pending").slice(0,10);p(l("[data-recent]",a),d,e=>s("li",{class:"x-item"},s("span",{class:"x-item-main"},s("b",{},`${e.status==="approved"?"🔊":"🚫"} ${e.who}`),s("small",{class:"tt-text"},e.text)),e.status==="approved"?s("button",{class:"btn btn--ghost btn--sm",type:"button",title:"Nochmal vorlesen",onclick:o=>h(o.currentTarget,async()=>{await r.api.tts.review(e.id,"replay")})},"🔁"):null),"Noch nichts vorgelesen.");const n=l("[data-settings]",a);this.settings&&!n.contains(document.activeElement)&&(n.approval.checked=this.settings.need_approval,n.max.value=this.settings.max_chars,n.blocked.value=(this.settings.blocked_words??[]).join(`
+`)),this.paintReward?.()},tileStatus(){const a=b()?this.messages.filter(t=>t.status==="pending").length:0;return a?`📝 ${a} warten auf Freigabe`:"🔊 Deine Nachricht im Stream"},async open(){$(this)&&(this.render(),await this.load(),this.render())}},cards={kind:"cards",icon:"🃏",cta:"Zu den Karten →",on:!1,error:"",defs:[],me:null,settings:null,board:[],trades:[],view:null,tab:"packs",editing:null,subscribed:!1,dialog:null,paintReward:null,setup(){this.dialog=x({id:"x-cards",cls:"x-cards",eyebrow:"Jeden Tag ein Gratis-Pack · Packs auch per Kanalpunkte",title:"Sammelkarten",body:`
       <div class="cd-tabs" role="tablist">
         <button type="button" role="tab" data-tab="packs">📦 Packs</button>
         <button type="button" role="tab" data-tab="collection">📖 Sammlung</button>
@@ -268,7 +110,7 @@ export const cards = {
               <form class="x-form" data-card-form>
                 <label class="field"><span>Name</span><input type="text" name="name" maxlength="40" required></label>
                 <div class="x-grid2">
-                  <label class="field"><span>Seltenheit</span><select name="rarity">${RARITY_ORDER.map((r) => `<option value="${r}">${RARITY_LABEL[r]}</option>`).join('')}</select></label>
+                  <label class="field"><span>Seltenheit</span><select name="rarity">${u.map(t=>`<option value="${t}">${f[t]}</option>`).join("")}</select></label>
                   <label class="field"><span>Emoji</span><input type="text" name="emoji" maxlength="8" placeholder="🃏"></label>
                 </div>
                 <label class="field"><span>Text</span><input type="text" name="description" maxlength="120"></label>
@@ -288,267 +130,11 @@ export const cards = {
                   <label class="toggle"><input type="checkbox" name="daily"><span class="toggle-ui" aria-hidden="true"></span>Gratis-Pack jeden Tag</label>
                 </div>
                 <p class="form-hint">Wie oft kommt welche Seltenheit? (Gewichte)</p>
-                <div class="cd-weights">${RARITY_ORDER.map((r, i) => `<label class="field"><span>${RARITY_LABEL[r]}</span><input type="number" name="w${i}" min="0" max="1000"></label>`).join('')}</div>
+                <div class="cd-weights">${u.map((t,i)=>`<label class="field"><span>${f[t]}</span><input type="number" name="w${i}" min="0" max="1000"></label>`).join("")}</div>
                 <button class="btn btn--outline btn--sm" type="submit">Speichern</button>
               </form>
             </section>
-            ${rewardBox('cards')}
+            ${P("cards")}
           </div>
         </div>
-      </div>`,
-    });
-    const d = this.dialog;
-    $$('.cd-tabs [data-tab]', d).forEach((b) => b.addEventListener('click', () => { this.tab = b.dataset.tab; this.render(); }));
-    $('[data-daily]', d).addEventListener('click', (e) => act(e.currentTarget, async () => {
-      const pack = await X.api.cards.claimDaily();
-      await this.loadMe();
-      await this.openPack(pack);
-    }));
-    $('[data-grant]', d).addEventListener('click', () => X.api.cards.grant?.().then(() => this.loadMe()).then(() => this.render()));
-    onSubmit($('[data-card-form]', d), async (form) => {
-      let image = this.editing?.image_path ?? null;
-      const file = form.image.files[0];
-      if (file) image = await X.api.cards.upload(await shrinkImage(file, 320));
-      await X.api.cards.save({
-        id: this.editing?.id, name: form.name.value, rarity: form.rarity.value, emoji: form.emoji.value,
-        image, description: form.description.value, active: form.active.checked,
-      });
-      toast('Karte gespeichert.', 'ok');
-      this.edit(null);
-      this.defs = await X.api.cards.defs();
-      this.render();
-    });
-    $('[data-edit-cancel]', d).addEventListener('click', () => this.edit(null));
-    onSubmit($('[data-settings]', d), async (form) => {
-      this.settings = await X.api.cards.saveSettings({
-        size: Number(form.size.value), daily: form.daily.checked, weights: RARITY_ORDER.map((_, i) => Number(form[`w${i}`].value)),
-      });
-      toast('Gespeichert.', 'ok');
-    });
-    wireReward(d, 'cards').then((fn) => { this.paintReward = fn; });
-  },
-
-  async load() {
-    try {
-      this.defs = await X.api.cards.defs();
-      this.on = true;
-      await Promise.all([
-        X.ctx.state.user ? this.loadMe() : null,
-        X.api.cards.settings().then((s) => { this.settings = s; }).catch(() => {}),
-      ]);
-    } catch (err) {
-      Object.assign(this, { on: false, error: err.message });
-    }
-    if (this.on && !this.subscribed && X.ctx.state.user) {
-      this.subscribed = true;
-      X.api.on('card_trades', () => this.loadTrades().then(() => this.dialog.open && this.render()));
-    }
-    paintTile(this);
-  },
-
-  async loadMe() {
-    this.me = await X.api.cards.me().catch(() => null);
-    await this.loadTrades();
-    paintTile(this);
-  },
-  async loadTrades() { this.trades = await X.api.cards.trades().catch(() => []); },
-
-  def(id) { return this.defs.find((c) => c.id === id); },
-
-  // Eine Karte als Element (unbekannt = Umriss mit ???)
-  cardEl(c, { count = 0, known = true, isNew = false, small = false, onclick = null } = {}) {
-    const img = c.image_path ? h('img', { src: X.api.cards.imageUrl(c.image_path), alt: '', loading: 'lazy' }) : h('span', { class: 'xc-emoji' }, c.emoji);
-    return h(onclick ? 'button' : 'div', {
-      class: `xcard r-${c.rarity}${known ? '' : ' is-unknown'}${small ? ' is-small' : ''}`, type: onclick ? 'button' : null, onclick,
-      title: known ? `${c.name} · ${RARITY_LABEL[c.rarity]}` : '???',
-    },
-    h('span', { class: 'xc-art' }, known ? img : h('span', { class: 'xc-emoji' }, '❔')),
-    h('b', { class: 'xc-name' }, known ? c.name : '???'),
-    h('small', { class: 'xc-rarity' }, RARITY_LABEL[c.rarity]),
-    count > 1 ? h('span', { class: 'xc-count' }, `×${count}`) : null,
-    isNew ? h('span', { class: 'xc-new' }, 'NEU') : null);
-  },
-
-  async openPack(id) {
-    const d = this.dialog;
-    const drawn = await X.api.cards.open(id);
-    const stage = $('[data-reveal]', d);
-    stage.hidden = false;
-    const flips = drawn.map((c) => {
-      const back = h('div', { class: 'xc-back' }, '🃏');
-      const face = this.cardEl(c, { isNew: c.new });
-      return h('div', { class: `cd-flip r-${c.rarity}` }, h('div', { class: 'cd-flip-inner' }, back, face));
-    });
-    stage.replaceChildren(h('p', { class: 'cd-reveal-title' }, 'Klick auf die Karten!'), h('div', { class: 'cd-reveal-row' }, flips),
-      h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => { stage.hidden = true; this.render(); } }, 'Fertig'));
-    flips.forEach((f, i) => {
-      const turn = () => f.classList.add('is-open');
-      f.addEventListener('click', turn);
-      setTimeout(turn, 900 + i * 700);
-    });
-    await this.loadMe();
-    this.renderPacks();
-    const best = drawn.find((c) => c.rarity === 'legendary') ?? drawn.find((c) => c.rarity === 'epic');
-    if (best) setTimeout(() => toast(`✨ ${RARITY_LABEL[best.rarity]}: ${best.name}!`, 'ok'), 900 + drawn.indexOf(best) * 700);
-  },
-
-  edit(c) {
-    this.editing = c;
-    const form = $('[data-card-form]', this.dialog);
-    form.reset();
-    if (c) {
-      form.name.value = c.name;
-      form.rarity.value = c.rarity;
-      form.emoji.value = c.emoji;
-      form.description.value = c.description ?? '';
-      form.active.checked = c.active;
-      form.name.focus();
-    }
-    $('[data-edit-title]', this.dialog).textContent = c ? `„${c.name}“ bearbeiten` : 'Neue Karte';
-    $('[data-edit-cancel]', this.dialog).hidden = !c;
-  },
-
-  ownedMap() { return new Map((this.me?.owned ?? []).map((o) => [o.card_id, o.count])); },
-
-  renderPacks() {
-    const d = this.dialog;
-    const me = this.me;
-    const daily = $('[data-daily]', d);
-    daily.disabled = !me?.daily;
-    $('[data-daily-hint]', d).textContent = !X.ctx.state.user ? 'Zum Sammeln anmelden.'
-      : me?.daily ? 'Einmal pro Tag gratis – hol es dir!' : 'Dein Gratis-Pack für heute hast du schon. Morgen gibt es ein neues.';
-    $('[data-grant]', d).hidden = !X.api.demo;
-    const src = { daily: '🎁 Gratis-Pack', twitch: '💜 Kanalpunkte', admin: '🎉 Geschenk' };
-    fill($('[data-packs]', d), me?.packs ?? [], (p) => h('li', { class: 'cd-pack' },
-      h('span', { class: 'cd-pack-art' }, '📦'), h('span', {}, h('b', {}, src[p.source] ?? 'Pack'), h('small', {}, timeOf(p.created_at))),
-      h('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: (e) => act(e.currentTarget, () => this.openPack(p.id)) }, 'Öffnen')),
-    'Keine ungeöffneten Packs. Per Kanalpunkte im Twitch-Chat gibt es mehr (mit Twitch anmelden, damit sie hier ankommen).');
-  },
-
-  render() {
-    const d = this.dialog;
-    paintNote(d, this);
-    const admin = isAdmin() && this.on;
-    $('.cd-tabs [data-tab="admin"]', d).hidden = !admin;
-    if (this.tab === 'admin' && !admin) this.tab = 'packs';
-    $$('.cd-tabs [data-tab]', d).forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === this.tab)));
-    $$('.cd-pane', d).forEach((p) => { p.hidden = p.dataset.pane !== this.tab || !this.on; });
-    const incoming = this.trades.filter((t) => t.to_key === this.me?.key);
-    $('[data-trade-badge]', d).textContent = incoming.length ? `(${incoming.length})` : '';
-    if (!this.on) return;
-    const owned = this.ownedMap();
-    if (this.tab === 'packs') this.renderPacks();
-    if (this.tab === 'collection') {
-      const sorted = [...this.defs].sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
-      $('[data-progress]', d).textContent = `${owned.size} von ${this.defs.length} Karten · ${[...owned.values()].reduce((s, n) => s + n, 0)} insgesamt`;
-      $('[data-collection]', d).replaceChildren(...sorted.map((c) => this.cardEl(c, { count: owned.get(c.id) ?? 0, known: owned.has(c.id) })));
-    }
-    if (this.tab === 'board') this.renderBoard();
-    if (this.tab === 'trades') this.renderTrades();
-    if (this.tab === 'admin') this.renderAdmin();
-  },
-
-  async renderBoard() {
-    const d = this.dialog;
-    this.board = await X.api.cards.leaderboard().catch(() => []);
-    fill($('[data-board]', d), this.board, (r) => h('li', {},
-      h('button', { class: 'cd-board-btn', type: 'button', onclick: () => this.showPlayer(r) }, h('b', {}, r.name || 'Anonym'), h('span', {}, `${r.uniq} / ${this.defs.length} · ${r.total} Karten`))),
-    'Noch sammelt niemand.');
-  },
-
-  // Sammlung von jemand anderem – Karte wählen, die man haben will
-  async showPlayer(player) {
-    const d = this.dialog;
-    const view = $('[data-view]', d);
-    view.hidden = false;
-    $('[data-view-title]', d).textContent = `Sammlung von ${player.name || 'Anonym'}`;
-    const theirs = await X.api.cards.collection(player.player_key);
-    const mine = this.ownedMap();
-    $('[data-view-grid]', d).replaceChildren(...theirs.map((o) => {
-      const c = this.def(o.card_id);
-      if (!c) return null;
-      return this.cardEl(c, { count: o.count, small: true, onclick: player.player_key === this.me?.key ? null : () => this.offer(player, c, mine) });
-    }).filter(Boolean));
-    view.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  },
-
-  offer(player, want, mine) {
-    const d = this.dialog;
-    const mineList = [...mine].map(([id, count]) => ({ c: this.def(id), count })).filter((x) => x.c);
-    if (!mineList.length) { toast('Du hast noch keine Karten zum Tauschen.', 'info'); return; }
-    const grid = $('[data-view-grid]', d);
-    grid.replaceChildren(
-      h('p', { class: 'cd-offer-title' }, `Du möchtest „${want.name}“. Welche Karte gibst du dafür?`),
-      ...mineList.map(({ c, count }) => this.cardEl(c, {
-        count, small: true,
-        onclick: (e) => act(e.currentTarget, async () => {
-          await X.api.cards.offer(player.player_key, c.id, want.id);
-          toast('Angebot geschickt! Sobald es angenommen wird, tauscht ihr.', 'ok');
-          await this.loadTrades();
-          this.showPlayer(player);
-        }),
-      })),
-      h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => this.showPlayer(player) }, 'Zurück'),
-    );
-  },
-
-  renderTrades() {
-    const d = this.dialog;
-    const name = (id) => this.def(id)?.name ?? '?';
-    const incoming = this.trades.filter((t) => t.to_key === this.me?.key);
-    const outgoing = this.trades.filter((t) => t.from_key === this.me?.key);
-    const done = async () => { await this.loadMe(); this.render(); };
-    fill($('[data-incoming]', d), incoming, (t) => h('li', { class: 'x-item' },
-      h('span', { class: 'x-item-main' }, h('b', {}, `${t.from_name || 'Jemand'} bietet „${name(t.give_card)}“`), h('small', {}, `für deine „${name(t.want_card)}“`)),
-      h('span', { class: 'x-item-actions' },
-        h('button', { class: 'btn btn--primary btn--sm', type: 'button', onclick: (e) => act(e.currentTarget, async () => { const r = await X.api.cards.answer(t.id, true); toast(r.status === 'accepted' ? 'Getauscht!' : 'Geht nicht mehr – eine der Karten ist weg.', r.status === 'accepted' ? 'ok' : 'info'); await done(); }) }, '✅ Tauschen'),
-        h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: (e) => act(e.currentTarget, async () => { await X.api.cards.answer(t.id, false); await done(); }) }, '❌'))),
-    'Keine Angebote an dich.');
-    fill($('[data-outgoing]', d), outgoing, (t) => h('li', { class: 'x-item' },
-      h('span', { class: 'x-item-main' }, h('b', {}, `„${name(t.give_card)}“ gegen „${name(t.want_card)}“`), h('small', {}, `an ${t.to_name || 'jemand'} · wartet`)),
-      h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: (e) => act(e.currentTarget, async () => { await X.api.cards.answer(t.id, false); await done(); }) }, 'Zurückziehen')),
-    'Keine offenen Angebote. Tauschen geht über die Rangliste: Namen anklicken.');
-  },
-
-  renderAdmin() {
-    const d = this.dialog;
-    fill($('[data-defs]', d), [...this.defs].sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity)), (c) => h('li', { class: `x-item${c.active ? '' : ' is-off'}` },
-      this.cardEl(c, { small: true }),
-      h('span', { class: 'x-item-main' }, h('b', {}, c.name), h('small', {}, `${RARITY_LABEL[c.rarity]}${c.active ? '' : ' · wird nicht gezogen'}`)),
-      h('span', { class: 'x-item-actions' },
-        h('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => this.edit(c) }, '✏️'),
-        h('button', {
-          class: 'btn btn--ghost btn--sm', type: 'button', title: 'Löschen',
-          onclick: (e) => {
-            if (!confirm(`„${c.name}“ löschen? Sie verschwindet aus allen Sammlungen. (Lieber „Kann gezogen werden“ ausschalten.)`)) return;
-            act(e.currentTarget, async () => { await X.api.cards.remove(c); this.defs = this.defs.filter((x) => x.id !== c.id); this.render(); });
-          },
-        }, '🗑'))), 'Noch keine Karten.');
-    const form = $('[data-settings]', d);
-    if (this.settings && !form.contains(document.activeElement)) {
-      form.size.value = this.settings.pack_size;
-      form.daily.checked = this.settings.daily;
-      this.settings.weights.forEach((w, i) => { form[`w${i}`].value = w; });
-    }
-    this.paintReward?.();
-  },
-
-  tileStatus() {
-    if (!this.on) return '🃏 Sammle sie alle';
-    const packs = this.me?.packs?.length ?? 0;
-    if (packs) return `📦 ${packs} ${packs === 1 ? 'Pack wartet' : 'Packs warten'}!`;
-    if (this.me?.daily) return '🎁 Gratis-Pack abholen!';
-    const owned = this.ownedMap().size;
-    return owned ? `🃏 ${owned} / ${this.defs.length} gesammelt` : '🃏 Sammle sie alle';
-  },
-
-  async open() {
-    if (!openFeature(this)) return;
-    $('[data-reveal]', this.dialog).hidden = true;
-    $('[data-view]', this.dialog).hidden = true;
-    this.render();
-    await this.load();
-    if (this.me?.packs?.length || this.me?.daily) this.tab = 'packs';
-    this.render();
-  },
-};
+      </div>`});const a=this.dialog;y(".cd-tabs [data-tab]",a).forEach(t=>t.addEventListener("click",()=>{this.tab=t.dataset.tab,this.render()})),l("[data-daily]",a).addEventListener("click",t=>h(t.currentTarget,async()=>{const i=await r.api.cards.claimDaily();await this.loadMe(),await this.openPack(i)})),l("[data-grant]",a).addEventListener("click",()=>r.api.cards.grant?.().then(()=>this.loadMe()).then(()=>this.render())),k(l("[data-card-form]",a),async t=>{let i=this.editing?.image_path??null;const c=t.image.files[0];c&&(i=await r.api.cards.upload(await N(c,320))),await r.api.cards.save({id:this.editing?.id,name:t.name.value,rarity:t.rarity.value,emoji:t.emoji.value,image:i,description:t.description.value,active:t.active.checked}),m("Karte gespeichert.","ok"),this.edit(null),this.defs=await r.api.cards.defs(),this.render()}),l("[data-edit-cancel]",a).addEventListener("click",()=>this.edit(null)),k(l("[data-settings]",a),async t=>{this.settings=await r.api.cards.saveSettings({size:Number(t.size.value),daily:t.daily.checked,weights:u.map((i,c)=>Number(t[`w${c}`].value))}),m("Gespeichert.","ok")}),E(a,"cards").then(t=>{this.paintReward=t})},async load(){try{this.defs=await r.api.cards.defs(),this.on=!0,await Promise.all([r.ctx.state.user?this.loadMe():null,r.api.cards.settings().then(a=>{this.settings=a}).catch(()=>{})])}catch(a){Object.assign(this,{on:!1,error:a.message})}this.on&&!this.subscribed&&r.ctx.state.user&&(this.subscribed=!0,r.api.on("card_trades",()=>this.loadTrades().then(()=>this.dialog.open&&this.render()))),v(this)},async loadMe(){this.me=await r.api.cards.me().catch(()=>null),await this.loadTrades(),v(this)},async loadTrades(){this.trades=await r.api.cards.trades().catch(()=>[])},def(a){return this.defs.find(t=>t.id===a)},cardEl(a,{count:t=0,known:i=!0,isNew:c=!1,small:d=!1,onclick:n=null}={}){const e=a.image_path?s("img",{src:r.api.cards.imageUrl(a.image_path),alt:"",loading:"lazy"}):s("span",{class:"xc-emoji"},a.emoji);return s(n?"button":"div",{class:`xcard r-${a.rarity}${i?"":" is-unknown"}${d?" is-small":""}`,type:n?"button":null,onclick:n,title:i?`${a.name} · ${f[a.rarity]}`:"???"},s("span",{class:"xc-art"},i?e:s("span",{class:"xc-emoji"},"❔")),s("b",{class:"xc-name"},i?a.name:"???"),s("small",{class:"xc-rarity"},f[a.rarity]),t>1?s("span",{class:"xc-count"},`×${t}`):null,c?s("span",{class:"xc-new"},"NEU"):null)},async openPack(a){const t=this.dialog,i=await r.api.cards.open(a),c=l("[data-reveal]",t);c.hidden=!1;const d=i.map(e=>{const o=s("div",{class:"xc-back"},"🃏"),g=this.cardEl(e,{isNew:e.new});return s("div",{class:`cd-flip r-${e.rarity}`},s("div",{class:"cd-flip-inner"},o,g))});c.replaceChildren(s("p",{class:"cd-reveal-title"},"Klick auf die Karten!"),s("div",{class:"cd-reveal-row"},d),s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:()=>{c.hidden=!0,this.render()}},"Fertig")),d.forEach((e,o)=>{const g=()=>e.classList.add("is-open");e.addEventListener("click",g),setTimeout(g,900+o*700)}),await this.loadMe(),this.renderPacks();const n=i.find(e=>e.rarity==="legendary")??i.find(e=>e.rarity==="epic");n&&setTimeout(()=>m(`✨ ${f[n.rarity]}: ${n.name}!`,"ok"),900+i.indexOf(n)*700)},edit(a){this.editing=a;const t=l("[data-card-form]",this.dialog);t.reset(),a&&(t.name.value=a.name,t.rarity.value=a.rarity,t.emoji.value=a.emoji,t.description.value=a.description??"",t.active.checked=a.active,t.name.focus()),l("[data-edit-title]",this.dialog).textContent=a?`„${a.name}“ bearbeiten`:"Neue Karte",l("[data-edit-cancel]",this.dialog).hidden=!a},ownedMap(){return new Map((this.me?.owned??[]).map(a=>[a.card_id,a.count]))},renderPacks(){const a=this.dialog,t=this.me,i=l("[data-daily]",a);i.disabled=!t?.daily,l("[data-daily-hint]",a).textContent=r.ctx.state.user?t?.daily?"Einmal pro Tag gratis – hol es dir!":"Dein Gratis-Pack für heute hast du schon. Morgen gibt es ein neues.":"Zum Sammeln anmelden.",l("[data-grant]",a).hidden=!r.api.demo;const c={daily:"🎁 Gratis-Pack",twitch:"💜 Kanalpunkte",admin:"🎉 Geschenk"};p(l("[data-packs]",a),t?.packs??[],d=>s("li",{class:"cd-pack"},s("span",{class:"cd-pack-art"},"📦"),s("span",{},s("b",{},c[d.source]??"Pack"),s("small",{},_(d.created_at))),s("button",{class:"btn btn--primary btn--sm",type:"button",onclick:n=>h(n.currentTarget,()=>this.openPack(d.id))},"Öffnen")),"Keine ungeöffneten Packs. Per Kanalpunkte im Twitch-Chat gibt es mehr (mit Twitch anmelden, damit sie hier ankommen).")},render(){const a=this.dialog;T(a,this);const t=b()&&this.on;l('.cd-tabs [data-tab="admin"]',a).hidden=!t,this.tab==="admin"&&!t&&(this.tab="packs"),y(".cd-tabs [data-tab]",a).forEach(d=>d.setAttribute("aria-selected",String(d.dataset.tab===this.tab))),y(".cd-pane",a).forEach(d=>{d.hidden=d.dataset.pane!==this.tab||!this.on});const i=this.trades.filter(d=>d.to_key===this.me?.key);if(l("[data-trade-badge]",a).textContent=i.length?`(${i.length})`:"",!this.on)return;const c=this.ownedMap();if(this.tab==="packs"&&this.renderPacks(),this.tab==="collection"){const d=[...this.defs].sort((n,e)=>u.indexOf(n.rarity)-u.indexOf(e.rarity));l("[data-progress]",a).textContent=`${c.size} von ${this.defs.length} Karten · ${[...c.values()].reduce((n,e)=>n+e,0)} insgesamt`,l("[data-collection]",a).replaceChildren(...d.map(n=>this.cardEl(n,{count:c.get(n.id)??0,known:c.has(n.id)})))}this.tab==="board"&&this.renderBoard(),this.tab==="trades"&&this.renderTrades(),this.tab==="admin"&&this.renderAdmin()},async renderBoard(){const a=this.dialog;this.board=await r.api.cards.leaderboard().catch(()=>[]),p(l("[data-board]",a),this.board,t=>s("li",{},s("button",{class:"cd-board-btn",type:"button",onclick:()=>this.showPlayer(t)},s("b",{},t.name||"Anonym"),s("span",{},`${t.uniq} / ${this.defs.length} · ${t.total} Karten`))),"Noch sammelt niemand.")},async showPlayer(a){const t=this.dialog,i=l("[data-view]",t);i.hidden=!1,l("[data-view-title]",t).textContent=`Sammlung von ${a.name||"Anonym"}`;const c=await r.api.cards.collection(a.player_key),d=this.ownedMap();l("[data-view-grid]",t).replaceChildren(...c.map(n=>{const e=this.def(n.card_id);return e?this.cardEl(e,{count:n.count,small:!0,onclick:a.player_key===this.me?.key?null:()=>this.offer(a,e,d)}):null}).filter(Boolean)),i.scrollIntoView({behavior:"smooth",block:"nearest"})},offer(a,t,i){const c=this.dialog,d=[...i].map(([e,o])=>({c:this.def(e),count:o})).filter(e=>e.c);if(!d.length){m("Du hast noch keine Karten zum Tauschen.","info");return}l("[data-view-grid]",c).replaceChildren(s("p",{class:"cd-offer-title"},`Du möchtest „${t.name}“. Welche Karte gibst du dafür?`),...d.map(({c:e,count:o})=>this.cardEl(e,{count:o,small:!0,onclick:g=>h(g.currentTarget,async()=>{await r.api.cards.offer(a.player_key,e.id,t.id),m("Angebot geschickt! Sobald es angenommen wird, tauscht ihr.","ok"),await this.loadTrades(),this.showPlayer(a)})})),s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:()=>this.showPlayer(a)},"Zurück"))},renderTrades(){const a=this.dialog,t=n=>this.def(n)?.name??"?",i=this.trades.filter(n=>n.to_key===this.me?.key),c=this.trades.filter(n=>n.from_key===this.me?.key),d=async()=>{await this.loadMe(),this.render()};p(l("[data-incoming]",a),i,n=>s("li",{class:"x-item"},s("span",{class:"x-item-main"},s("b",{},`${n.from_name||"Jemand"} bietet „${t(n.give_card)}“`),s("small",{},`für deine „${t(n.want_card)}“`)),s("span",{class:"x-item-actions"},s("button",{class:"btn btn--primary btn--sm",type:"button",onclick:e=>h(e.currentTarget,async()=>{const o=await r.api.cards.answer(n.id,!0);m(o.status==="accepted"?"Getauscht!":"Geht nicht mehr – eine der Karten ist weg.",o.status==="accepted"?"ok":"info"),await d()})},"✅ Tauschen"),s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:e=>h(e.currentTarget,async()=>{await r.api.cards.answer(n.id,!1),await d()})},"❌"))),"Keine Angebote an dich."),p(l("[data-outgoing]",a),c,n=>s("li",{class:"x-item"},s("span",{class:"x-item-main"},s("b",{},`„${t(n.give_card)}“ gegen „${t(n.want_card)}“`),s("small",{},`an ${n.to_name||"jemand"} · wartet`)),s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:e=>h(e.currentTarget,async()=>{await r.api.cards.answer(n.id,!1),await d()})},"Zurückziehen")),"Keine offenen Angebote. Tauschen geht über die Rangliste: Namen anklicken.")},renderAdmin(){const a=this.dialog;p(l("[data-defs]",a),[...this.defs].sort((i,c)=>u.indexOf(i.rarity)-u.indexOf(c.rarity)),i=>s("li",{class:`x-item${i.active?"":" is-off"}`},this.cardEl(i,{small:!0}),s("span",{class:"x-item-main"},s("b",{},i.name),s("small",{},`${f[i.rarity]}${i.active?"":" · wird nicht gezogen"}`)),s("span",{class:"x-item-actions"},s("button",{class:"btn btn--ghost btn--sm",type:"button",onclick:()=>this.edit(i)},"✏️"),s("button",{class:"btn btn--ghost btn--sm",type:"button",title:"Löschen",onclick:c=>{confirm(`„${i.name}“ löschen? Sie verschwindet aus allen Sammlungen. (Lieber „Kann gezogen werden“ ausschalten.)`)&&h(c.currentTarget,async()=>{await r.api.cards.remove(i),this.defs=this.defs.filter(d=>d.id!==i.id),this.render()})}},"🗑"))),"Noch keine Karten.");const t=l("[data-settings]",a);this.settings&&!t.contains(document.activeElement)&&(t.size.value=this.settings.pack_size,t.daily.checked=this.settings.daily,this.settings.weights.forEach((i,c)=>{t[`w${c}`].value=i})),this.paintReward?.()},tileStatus(){if(!this.on)return"🃏 Sammle sie alle";const a=this.me?.packs?.length??0;if(a)return`📦 ${a} ${a===1?"Pack wartet":"Packs warten"}!`;if(this.me?.daily)return"🎁 Gratis-Pack abholen!";const t=this.ownedMap().size;return t?`🃏 ${t} / ${this.defs.length} gesammelt`:"🃏 Sammle sie alle"},async open(){$(this)&&(l("[data-reveal]",this.dialog).hidden=!0,l("[data-view]",this.dialog).hidden=!0,this.render(),await this.load(),(this.me?.packs?.length||this.me?.daily)&&(this.tab="packs"),this.render())}};
