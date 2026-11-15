@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { createApi, germanError, isDemo } from './api.js';
 import { renderConsole } from './dash-console.js';
 import { renderTouchAdmin } from './dash-console-touch.js';
+import { renderBilanz } from './admin-bilanz.js';
 import { createExtrasApi } from './extras-api.js';
 import { setChannel } from './channel.js';
 import { DEFAULT_VARIANTS } from './defaults.js';
@@ -1681,6 +1682,7 @@ const VIEWS = {
   users: ['Nutzer', 'Alle registrierten Konten'],
   inbox: ['Postfach', 'Kontaktformular der Startseite'],
   money: ['Pro, Sponsoring, Spenden', 'Start-Checks – Freischalten Schritt für Schritt in docs/STARTKLAR.md'],
+  bilanz: ['Bilanz (EÜR)', 'Einnahmen-Überschuss-Rechnung, Bilanz und T-Konten – nur in diesem Browser gespeichert, keine Steuerberatung'],
   artists: ['Artists', 'Bewerbungen freischalten und Uploads prüfen'],
   security: ['Sicherheit', 'Datenbank-Check und Anmelde-Möglichkeiten'],
   console: ['StreamHelp Console', 'Tasten belegen, 3D-Modell, Technik-Baukasten, Release-Check, Anleitung und Werbung'],
@@ -1707,6 +1709,7 @@ function showView(id, scroll = true) {
   $('#adm-title-badge').hidden = id !== 'console' && id !== 'touch';
   if (id === 'console') openConsole();
   if (id === 'touch') openTouch();
+  if (id === 'bilanz') renderBilanz($('#bilanz-slot'));
   document.title = `${title} · StreamHelp-Admin`;
   if (location.hash.slice(1) !== id) history.replaceState(null, '', `#${id}`);
   if (scroll) window.scrollTo(0, 0);

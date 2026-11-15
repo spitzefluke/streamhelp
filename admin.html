@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-tsvDgKs2gaZH1/NH1OtI6Eh6ipGI5CTxE13lELxK4wM=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mSinRI6tReqJ3CJ7iud8xLQcTG92YslOaPhoZyjS3YU=' 'sha256-1ui2VcY3Yi8XsSAiEp60aGoilmBOTdTRqWU9HU02x90='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,13 +15,14 @@
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
   <link rel="stylesheet" href="css/phosphor.css?v=110d4d2cf3">
   <link rel="stylesheet" href="css/style.css?v=c9174eefba">
-  <link rel="stylesheet" href="css/admin.css?v=7163bf33f4">
+  <link rel="stylesheet" href="css/admin.css?v=59f1c895ed">
   <link rel="stylesheet" href="css/console-touch.css?v=312455117a">
   <!-- versions:start (node tools/stamp-versions.mjs) -->
   <script type="importmap">{
     "imports": {
       "./js/a11y.js": "./js/a11y.js?v=2e8e03ec6d",
-      "./js/admin.js": "./js/admin.js?v=8078c02180",
+      "./js/admin-bilanz.js": "./js/admin-bilanz.js?v=c37572a6f4",
+      "./js/admin.js": "./js/admin.js?v=be05dbe21b",
       "./js/affiliate.js": "./js/affiliate.js?v=6a2436ccda",
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
@@ -241,6 +242,7 @@
         <div class="adm-nav-group">
           <p class="adm-nav-head">Einnahmen &amp; Inhalte</p>
           <button class="adm-nav-item" type="button" data-go="money" title="Pro, Sponsoring, Spenden"><span class="adm-nav-ico" aria-hidden="true">💶</span><span class="adm-nav-label">Pro, Sponsoring, Spenden</span><span class="adm-badge" data-badge="money" hidden></span></button>
+          <button class="adm-nav-item" type="button" data-go="bilanz" title="Bilanz (EÜR)"><span class="adm-nav-ico" aria-hidden="true">🧾</span><span class="adm-nav-label">Bilanz (EÜR)</span></button>
           <button class="adm-nav-item" type="button" data-go="artists" title="Artists"><span class="adm-nav-ico" aria-hidden="true">🎨</span><span class="adm-nav-label">Artists</span><span class="adm-badge" data-badge="artists" hidden></span></button>
         </div>
         <div class="adm-nav-group">
@@ -597,6 +599,12 @@
           </div>
           <ul id="providers" class="providers"></ul>
         </section>
+      </div>
+
+      <!-- ============ BILANZ (EÜR) ============ -->
+      <!-- Einnahmen-Überschuss-Rechnung mit Bilanz und T-Konten (js/admin-bilanz.js). Daten nur in diesem Browser. -->
+      <div class="adm-view" data-view="bilanz" hidden>
+        <div class="bil-wrap" id="bilanz-slot"><p class="muted">Lädt …</p></div>
       </div>
 
       <!-- ============ CONSOLE ============ -->

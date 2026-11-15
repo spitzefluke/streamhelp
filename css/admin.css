@@ -527,3 +527,44 @@
 .tch-adm-dot::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #8e8e9a; }
 .tch-adm-dot.is-ok::before { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; }
 .tch-adm-dot.is-bad::before { background: #ff5a4e; }
+
+/* ---------- Bilanz (EÜR) – js/admin-bilanz.js ---------- */
+.bil-wrap { display: grid; gap: 14px; max-width: 900px; }
+.bil { display: grid; gap: 10px; }
+.bil-h { margin: 0; font-size: 16px !important; letter-spacing: .04em !important; }
+.bil label { display: block; margin-bottom: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.bil input, .bil select { width: 100%; min-height: 40px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text); font: inherit; font-size: 14.5px; }
+.bil input:focus, .bil select:focus { outline: none; border-color: var(--acc); box-shadow: 0 0 0 3px rgba(var(--acc-rgb), .2); }
+.bil-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.bil-f { flex: 1; min-width: 130px; }
+.bil-f--2 { flex: 2; min-width: 190px; }
+.bil-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.bil-wide { grid-column: 1 / -1; }
+.bil-mt { margin-top: 4px; }
+.bil-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bil-actions .btn { flex: 1; min-width: 130px; }
+.bil-k { font-size: 12.5px; color: var(--muted); }
+.bil-v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bil-in { color: var(--ok-ink); }
+.bil-out { color: #ff8a80; }
+:root[data-theme="light"] .bil-out { color: #b91c1c; }
+.bil-hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+.bil-sc { overflow-x: auto; }
+.bil-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.bil-table th, .bil-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.bil-table th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.bil-table .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bil-tot td { font-weight: 700; }
+.bil-ph td { padding-top: 16px; border-bottom: 0; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+.bil-x { min-width: 32px; min-height: 32px; padding: 2px 8px; border: 0; border-radius: 8px; background: transparent; color: #ff8a80; font: inherit; font-weight: 600; cursor: pointer; }
+.bil-x:hover { background: var(--bg-2); }
+.bil-x--ac { color: var(--acc-ink-d, var(--acc)); }
+.bil-tk { padding: 10px 0 !important; }
+.bil-tk b { padding-left: 6px; }
+.bil-tg { display: grid; grid-template-columns: 1fr 1fr; margin-top: 4px; border-top: 2px solid var(--text); }
+.bil-tg > div { min-width: 0; padding: 3px 6px; font-size: 13px; }
+.bil-tg > div:nth-child(odd) { border-right: 2px solid var(--text); }
+.bil-th { color: var(--muted); font-size: 11px !important; }
+.bil-ts { border-top: 1px solid var(--text); font-weight: 700; }
+.bil-tl { display: flex; justify-content: space-between; gap: 8px; }
+.bil-tl span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
