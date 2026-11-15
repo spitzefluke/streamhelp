@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-veOQeHtkCIyZRLxwVHUYEOKxI8shLCE0jmhMYM3bCdA=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-tsvDgKs2gaZH1/NH1OtI6Eh6ipGI5CTxE13lELxK4wM=' 'sha256-PKQ0cxaYvEwlryd+qcMFuNSkqilDmsngZp02uZBhv2s=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://irc-ws.chat.twitch.tv ws://127.0.0.1:* ws://localhost:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <script src="js/a11y.js?v=2e8e03ec6d"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -103,11 +103,11 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="css/fonts.css?v=15040c6dc7">
   <link rel="stylesheet" href="css/style.css?v=c9174eefba">
-  <link rel="stylesheet" href="css/phosphor.css?v=41662421df">
+  <link rel="stylesheet" href="css/phosphor.css?v=110d4d2cf3">
   <link rel="stylesheet" href="css/consent.css?v=942aa7d09e">
   <link rel="stylesheet" href="css/landing.css?v=92e9c75f79">
   <link rel="stylesheet" href="css/yami.css?v=414a6010cd">
-  <link rel="stylesheet" href="css/shell.css?v=e77d753afb">
+  <link rel="stylesheet" href="css/shell.css?v=4e11abb4e2">
   <link rel="stylesheet" href="css/prank-fx.css?v=82d09df5b9">
   <link rel="stylesheet" href="css/bingo.css?v=41f5ca23ab">
   <link rel="stylesheet" href="css/pet.css?v=810a0995fc">
@@ -123,7 +123,7 @@
       "./js/alert-designer.js": "./js/alert-designer.js?v=4e2dfd6a25",
       "./js/alerts.js": "./js/alerts.js?v=863b5a2311",
       "./js/api.js": "./js/api.js?v=2e2f2c1fc5",
-      "./js/app.js": "./js/app.js?v=8bfcdb8675",
+      "./js/app.js": "./js/app.js?v=2a08b9bfe0",
       "./js/artist-files.js": "./js/artist-files.js?v=5ca31ade50",
       "./js/avatar.js": "./js/avatar.js?v=136eccd608",
       "./js/bingo.js": "./js/bingo.js?v=1b500b0cd6",
@@ -202,7 +202,7 @@
       "./js/i18n-ru.js": "./js/i18n-ru.js?v=c85900a1be",
       "./js/i18n-tr.js": "./js/i18n-tr.js?v=e12634fb30",
       "./js/i18n.js": "./js/i18n.js?v=4550a5388d",
-      "./js/intro.js": "./js/intro.js?v=30d2b9efea",
+      "./js/intro.js": "./js/intro.js?v=b19074af39",
       "./js/kuendigen.js": "./js/kuendigen.js?v=9478ee88ee",
       "./js/landing.js": "./js/landing.js?v=1e86762ef9",
       "./js/launch.js": "./js/launch.js?v=cb96388dfe",
@@ -243,7 +243,7 @@
       "./js/supabase-js.js": "./js/supabase-js.js?v=397c32fbeb",
       "./js/theme-packs.js": "./js/theme-packs.js?v=90faabe1ce",
       "./js/ticker.js": "./js/ticker.js?v=f42d43ff2c",
-      "./js/tiktok-ideas.js": "./js/tiktok-ideas.js?v=ad4aeaff7e",
+      "./js/tiktok-ideas.js": "./js/tiktok-ideas.js?v=81e45bb5c2",
       "./js/tour.js": "./js/tour.js?v=c499758325",
       "./js/tts-voice.js": "./js/tts-voice.js?v=3a37b18618",
       "./js/twitch-chat.js": "./js/twitch-chat.js?v=1b6eb8553c",
@@ -821,57 +821,48 @@
         <section class="page" data-page="ideas" aria-labelledby="page-title">
           <!-- Ruhiger Einstieg für Streamer (js/dash-start.js) -->
           <div id="start-slot" hidden></div>
-          <!-- Begrüßung -->
-          <article class="hello-hero" id="next-departure">
-            <span class="nd-bg" aria-hidden="true"></span>
-            <div class="hh-text">
-              <h2 id="hello-title">Hallo!</h2>
-              <p id="next-desc">Schön, dass du da bist.</p>
-            </div>
-          </article>
-
-          <div class="section ideas-section">
-            <div class="ideas-head">
-              <h2 id="grid-title">Content-Ideen</h2>
-              <span class="ideas-count" id="plan-count"></span>
-              <div class="ideas-tools">
-                <label class="ideas-search">
-                  <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-                  <input id="grid-search" type="search" placeholder="Idee suchen …" aria-label="Content-Ideen durchsuchen" autocomplete="off">
-                </label>
-                <div class="view-toggle" id="view-toggle" role="group" aria-label="Ansicht">
-                  <button type="button" data-view="grid" aria-pressed="true" title="Raster" aria-label="Raster"><i class="ph ph-squares-four" aria-hidden="true"></i></button>
-                  <button type="button" data-view="list" aria-pressed="false" title="Liste" aria-label="Liste"><i class="ph ph-list-bullets" aria-hidden="true"></i></button>
-                </div>
+          <!-- Content-Ideen nach Entwurf „Content-Ideen v2 · 1a“: Plattform, Filter, Angepinnt, Listen nach Art (js/app.js renderGrid) -->
+          <div class="ix" id="ix">
+            <header class="ix-head">
+              <div class="ix-head-text">
+                <p class="ix-eyebrow">Inhalte</p>
+                <h2 id="grid-title">Content-Ideen</h2>
               </div>
-            </div>
+              <label class="ix-search">
+                <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                <input id="grid-search" type="search" placeholder="Idee suchen …" aria-label="Content-Ideen durchsuchen" autocomplete="off">
+              </label>
+            </header>
 
-            <div class="ideas-filters">
+            <!-- Twitch oder TikTok LIVE (TikTok nur für Streamer und Mods, js/tiktok-ideas.js) -->
+            <div class="ix-plat" id="ix-plat" role="group" aria-label="Plattform" hidden></div>
+
+            <div class="ix-filters" id="ix-filters">
               <div class="cat-chips" id="cat-chips" role="group" aria-label="Nach Art filtern"></div>
               <!-- Games: je Game die passenden Content-Ideen (Migration …_games.sql) -->
               <div class="games-section" id="games-section" hidden>
-                <div class="games-strip" id="games-strip" role="tablist" aria-label="Game wählen"></div>
-                <button type="button" class="game-chip game-chip--edit" id="games-edit" hidden title="Games verwalten"><i class="ph ph-gear-six" aria-hidden="true"></i><span>Games verwalten</span></button>
+                <label class="ix-game"><i class="ph ph-game-controller" aria-hidden="true"></i>Game
+                  <select id="games-select" aria-label="Game wählen"></select></label>
+                <button type="button" class="ix-game-edit" id="games-edit" hidden title="Games verwalten" aria-label="Games verwalten"><i class="ph ph-gear-six" aria-hidden="true"></i></button>
               </div>
+              <span class="ix-count" id="plan-count"></span>
             </div>
             <p class="games-live" id="games-live" hidden></p>
 
-            <div id="grid" class="grid" aria-live="polite"></div>
-          </div>
+            <section class="ix-pinned" id="ix-pinned" aria-label="Angepinnt" hidden>
+              <p class="ix-label"><i class="ph ph-star" aria-hidden="true"></i>Angepinnt · bis zu 3</p>
+              <div class="grid ix-pinned-grid" id="ix-pinned-grid"></div>
+            </section>
 
-          <!-- TikTok LIVE: Ideen fürs Hochformat (js/tiktok-ideas.js) – ohne TikTok-Verbindung, mit Werkzeugen zum Bedienen von Hand -->
-          <details class="tt-section" id="tt-ideas" data-for="team">
-            <summary class="tt-summary">
-              <span class="tt-logo" aria-hidden="true"><i class="ph ph-tiktok-logo"></i></span>
-              <span class="tt-summary-text"><b>TikTok LIVE</b><small>19 Ideen fürs Hochformat – Geschenke, Battles, Like-Spiele und Formate</small></span>
-              <i class="ph ph-caret-down tt-caret" aria-hidden="true"></i>
-            </summary>
-            <div class="tt-body">
-              <p class="tt-intro">TikTok gibt Chat, Geschenke und Likes eines LIVEs nicht an andere Dienste weiter. Diese Ideen laufen deshalb mit Werkzeugen, die du oder deine Mods von Hand bedienen – Zähler, Spiel-Rad, Timer – und mit dem Overlay im Hochformat. <button type="button" class="link-btn" data-tt-obs>Overlay auf Hochformat stellen →</button></p>
-              <div class="cat-chips" data-tt-chips role="group" aria-label="TikTok-Ideen filtern"></div>
-              <div class="tt-grid" data-tt-grid></div>
+            <!-- TikTok LIVE: ohne TikTok-Verbindung, mit Werkzeugen zum Bedienen von Hand -->
+            <div class="ix-tt-note" id="ix-tt-note" hidden>
+              <i class="ph ph-hand-pointing" aria-hidden="true"></i>
+              <p>TikTok gibt Chat, Geschenke und Likes nicht an andere Dienste weiter. Diese Ideen laufen mit Werkzeugen, die du oder deine Mods von Hand bedienen.</p>
+              <button type="button" class="btn btn--ghost btn--sm" data-tt-obs><i class="ph ph-device-mobile" aria-hidden="true"></i>Overlay auf Hochformat</button>
             </div>
-          </details>
+
+            <div id="grid" class="ix-groups" aria-live="polite"></div>
+          </div>
         </section>
 
         <!-- Vorschläge & Archiv -->

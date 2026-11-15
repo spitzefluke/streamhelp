@@ -198,3 +198,10 @@
 .ph.ph-pause-circle:before { content: "\e3a0"; }
 .ph.ph-infinity:before { content: "\e634"; }
 .ph.ph-warning-circle:before { content: "\e4e2"; }
+.ph.ph-chat-circle-dots:before { content: "\e16c"; }
+.ph.ph-storefront:before { content: "\e470"; }
+.ph.ph-fire:before { content: "\e242"; }
+.ph.ph-chart-bar:before { content: "\e150"; }
+.ph.ph-hash:before { content: "\e2a2"; }
+.ph.ph-coins:before { content: "\e78e"; }
+.ph.ph-dice-five:before { content: "\e1ee"; }

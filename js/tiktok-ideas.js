@@ -1,16 +1,16 @@
-// Content-Ideen für TikTok LIVE (Seite „Content-Ideen“, Abschnitt „TikTok LIVE“).
+// Content-Ideen für TikTok LIVE (Seite „Content-Ideen“, Plattform „TikTok LIVE“).
 // TikTok hat keine offizielle Schnittstelle für Chat, Geschenke und Likes eines LIVEs – StreamHelp liest dort also
 // nichts mit. Die Ideen sind deshalb so gebaut, dass du (oder deine Mods) sie mit Werkzeugen steuern, die ohne
 // Twitch-Daten laufen: Zähler (+1/−1), Spiel-Rad, Timer, Pause-Bildschirm und das Overlay im Hochformat (fmt=v).
-// Eingebunden von js/app.js (renderTikTokIdeas). Reine Anzeige – nichts wird gespeichert außer dem gewählten
-// Bereich und ob der Abschnitt offen ist (nur in diesem Browser).
+// Eingebunden von js/app.js (setupTikTok, tikTokGroups): Auf „Content-Ideen“ unter der Plattform „TikTok LIVE“.
+// Reine Anzeige – gespeichert wird nichts.
 import { h } from './extras-core.js';
 
 export const TT_CATS = [
-  { id: 'gifts', label: 'Geschenke & Ziele', icon: '🎁' },
-  { id: 'battle', label: 'Battles & Match', icon: '⚔️' },
-  { id: 'likes', label: 'Like- & Chat-Spiele', icon: '❤️' },
-  { id: 'formats', label: 'Formate & Serien', icon: '📺' },
+  { id: 'gifts', label: 'Geschenke & Ziele', icon: '🎁', hint: 'Ziele, Belohnungen, Danke-Runden' },
+  { id: 'battle', label: 'Battles & Match', icon: '⚔️', hint: 'Gegen andere LIVEs' },
+  { id: 'likes', label: 'Like- & Chat-Spiele', icon: '❤️', hint: 'Der Chat spielt mit' },
+  { id: 'formats', label: 'Formate & Serien', icon: '📺', hint: 'Wiederkehrende Sendungen' },
 ];
 
 // Werkzeuge in StreamHelp, die ohne TikTok-Daten funktionieren (Knopf im Detail)
@@ -109,50 +109,33 @@ export const TT_IDEAS = [
     tools: ['subathon', 'pause'], tip: 'Ruhige Musik ohne Urheberrechtsprobleme – TikTok schaltet LIVEs sonst stumm.' },
 ];
 
-const OPEN_KEY = 'sh_tt_open';
-const CAT_KEY = 'sh_tt_cat';
-const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-const set = (k, v) => { try { localStorage.setItem(k, v); } catch { /* privates Fenster: gilt nur jetzt */ } };
+let deps = null; // { openExtra, openObs }
 
-let deps = null; // { openExtra, openObs, toast, first }
-let cat = 'all';
-
-// Abschnitt zeichnen. first = TikTok in der Einführung gewählt → offen und oben.
-export function renderTikTokIdeas(d) {
+export function setupTikTok(d) {
   deps = d;
-  const box = document.getElementById('tt-ideas');
-  if (!box) return;
-  cat = get(CAT_KEY) ?? 'all';
-  if (cat !== 'all' && !TT_CATS.some((c) => c.id === cat)) cat = 'all';
-  const stored = get(OPEN_KEY);
-  box.open = stored === null ? !!d.first : stored === '1';
-  if (!box.dataset.ready) {
-    box.dataset.ready = '1';
-    box.addEventListener('toggle', () => set(OPEN_KEY, box.open ? '1' : '0'));
-  }
-  // Wer TikTok als Plattform gewählt hat, sieht den Abschnitt über den anderen Ideen
-  const section = document.querySelector('.ideas-section');
-  if (d.first && section && box.nextElementSibling !== section) section.before(box);
-  paint();
 }
 
-function paint() {
-  const box = document.getElementById('tt-ideas');
-  const list = TT_IDEAS.filter((i) => cat === 'all' || i.cat === cat);
-  box.querySelector('[data-tt-chips]').replaceChildren(...[{ id: 'all', label: 'Alle', icon: '✨' }, ...TT_CATS].map((c) => h('button', {
-    type: 'button', class: 'cat-chip', 'aria-pressed': String(c.id === cat),
-    onclick: () => { cat = c.id; set(CAT_KEY, cat); paint(); },
-  }, `${c.icon} ${c.label}`, h('span', { class: 'cat-n' }, String(c.id === 'all' ? TT_IDEAS.length : TT_IDEAS.filter((i) => i.cat === c.id).length)))));
-  box.querySelector('[data-tt-grid]').replaceChildren(...list.map((idea) => h('button', {
-    type: 'button', class: 'tt-card', 'data-tt': idea.id, onclick: () => openIdea(idea),
-  },
-  h('span', { class: 'tt-card-ico', 'aria-hidden': 'true' }, idea.icon),
-  h('span', { class: 'tt-card-text' },
-    h('b', {}, idea.title),
-    h('small', {}, idea.pitch)),
-  h('span', { class: 'tt-card-meta' },
-    h('span', {}, TT_CATS.find((c) => c.id === idea.cat)?.label ?? ''),
-    h('span', {}, `${idea.time} · ${idea.effort}`)))));
+// Zeilen für die Seite „Content-Ideen“ (Plattform TikTok LIVE): je Bereich eine Gruppe.
+// Gleicher Aufbau wie die Twitch-Ideen in der Liste (.tile mit .tile-bg, .tile-body), damit beide gleich aussehen.
+export function tikTokGroups(query = '') {
+  const q = query.trim().toLowerCase();
+  const found = TT_IDEAS.filter((i) => !q || `${i.title} ${i.pitch}`.toLowerCase().includes(q));
+  return {
+    total: TT_IDEAS.length,
+    found: found.length,
+    groups: TT_CATS.map((c) => ({
+      id: `tt-${c.id}`, label: c.label, hint: c.hint,
+      rows: found.filter((i) => i.cat === c.id).map((idea) => h('button', {
+        type: 'button', class: 'tile tile--tt', 'data-tt': idea.id, onclick: () => openIdea(idea),
+      },
+      h('span', { class: 'tile-bg', 'aria-hidden': 'true' }),
+      h('span', { class: 'tile-ico tile-ico--emoji', 'aria-hidden': 'true' }, idea.icon),
+      h('span', { class: 'tile-body' },
+        h('h3', { class: 'tile-title' }, idea.title),
+        h('p', { class: 'tile-desc' }, idea.pitch),
+        h('span', { class: 'tile-tag' }, idea.effort)))),
+    })).filter((g) => g.rows.length),
+  };
 }
 
 function openIdea(idea) {

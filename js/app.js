@@ -31,8 +31,8 @@ import {
   channelFromUrl, channelParam, cleanChannel, rememberChannel, rememberedChannel, setChannel, withChannelParam,
 } from './channel.js';
 import { h } from './extras-core.js';
-import { introAnswers, maybeOpenIntro, openIntro, setupIntro } from './intro.js';
-import { renderTikTokIdeas } from './tiktok-ideas.js';
+import { maybeOpenIntro, openIntro, setupIntro } from './intro.js';
+import { TT_IDEAS, setupTikTok, tikTokGroups } from './tiktok-ideas.js';
 import { applyI18n, initI18n, LANGS, langPicker, t as tr, watchI18n } from './i18n.js';
 import { avatarSrc } from './avatar.js';
 import { setupConsent } from './consent.js';
@@ -1038,10 +1038,10 @@ async function enterApp(user, { animate = false } = {}) {
   applyView(view);
   setPage(state.pendingPage ?? 'ideas');
   state.pendingPage = null;
-  renderHero();
   renderGrid();
   // TikTok LIVE: Ideen fürs Hochformat – oben und offen, wenn in der Einführung TikTok gewählt wurde
-  renderTikTokIdeas({ openExtra, openObs: () => { setObsFmt('v'); openObsWindow(); }, first: introAnswers().platform === 'tiktok' });
+  // TikTok LIVE: Ideen fürs Hochformat – auf „Content-Ideen“ unter der Plattform „TikTok LIVE“
+  setupTikTok({ openExtra, openObs: () => { setObsFmt('v'); openObsWindow(); } });
   loadGames();
   renderArchive();
   renderIdeas();
@@ -1109,7 +1109,6 @@ function renderHeader() {
   const hour = new Date().getHours();
   const hello = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
   $('#greeting').textContent = `${hello}, ${profile.username}`;
-  $('#hello-title').textContent = `${hello}, ${profile.username}!`;
 
   // Die Plakette zeigt, ob Zuschauer das Rad gerade per Kanalpunkten drehen können.
   $('#live-pill').hidden = !(twitch.connected && twitch.reward_active);
@@ -1517,11 +1516,6 @@ function startNote(tile) {
   return note;
 }
 
-// Der nächste Termin, der noch bevorsteht – sonst der, der gerade läuft.
-// Begrüßung oben auf den Content-Ideen (ohne Countdown – Termine stehen unter „Profil & Zeitplan“)
-function renderHero() {
-  $('#next-desc').textContent = 'Schön, dass du da bist. Such dir eine Idee für deinen nächsten Stream aus.';
-}
 
 // ---------- Archiv ----------
 function renderArchive() {
@@ -1649,23 +1643,52 @@ async function submitIdea(e) {
 }
 
 // ---------- Kacheln ----------
-// Arten für die Filter-Chips über dem Raster (Farbe = Punkt auf Chip und Kachel)
+// Seite „Content-Ideen“ nach Entwurf „Content-Ideen v2 · 1a“: oben Plattform (Twitch / TikTok LIVE), Filter nach
+// Art und Game, darunter bis zu 3 angepinnte Ideen als große Karten und alle anderen als Listen je Art (aufklappbar).
+// Arten für die Filter-Chips (Farbe = Punkt auf Chip, Gruppe und Karte)
 const IDEA_CATS = [
   { id: 'all', label: 'Alle' },
-  { id: 'join', label: 'Mitmachen', dot: 'var(--acc-3)' },
-  { id: 'chat', label: 'Chat-Spiele', dot: '#4fd6ff' },
-  { id: 'overlay', label: 'Overlay', dot: '#3ddc84' },
+  { id: 'join', label: 'Mitmachen', dot: 'var(--acc-3)', hint: 'Zuschauer machen direkt mit' },
+  { id: 'chat', label: 'Chat-Spiele', dot: '#4fd6ff', hint: 'Läuft über Chat-Befehle' },
+  { id: 'overlay', label: 'Overlay', dot: '#3ddc84', hint: 'Sichtbar im Stream' },
 ];
 const CHAT_KINDS = new Set(['forbidden', 'quiz', 'queue', 'giveaway', 'hotwords', 'poll', 'counter', 'chatcontrol', 'cup', 'bet', 'scratch']);
 const OVERLAY_KINDS = new Set(['wheel', 'subathon', 'pause', 'gamewheel', 'heart', 'emoterain']);
 const ideaCat = (t) => (CHAT_KINDS.has(t.kind) ? 'chat' : OVERLAY_KINDS.has(t.kind) ? 'overlay' : 'join');
-const IDEAS_VIEW_KEY = 'sh_ideas_view';
-function ideasView() {
-  try { return localStorage.getItem(IDEAS_VIEW_KEY) === 'list' ? 'list' : 'grid'; } catch { return 'grid'; }
+// Symbol je Idee (in der Liste links neben dem Titel)
+const KIND_ICON = {
+  wheel: 'ph-spinner-gap', prank: 'ph-lightning', bingo: 'ph-grid-nine', questions: 'ph-chat-circle-dots', pet: 'ph-paw-print',
+  shop: 'ph-storefront', challenge: 'ph-flag-checkered', tts: 'ph-speaker-high', cards: 'ph-cards', forbidden: 'ph-prohibit',
+  quiz: 'ph-question', queue: 'ph-users-three', giveaway: 'ph-gift', hotwords: 'ph-fire', poll: 'ph-chart-bar', counter: 'ph-hash',
+  chatcontrol: 'ph-joystick', cup: 'ph-trophy', bet: 'ph-coins', scratch: 'ph-ticket', subathon: 'ph-timer', pause: 'ph-coffee',
+  gamewheel: 'ph-dice-five', heart: 'ph-heartbeat', emoterain: 'ph-cloud-rain',
+};
+const PIN_MAX = 3;
+const IDEAS_PLAT_KEY = 'sh_ideas_plat';
+const IDEAS_CLOSED_KEY = 'sh_ideas_closed';
+// TikTok LIVE nur für Streamer und Mods (Zuschauer sehen die Twitch-Ideen ihres Streamers)
+function ideasPlat() {
+  if (!isTeam()) return 'twitch';
+  try { return localStorage.getItem(IDEAS_PLAT_KEY) === 'tiktok' ? 'tiktok' : 'twitch'; } catch { return 'twitch'; }
+}
+function setIdeasPlat(plat) {
+  try { localStorage.setItem(IDEAS_PLAT_KEY, plat); } catch { /* privates Fenster: gilt nur jetzt */ }
+  renderGrid();
+}
+function closedGroups() {
+  try { return new Set(JSON.parse(localStorage.getItem(IDEAS_CLOSED_KEY)) ?? []); } catch { return new Set(); }
+}
+function toggleGroup(id, head) {
+  const closed = closedGroups();
+  const open = closed.has(id);
+  if (open) closed.delete(id); else closed.add(id);
+  try { localStorage.setItem(IDEAS_CLOSED_KEY, JSON.stringify([...closed])); } catch { /* privates Fenster */ }
+  head.setAttribute('aria-expanded', String(open));
+  head.closest('.ix-group').classList.toggle('is-closed', !open);
+  document.getElementById(head.getAttribute('aria-controls')).hidden = !open;
 }
 
 function renderGrid() {
-  const grid = $('#grid');
   // „Ärgere den Streamer“ und das Bingo haben keinen Termin und stehen immer bei den Content-Ideen.
   // Vor dem Start sehen Zuschauer statt der Aktion einen Countdown (isLocked).
   const build = {
@@ -1674,50 +1697,104 @@ function renderGrid() {
   };
   // Termin-Kacheln (countdown) stehen nicht mehr bei den Ideen – sie bleiben nur für Archiv und Overlay „Nächster Stream“
   const all = state.tiles.filter((t) => build[t.kind]);
-  // Games: je Game erst die passenden Ideen, dann was zu jedem Game passt
+  // Games: das gewählte Game zuerst, dazu was zu jedem Game passt
   const game = gameById(selectedGame());
   const { mine, general } = game ? splitTiles(all, game.id) : { mine: [], general: all };
   const pool = [...mine, ...general];
-  // Suche (Titel + Beschreibung), Art und Favoriten zuerst – Favoriten und Ansicht nur in diesem Browser
   const query = ($('#grid-search')?.value ?? '').trim().toLowerCase();
+  const plat = ideasPlat();
+  $('#ix').dataset.plat = plat;
+  renderPlatforms(pool.length);
+  $('#ix-filters').hidden = plat === 'tiktok';
+  $('#ix-tt-note').hidden = plat !== 'tiktok';
+
+  if (plat === 'tiktok') {
+    const tt = tikTokGroups(query);
+    $('#ix-pinned').hidden = true;
+    $('#grid-title').textContent = 'TikTok LIVE';
+    if (!tt.found) paintEmpty(query);
+    else paintGroups(tt.groups.map((g) => ({ ...g, dot: '#ff4f79' })));
+    return;
+  }
+
+  // Suche (Titel + Beschreibung), Art und Favoriten – Favoriten nur in diesem Browser
   const found = pool.filter((t) => !query || `${t.title} ${t.description ?? ''}`.toLowerCase().includes(query));
   if (!IDEA_CATS.some((c) => c.id === state.ideaCat)) state.ideaCat = 'all';
   const cat = state.ideaCat;
   const favs = favTiles();
-  const shown = found.filter((t) => cat === 'all' || ideaCat(t) === cat)
-    .sort((a, b) => favs.has(b.id) - favs.has(a.id));
+  const mineIds = new Set(mine.map((t) => t.id));
+  const shown = found.filter((t) => cat === 'all' || ideaCat(t) === cat);
   renderCatChips(found);
   $('#plan-count').textContent = `${shown.length} von ${pool.length}`;
   $('#grid-title').textContent = game ? `Ideen für ${game.name}` : 'Content-Ideen';
-  const view = ideasView();
-  grid.classList.toggle('is-list', view === 'list');
-  $('#view-toggle').querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
 
   const hasPro = channelPro();
-  const make = (tile, i) => withFav(tile, withPro(tile, withCat(tile, (build[tile.kind] && !isLocked(tile) ? build[tile.kind] : buildTile)(tile, i)), hasPro), favs);
+  let i = 0;
+  const make = (tile) => withFav(tile, withPro(tile, withCat(tile, (build[tile.kind] && !isLocked(tile) ? build[tile.kind] : buildTile)(tile, i++)), hasPro), favs);
+  // Angepinnt: die ersten 3 Favoriten (ohne Suche), als große Karten
+  const pinned = query ? [] : shown.filter((t) => favs.has(t.id)).slice(0, PIN_MAX);
+  const pinnedIds = new Set(pinned.map((t) => t.id));
+  $('#ix-pinned').hidden = !pinned.length;
+  $('#ix-pinned-grid').replaceChildren(...pinned.map(make));
+
   if (!shown.length) {
-    grid.replaceChildren(h('div', { class: 'grid-empty' }, query ? `Keine Idee passt zu „${query}“. ` : 'Keine Idee passt zu diesem Filter. ',
-      h('button', { type: 'button', class: 'link-btn', onclick: resetIdeaFilters }, 'Filter zurücksetzen')));
-  } else if (!game || query || cat !== 'all') {
-    grid.replaceChildren(...shown.map(make));
+    paintEmpty(query);
   } else {
-    const isFav = (t) => favs.has(t.id);
-    const { mine: mineShown, general: generalShown } = splitTiles(shown, game.id);
-    // Favoriten (die zu diesem Game passen) als eigene Gruppe ganz oben
-    const starred = shown.filter(isFav);
-    const rest = (list) => list.filter((t) => !isFav(t));
-    let i = 0;
-    grid.replaceChildren(
-      ...(starred.length ? [gridHead('★ Deine Favoriten'), ...starred.map((t) => make(t, i++))] : []),
-      gridHead(`${game.icon} Passt zu ${game.name}`),
-      ...(mineShown.length ? rest(mineShown).map((t) => make(t, i++)) : [buildGamePlaceholder(game)]),
-      ...(rest(generalShown).length ? [gridHead('🎮 Passt zu jedem Game'), ...rest(generalShown).map((t) => make(t, i++))] : []),
-    );
+    // In jeder Liste: weitere Favoriten zuerst, dann was genau zum gewählten Game passt
+    const order = (a, b) => (favs.has(b.id) - favs.has(a.id)) || (mineIds.has(b.id) - mineIds.has(a.id));
+    const groups = IDEA_CATS.filter((c) => c.id !== 'all' && (cat === 'all' || cat === c.id)).map((c) => ({
+      id: c.id, label: c.label, hint: c.hint, dot: c.dot,
+      rows: shown.filter((t) => ideaCat(t) === c.id && !pinnedIds.has(t.id)).sort(order).map(make),
+    })).filter((g) => g.rows.length);
+    // Für dieses Game gibt es noch nichts Eigenes: Hinweis über den Listen
+    paintGroups(groups, game && !query && !mine.length ? [h('div', { class: 'grid is-list ix-note' }, buildGamePlaceholder(game))] : []);
   }
   // Läuft ein Countdown ab, wird die Kachel von selbst zur Aktion.
   state.unlockAt = Math.min(...shown.filter(isLocked).map((t) => Date.parse(t.target_at)), Infinity);
   updateCountdowns();  // Streameransicht offen? Dann die Content-Liste mitziehen
   if ($('#obs-dialog')?.open && state.profile?.is_admin) renderObsContent();
+}
+
+// Plattform-Karten: Twitch und TikTok LIVE (nur Streamer und Mods)
+function renderPlatforms(twitchCount) {
+  const box = $('#ix-plat');
+  box.hidden = !isTeam();
+  if (box.hidden) return;
+  const plat = ideasPlat();
+  const items = [
+    { id: 'twitch', icon: 'ph-twitch-logo', label: 'Twitch', n: twitchCount, sub: `${twitchCount} Ideen · Mitmachen, Chat-Spiele, Overlay` },
+    { id: 'tiktok', icon: 'ph-tiktok-logo', label: 'TikTok LIVE', n: TT_IDEAS.length, sub: `${TT_IDEAS.length} Ideen fürs Hochformat · von Hand bedient` },
+  ];
+  box.replaceChildren(...items.map((p) => h('button', {
+    type: 'button', class: `ix-plat-btn ix-plat-btn--${p.id}`, 'aria-pressed': String(p.id === plat), 'data-plat': p.id,
+    onclick: () => { if (p.id !== ideasPlat()) setIdeasPlat(p.id); },
+  },
+  h('span', { class: 'ix-plat-ico', 'aria-hidden': 'true' }, h('i', { class: `ph ${p.icon}` })),
+  h('span', { class: 'ix-plat-text' }, h('b', {}, p.label), h('small', {}, p.sub)),
+  h('span', { class: 'ix-plat-n' }, String(p.n)))));
+}
+
+// Listen je Art: Kopf mit Pfeil, Punkt, Name, Anzahl und Hinweis; zu bleibt zu (in diesem Browser gemerkt)
+function paintGroups(groups, before = []) {
+  const closed = closedGroups();
+  $('#grid').replaceChildren(...before, ...groups.map((g) => {
+    const open = !closed.has(g.id);
+    const bodyId = `ix-g-${g.id}`;
+    const head = h('button', { type: 'button', class: 'ix-group-head', 'aria-expanded': String(open), 'aria-controls': bodyId },
+      h('i', { class: 'ph ph-caret-down ix-caret', 'aria-hidden': 'true' }),
+      g.dot && h('span', { class: 'cat-dot', 'aria-hidden': 'true' }),
+      h('span', { class: 'ix-group-label' }, g.label),
+      h('span', { class: 'ix-group-n' }, String(g.rows.length)),
+      g.hint && h('span', { class: 'ix-group-hint' }, g.hint));
+    head.addEventListener('click', () => toggleGroup(g.id, head));
+    return h('section', { class: `ix-group${open ? '' : ' is-closed'}`, style: g.dot ? `--dot:${g.dot}` : null },
+      head, h('div', { class: 'grid is-list ix-rows', id: bodyId, hidden: !open }, ...g.rows));
+  }));
+}
+
+function paintEmpty(query) {
+  $('#grid').replaceChildren(h('div', { class: 'grid-empty' }, query ? `Keine Idee passt zu „${query}“. ` : 'Keine Idee passt zu diesem Filter. ',
+    h('button', { type: 'button', class: 'link-btn', onclick: resetIdeaFilters }, 'Filter zurücksetzen')));
 }
 
 function renderCatChips(found) {
@@ -1744,6 +1821,8 @@ function withCat(tile, el) {
   el.dataset.cat = c.id;
   el.style.setProperty('--dot', c.dot);
   el.prepend(h('span', { class: 'tile-cat' }, h('span', { class: 'cat-dot', 'aria-hidden': 'true' }), c.label));
+  // Symbol: in der Liste über dem kleinen Vorschaubild
+  el.querySelector('.tile-bg')?.after(h('i', { class: `ph ${KIND_ICON[tile.kind] ?? 'ph-lightbulb'} tile-ico`, 'aria-hidden': 'true' }));
   return el;
 }
 
@@ -1844,10 +1923,9 @@ function renderGames() {
   const sel = selectedGame();
   const live = liveGameId(g.data);
   const items = [{ id: 'all', name: 'Alle Games', icon: '✨' }, ...activeGames(g.data)];
-  $('#games-strip').replaceChildren(...items.map((game) => h('button', {
-    type: 'button', role: 'tab', class: 'game-chip', 'aria-selected': String(game.id === sel), onclick: () => selectGame(game.id),
-  }, h('span', { class: 'game-chip-ico', 'aria-hidden': 'true' }, game.icon), h('span', { class: 'game-chip-name' }, game.name),
-  game.id === live && h('span', { class: 'game-chip-live' }, 'Live'))));
+  const select = $('#games-select');
+  select.replaceChildren(...items.map((game) => h('option', { value: game.id }, `${game.icon} ${game.name}${game.id === live ? ' · live' : ''}`)));
+  select.value = sel;
   const liveText = $('#games-live');
   const recent = g.data.live_at && Date.now() - Date.parse(g.data.live_at) < 15 * 60_000;
   liveText.hidden = !recent || !g.data.live_category;
@@ -1912,10 +1990,6 @@ function withFav(tile, el, favs) {
     renderGrid();
   });
   return h('div', { class: `tile-wrap${on ? ' is-fav' : ''}` }, el, star);
-}
-
-function gridHead(text) {
-  return h('div', { class: 'grid-head' }, h('h3', {}, text));
 }
 
 function buildGamePlaceholder(game) {
@@ -2229,13 +2303,8 @@ function setupDialogs() {
   $('#games-edit').addEventListener('click', openGamesDialog);
   setupTour();
   $('#games-form').addEventListener('submit', saveGames);
-  $('#view-toggle').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-view]');
-    if (!btn) return;
-    try { localStorage.setItem(IDEAS_VIEW_KEY, btn.dataset.view); } catch { /* egal */ }
-    renderGrid();
-  });
-  $('#grid').addEventListener('click', (e) => { if (e.target.closest('.tile') && !e.target.closest('.tile--placeholder')) markStart(START, 'idea'); });
+  $('#games-select').addEventListener('change', (e) => selectGame(e.target.value));
+  $('#ix').addEventListener('click', (e) => { if (e.target.closest('.tile') && !e.target.closest('.tile--placeholder, .tile--tt')) markStart(START, 'idea'); });
   let searchTimer = 0;
   $('#grid-search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderGrid, 120); });
   $('#idea-form').addEventListener('submit', submitIdea);
@@ -2358,7 +2427,6 @@ async function freshVariantFor(spin) {
   state.variants = variants;
   if (!variants.some((x) => x.id === state.variantId)) state.variantId = variants[0].id;
   renderWheelPanel();
-  renderHero();
   if (state.spinning) setVariantInputsDisabled(true);
 }
 
@@ -2641,7 +2709,6 @@ async function saveWheelVariants() {
     we.dirty = false;
     renderWheelEdit();
     renderWheelPanel();
-    renderHero();
     msg.textContent = '✓ Gespeichert – das Rad dreht ab jetzt mit den neuen Ergebnissen.';
     msg.classList.add('is-ok');
   } catch (err) {
@@ -2681,7 +2748,6 @@ async function saveWheelCost(e) {
     const res = await state.api.setWheelCost(cost);
     state.twitch = { ...state.twitch, reward_cost: res.cost, reward_title: res.title ?? state.twitch.reward_title };
     renderWheelPanel();
-    renderHero();
     formMsg(form, `✓ Drehen kostet jetzt ${Number(res.cost).toLocaleString('de-DE')} Kanalpunkte.`, true);
   } catch (err) {
     console.error(err);
@@ -6113,7 +6179,6 @@ async function saveTile(e) {
     state.tiles = state.tiles.map((t) => (t.id === updated.id ? updated : t));
     state.activeTile = updated;
     discordAnnounceTile(updated);
-    renderHero();
     renderGrid();
     renderArchive();
     fillTileDialog(updated);
@@ -8197,7 +8262,6 @@ function renderTwitchPanel() {
 async function refreshTwitch() {
   state.twitch = await state.api.twitchStatus().then((t) => t ?? { connected: false }).catch(() => ({ connected: false }));
   renderHeader();
-  renderHero();
   renderWheelPanel();
   renderBotPanel();
 }

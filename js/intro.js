@@ -153,7 +153,6 @@ function tourSteps() {
   if (r === 'viewer') {
     return [
       { target: '#games-section', kind: 'look', title: 'Games', text: 'Wähle das Game – darunter stehen die passenden Content-Ideen. Ist der Stream live, ist das richtige Game schon ausgewählt.' },
-      { target: '#next-departure', kind: 'look', title: 'Als Nächstes', text: 'Hier steht, was als Nächstes im Stream passiert – mit Countdown.' },
       { target: '#grid .tile', kind: 'look', title: 'Content-Ideen', text: 'Ein Klick auf eine Kachel zeigt, worum es geht – Glücksrad, Bingo, Verlosung, Hot Words und mehr.' },
       { target: '#acct-btn', kind: 'look', title: 'Kanal & Konto', text: 'Hier wechselst du zwischen den Streamern auf StreamHelp, stellst Hell/Dunkel ein und meldest dich ab.' },
     ];
