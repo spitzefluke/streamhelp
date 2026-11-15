@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-HCRV4/7i1+p3Y+sGpUfXOHhNnymSKswedQwcCYw1EEo='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="same-origin">
+  <script src="js/a11y.js?v=2e8e03ec6d"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game-Mods für Twitch-Streams – bald bei StreamHelp</title>
+  <meta name="description" content="Bald bei StreamHelp: Mods für Minecraft, Terraria, Valheim, Stardew Valley und Lethal Company – Kanalpunkte, Bits und Chat-Befehle lösen direkt im Spiel etwas aus.">
+  <link rel="canonical" href="https://streamhelp.de/mods.html">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="StreamHelp">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:title" content="Game-Mods für Twitch-Streams – bald bei StreamHelp">
+  <meta property="og:description" content="Bald bei StreamHelp: Mods für Minecraft, Terraria, Valheim, Stardew Valley und Lethal Company – Kanalpunkte, Bits und Chat-Befehle lösen direkt im Spiel etwas aus.">
+  <meta property="og:url" content="https://streamhelp.de/mods.html">
+  <meta property="og:image" content="https://streamhelp.de/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0d0b26">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/seo.css">
+  <!-- Game-Mods (in Planung): statisch, ohne Skripte. Die Ideen-Liste zwischen mods:start und mods:end schreibt
+       tools/mod-ideas-page.mjs aus js/mod-ideas.js (nicht von Hand ändern – dort ändern und das Werkzeug ausführen). -->
+  <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "StreamHelp", "item": "https://streamhelp.de/"}, {"@type": "ListItem", "position": 2, "name": "Game-Mods", "item": "https://streamhelp.de/mods.html"}]}</script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/favicon.svg" width="28" height="28" alt="">StreamHelp</a>
+      <nav aria-label="Themen"><a href="twitch-overlay.html">OBS-Overlay</a><a href="twitch-chatbot.html">Chat-Bot</a><a href="twitch-content-ideen.html">Content-Ideen</a><a href="obs-overlay-einrichten.html">Anleitung</a><a href="mods.html" aria-current="page">Game-Mods</a></nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <p class="crumbs"><a href="./">StreamHelp</a> › Game-Mods</p>
+      <div class="hero">
+        <p class="eyebrow">Bald · in Planung</p>
+        <h1>Game-Mods: Der Chat spielt mit</h1>
+        <p class="lead">Kanalpunkte, Bits, Abos und Chat-Befehle lösen bei StreamHelp heute schon Alerts, Sounds und Spiele im Overlay aus. Als Nächstes sollen sie direkt im Spiel etwas tun – Mobs, Wetter, Geschenke, Bosse. Hier sind unsere Ideen.</p>
+        <div class="cta"><a class="btn btn-solid" href="./#login">Kostenlos starten</a><a class="btn btn-line" href="#ideen">Ideen ansehen</a></div>
+      </div>
+      <section aria-labelledby="wie">
+        <h2 id="wie">So soll es funktionieren</h2>
+        <ul class="cards"><li><h3>Mod installieren</h3><p>Eine kleine Mod für dein Spiel verbindet sich mit deinem StreamHelp-Kanal – mit einem Schlüssel aus dem Dashboard, ohne dein Twitch-Passwort.</p></li><li><h3>Auslöser wählen</h3><p>Im Dashboard legst du fest, was Kanalpunkte, Bits, Abos, Raids oder Chat-Befehle im Spiel auslösen dürfen – und wie oft.</p></li><li><h3>Sicher und fair</h3><p>Raid-Schutz und „Alle pausieren“ gelten auch im Spiel. Alles läuft nur, solange du es erlaubst.</p></li></ul>
+        <p>Nur für Spiele, die Mods offiziell erlauben, und nur im Einzelspieler oder auf deinem eigenen Server. Für Online-Spiele mit Anti-Cheat wie Fortnite oder Valorant gibt es keine Mods – dort wären sie ein Regelverstoß.</p>
+      </section>
+      <section aria-labelledby="ideen">
+        <h2 id="ideen">Ideen je Game</h2>
+<!-- mods:start -->
+        <h3 id="mod-minecraft">⛏️ Minecraft</h3>
+        <p>Java Edition mit Fabric – im Einzelspieler oder auf deinem eigenen Server.</p>
+        <ul class="cards"><li><h3>Mob-Überraschung</h3><p><strong>Ein Zuschauer löst Kanalpunkte ein – und hinter dir steht plötzlich ein Creeper.</strong></p><p>Neben dir erscheinen Mobs, die den Namen des Zuschauers über dem Kopf tragen. Wie viele und welche, legst du im Dashboard fest.</p><p><small>Auslöser: 🎟️ Kanalpunkte</small></p></li><li><h3>Der Chat macht das Wetter</h3><p><strong>Gewitter, Nacht oder strahlender Sonnenschein – die Mehrheit im Chat entscheidet.</strong></p><p>Eine kurze Abstimmung im Overlay (!regen, !nacht, !sonne). Die Gewinner-Option ändert Wetter oder Tageszeit im Spiel.</p><p><small>Auslöser: 🗳️ Abstimmung · 💬 Chat-Befehl</small></p></li><li><h3>Lieferung vom Chat</h3><p><strong>Bits lassen eine Kiste vom Himmel fallen – mit nützlichem Loot oder kompletter Unsinn.</strong></p><p>Eine Kiste landet neben dir. Je mehr Bits, desto besser der Inhalt. Ein Zettel darin sagt, von wem sie kommt.</p><p><small>Auslöser: 💎 Bits</small></p></li><li><h3>Der Stream-Dino zieht ein</h3><p><strong>Dein Stream-Haustier aus dem Overlay begleitet dich auch im Spiel.</strong></p><p>Ein zahmer Begleiter folgt dir. Füttert der Chat das Stream-Haustier, wird er im Spiel größer – hat er Hunger, bleibt er stehen.</p><p><small>Auslöser: 🎟️ Kanalpunkte · 💬 Chat-Befehl · mit Stream-Haustier</small></p></li><li><h3>Bauen nach Glücksrad</h3><p><strong>Das Glücksrad aus dem Overlay legt die nächste Bau-Regel fest.</strong></p><p>„Nur Holz“, „Kein Springen für 5 Minuten“, „Alles in Pink“: Das Ergebnis des Rads gilt sofort im Spiel und läuft als Timer mit.</p><p><small>Auslöser: 🎡 Glücksrad · mit Glücksrad</small></p></li><li><h3>Tode zählen sich selbst</h3><p><strong>Jeder Tod landet automatisch im Zähler – kein Mod muss mehr !tode + tippen.</strong></p><p>Stirbst du, zählt der Zähler im Overlay hoch und der Bot schreibt die Todesursache in den Chat.</p><p><small>Auslöser: ⚙️ Automatisch · mit Zähler</small></p></li></ul>
+        <h3 id="mod-terraria">🌳 Terraria</h3>
+        <p>tModLoader (kostenlos auf Steam).</p>
+        <ul class="cards"><li><h3>Der Hype-Train ruft den Boss</h3><p><strong>Erreicht der Hype-Train Stufe 3, erscheint ein Boss – ob du bereit bist oder nicht.</strong></p><p>Welcher Boss je Stufe kommt, stellst du ein. Bis dahin zeigt das Overlay, wie nah der Chat dran ist.</p><p><small>Auslöser: 🚂 Hype-Train</small></p></li><li><h3>Emote-Regen wird Münzregen</h3><p><strong>Regnet es im Overlay Emotes, regnet es im Spiel Münzen und Herzen.</strong></p><p>Ein gekaufter Emote-Regen lässt gleichzeitig Münzen, Herzen oder Sterne um dich herum fallen.</p><p><small>Auslöser: 🎟️ Kanalpunkte · 💎 Bits · mit Emote-Regen</small></p></li><li><h3>Waffe des Tages</h3><p><strong>Der Chat wählt aus drei Waffen – und nur mit der wird heute gekämpft.</strong></p><p>Zu Beginn eine Umfrage im Overlay. Die Gewinner-Waffe landet im Inventar, die anderen sind bis zum Stream-Ende gesperrt.</p><p><small>Auslöser: 🗳️ Abstimmung · mit Umfrage</small></p></li></ul>
+        <h3 id="mod-valheim">🪓 Valheim</h3>
+        <p>BepInEx – auf deiner eigenen Welt bzw. deinem Server.</p>
+        <ul class="cards"><li><h3>Ein Raid wird zum Überfall</h3><p><strong>Kommt ein Raid auf Twitch, greift im Spiel eine Gegnerwelle an.</strong></p><p>Je größer der Raid, desto mehr Gegner – sie tragen die Namen des raidenden Kanals. Danach dankt der Bot im Chat.</p><p><small>Auslöser: 🚀 Raid</small></p></li><li><h3>Odins Segen oder Fluch</h3><p><strong>Zuschauer entscheiden, ob du schneller läufst – oder nass und durchgefroren bist.</strong></p><p>Zwei Belohnungen: „Segen“ gibt für 2 Minuten mehr Ausdauer, „Fluch“ macht dich nass und kalt. Der Name steht im Overlay.</p><p><small>Auslöser: 🎟️ Kanalpunkte</small></p></li><li><h3>Gegner mit Chat-Namen</h3><p><strong>Die aktivsten Chatter tauchen als Gegner in deiner Welt auf.</strong></p><p>Wer heute viel schreibt, landet als Name über einem Gegner. Wer besiegt wurde, bekommt eine Erwähnung im Chat.</p><p><small>Auslöser: 💬 Chat-Befehl</small></p></li></ul>
+        <h3 id="mod-stardew">🌾 Stardew Valley</h3>
+        <p>SMAPI – im Einzelspieler oder Koop mit Freunden.</p>
+        <ul class="cards"><li><h3>Geschenkkorb im Briefkasten</h3><p><strong>Ein Abo bringt am nächsten Spieltag einen Brief mit Geschenk.</strong></p><p>Der Brief trägt den Namen des Zuschauers und eine kurze Nachricht, im Paket liegen Saatgut oder ein seltenes Item.</p><p><small>Auslöser: ⭐ Abo</small></p></li><li><h3>Wetter-Wette</h3><p><strong>Sonne, Regen oder Sturm morgen? Der Chat tippt – das Spiel löst auf.</strong></p><p>Die Zuschauer-Wette fragt jeden Abend im Spiel das Wetter für morgen ab und wertet am nächsten Morgen automatisch aus.</p><p><small>Auslöser: 🗳️ Abstimmung · mit Zuschauer-Wette</small></p></li><li><h3>Das Dorf liest den Chat</h3><p><strong>Dorfbewohner sagen ab und zu, was gerade im Chat steht.</strong></p><p>Kurze Chat-Nachrichten erscheinen als Sprechblase über Dorfbewohnern – gefiltert wie beim Vorlesen, mit Wortsperre.</p><p><small>Auslöser: 💬 Chat-Befehl · mit Vorlesen</small></p></li></ul>
+        <h3 id="mod-lethal">🔦 Lethal Company</h3>
+        <p>BepInEx – in deiner eigenen Lobby, alle Mitspieler mit Mod.</p>
+        <ul class="cards"><li><h3>Monster auf Bestellung</h3><p><strong>Kanalpunkte setzen ein Monster in deine Nähe – die Crew muss damit leben.</strong></p><p>Welches Monster und wie oft pro Runde, legst du fest. Die Mitspieler sehen im Spiel, wer es geschickt hat.</p><p><small>Auslöser: 🎟️ Kanalpunkte</small></p></li><li><h3>Licht aus</h3><p><strong>Bits schalten in der Anlage für 10 Sekunden den Strom ab.</strong></p><p>Alle Lichter gehen aus, Türen bleiben stehen. Ein Countdown im Overlay zeigt, wann es weitergeht.</p><p><small>Auslöser: 💎 Bits</small></p></li><li><h3>Schafft die Crew die Quote?</h3><p><strong>Der Chat tippt, ob die Quote erreicht wird – das Spiel löst automatisch auf.</strong></p><p>Am Anfang jeder Quote startet eine Wette. Ist die Frist um, liest die Mod das Ergebnis aus und zahlt die Tipp-Punkte aus.</p><p><small>Auslöser: 🗳️ Abstimmung · mit Zuschauer-Wette</small></p></li></ul>
+<!-- mods:end -->
+      </section>
+      <section aria-labelledby="fahrplan">
+        <h2 id="fahrplan">Fahrplan</h2>
+<!-- steps:start -->
+        <ol><li><strong>Ideen sammeln (jetzt):</strong> Welche Mods würdet ihr im Stream wirklich nutzen? Vorschläge gern im Discord oder unter „Vorschläge“.</li><li><strong>Minecraft zuerst:</strong> Eine erste Mod für Minecraft (Fabric), die Kanalpunkte, Bits und Chat-Befehle von StreamHelp empfängt.</li><li><strong>Weitere Games:</strong> Danach Terraria, Valheim, Stardew Valley und Lethal Company – je nachdem, was am meisten gewünscht wird.</li></ol>
+<!-- steps:end -->
+      </section>
+      <section aria-labelledby="faq">
+        <h2 id="faq">Häufige Fragen</h2>
+        <details><summary>Wann kommen die Mods?</summary><p>Es gibt noch keinen Termin. Gerade sammeln wir Ideen; als Erstes ist eine Mod für Minecraft geplant.</p></details><details><summary>Kosten die Mods etwas?</summary><p>Das steht noch nicht fest. Alles, was StreamHelp heute kostenlos anbietet, bleibt kostenlos.</p></details><details><summary>Warum keine Mods für Fortnite oder Valorant?</summary><p>Diese Spiele erlauben keine Mods und haben Anti-Cheat – wer dort Mods nutzt, riskiert eine Sperre. Für Fortnite gibt es dafür die Content-Ideen im Overlay.</p></details><details><summary>Wie kann ich mitreden?</summary><p>Schreib uns im <a href="https://discord.gg/XkVG2ZEDG" rel="noopener">Discord</a> oder im Dashboard unter „Vorschläge“, welche Mod du im Stream nutzen würdest.</p></details>
+      </section>
+
+      <section class="more" aria-labelledby="more-title">
+        <h2 id="more-title">Mehr zu StreamHelp</h2>
+        <ul><li><a href="twitch-content-ideen.html">Glücksrad, Bingo &amp; mehr</a></li><li><a href="twitch-overlay.html">OBS-Overlay &amp; Alerts</a></li><li><a href="twitch-chatbot.html">Chat-Bot auf Deutsch</a></li><li><a href="ueber-uns.html#roadmap">Roadmap</a></li></ul>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">
+      <span>© 2026 StreamHelp · Hamburg</span>
+      <nav aria-label="Rechtliches"><a href="./">Startseite</a><a href="ueber-uns.html">Über uns</a><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a><a href="cookies.html">Cookies</a><a href="nutzungsbedingungen.html">Nutzungsbedingungen</a></nav>
+    </div>
+  </footer>
+</body>
+</html>
