@@ -488,6 +488,8 @@ code { font-family: var(--font-mono); font-size: .9em; }
 }
 .archive .ar-vod:hover { background: rgba(var(--acc-rgb), .22); text-decoration: none; }
 .panel .empty { display: block; padding: 16px; border-radius: 14px; background: rgba(var(--surf-rgb), .8); border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+/* Leere Listen: Streamy wartet mit (feste 3/4-Ansicht, assets/streamy) */
+.panel .empty { min-height: 64px; padding-left: 74px; background-image: url("../assets/streamy/three.webp"); background-repeat: no-repeat; background-position: 16px center; background-size: 46px auto; display: flex; align-items: center; }
 
 .ideas-box { padding: 16px; border-radius: 18px; background: rgba(var(--surf-rgb), .8); border: 1px solid var(--line); display: grid; gap: 12px; }
 .ideas-box form { display: grid; gap: 12px; }
@@ -2231,7 +2233,7 @@ body.obs-page .demo-banner { font-size: 12px; padding: 4px 12px; }
 .tile-fav:hover { transform: scale(1.08); background: rgba(10, 13, 19, .8); }
 .tile-fav.is-on { color: #ffd166; border-color: rgba(255, 209, 102, .5); }
 @media (hover: none) { .tile-fav { opacity: .85; } }
-.grid-empty { grid-column: 1 / -1; padding: 32px; border: 1px dashed var(--line-2); border-radius: 16px; color: var(--muted); font-size: 14px; }
+.grid-empty { grid-column: 1 / -1; padding: 32px 32px 32px 108px; border: 1px dashed var(--line-2); border-radius: 16px; color: var(--muted); font-size: 14px; min-height: 120px; background: url("../assets/streamy/three.webp") no-repeat 28px center / 62px auto; }
 .grid-empty .link-btn { padding: 0; border: 0; background: none; color: var(--acc-ink); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
 .grid-empty .link-btn:hover { text-decoration: underline; }
 
@@ -3308,3 +3310,13 @@ body.obs-page .obs-insp-head { padding-bottom: 8px; border-bottom: 1px solid var
   .tt-body { padding: 0 14px 14px; }
   .tt-dialog-body { padding: 0 16px 18px; }
 }
+
+/* ---------- Streamy, das Maskottchen (js/streamy.js) ---------- */
+.streamy { position: relative; display: block; }
+.streamy-canvas { display: block; width: 100%; height: 100%; cursor: grab; outline: none; -webkit-tap-highlight-color: transparent; }
+.streamy-canvas.is-drag { cursor: grabbing; }
+.streamy-canvas:focus-visible { outline: 2px solid var(--acc, #39ff6a); outline-offset: 4px; border-radius: 12px; }
+/* Feste Ansicht ohne Skript (leere Listen, Laden): wippt leicht */
+.streamy-pic { display: block; width: var(--sz, 64px); height: auto; aspect-ratio: 370 / 408; object-fit: contain; animation: streamy-bob 2.4s ease-in-out infinite; }
+@keyframes streamy-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5%); } }
+@media (prefers-reduced-motion: reduce) { .streamy-pic { animation: none; } }

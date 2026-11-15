@@ -94,7 +94,7 @@ ol.x-list { list-style: none; }
 .x-item-actions { display: flex; gap: 6px; flex: none; }
 .x-item-actions .btn--sm { min-height: 32px; padding: 0 10px; }
 .x-list--compact .x-item { padding: 6px 10px; font-size: 14px; }
-.x-empty { color: var(--dim); font-size: 14px; padding: 6px 2px; }
+.x-empty { display: flex; align-items: center; min-height: 48px; color: var(--dim); font-size: 14px; padding: 6px 2px 6px 50px; background: url("../assets/streamy/three.webp") no-repeat 4px center / 38px auto; }
 .x-rank { margin: 0; padding: 0; list-style: none; counter-reset: rank; display: grid; gap: 6px; }
 .x-rank > li {
   counter-increment: rank; display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; gap: 8px; align-items: center;
@@ -104,7 +104,7 @@ ol.x-list { list-style: none; }
 .x-rank > li:nth-child(1)::before { content: "🥇"; }
 .x-rank > li:nth-child(2)::before { content: "🥈"; }
 .x-rank > li:nth-child(3)::before { content: "🥉"; }
-.x-rank > li.x-empty { display: block; background: none; border: 0; }
+.x-rank > li.x-empty { display: flex; background-color: transparent; border: 0; }
 .x-rank > li.x-empty::before { content: none; }
 .x-rank > li > span { color: var(--muted); font-size: 14px; white-space: nowrap; }
 @media (max-width: 860px) {

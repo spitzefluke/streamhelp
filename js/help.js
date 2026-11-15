@@ -5,6 +5,7 @@
 //   · Showcase: showcase_list – nur Kanäle, deren Streamer zugestimmt haben.
 import { avatarSrc } from './avatar.js';
 import { currentLang, sourceOf, t } from './i18n.js';
+import { mountStreamy } from './streamy.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 let api = null;
@@ -25,6 +26,9 @@ function setupChat(root) {
   const log = $('#help-log', root);
   const form = $('#help-form', root);
   if (!log || !form) return;
+  // Streamy beantwortet die Fragen: dreht sich oben in der Karte und hüpft, wenn eine Antwort kommt
+  const host = $('#help-streamy', root);
+  const streamy = host ? mountStreamy(host, { label: t('Streamy, das Maskottchen von StreamHelp') }) : null;
   const say = (text, who, cls = '') => {
     const li = document.createElement('li');
     li.className = `nc-help-msg nc-help-msg--${who} ${cls}`.trim();
@@ -52,6 +56,7 @@ function setupChat(root) {
     if (!answer) answer = faqAnswer(root, q);
     wait.classList.remove('is-wait');
     wait.textContent = answer;
+    streamy?.hop();
     history.push({ role: 'user', content: q }, { role: 'assistant', content: answer });
     busy = false;
   };

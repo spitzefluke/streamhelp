@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wKoOPhm+kB0pPTjcd9pgDZLbsQuk7+K9rdifI0l/8BM='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-/U4tL75+R9FbnCdP2co4cngCOhzoeRldsMGlc7nL6W0='; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
@@ -47,7 +47,10 @@
     .btn-primary { background: var(--twitch); color: #fff; }
     .btn-ghost { border: 1px solid var(--line); color: var(--text); background: rgba(255, 255, 255, .04); }
     footer { font-size: 12px; color: #6b6585; }
-    @media (prefers-reduced-motion: reduce) { .tv::before, .tv::after, .code { animation: none; } }
+    /* Streamy (von hinten) sucht die Seite: dreht den Kopf hin und her */
+    .streamy { display: block; width: 120px; height: auto; margin: -8px auto -4px; filter: drop-shadow(0 0 22px rgba(57, 255, 106, .25)); animation: look 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+    @keyframes look { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg) translateY(-3px); } }
+    @media (prefers-reduced-motion: reduce) { .tv::before, .tv::after, .code, .streamy { animation: none; } }
   </style>
 </head>
 <body>
@@ -58,6 +61,7 @@
         <span class="live"><i></i>Offline</span>
       </div>
     </div>
+    <img class="streamy" id="streamy" src="/assets/streamy/back.webp" alt="Streamy, das Maskottchen von StreamHelp, schaut sich suchend um" width="156" height="212">
     <h1>Dieser Stream ist offline</h1>
     <p>Unter <span class="path" id="path">dieser Adresse</span> gibt es nichts zu sehen – vielleicht ein Tippfehler im Link oder die Seite ist umgezogen.</p>
     <div class="actions">
@@ -74,6 +78,7 @@
       var base = /\.github\.io$/.test(location.hostname) && /^[\w.-]+$/.test(first) ? '/' + first + '/' : '/';
       document.getElementById('go-home').setAttribute('href', base);
       document.getElementById('go-dashboard').setAttribute('href', base + '#dashboard');
+      document.getElementById('streamy').setAttribute('src', base + 'assets/streamy/back.webp');
       var shown = location.pathname + location.search;
       try { shown = decodeURIComponent(shown); } catch (e) { /* kaputte %-Folge: roh anzeigen */ }
       document.getElementById('path').textContent = shown.slice(0, 120);

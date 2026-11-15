@@ -231,6 +231,11 @@ html:has(.nct:not([hidden])) { scroll-behavior: smooth; }
 .nc-help-chips .nc-chip { padding: 8px 12px; font-size: 13px; }
 .nc-help-form input { min-height: 44px; }
 .nc-help-log:empty { display: none; }
+/* Streamy oben rechts in der KI-Hilfe (js/help.js → js/streamy.js) */
+.nc-help { position: relative; }
+.nc-help-streamy { position: absolute; top: -34px; right: 6px; width: 104px; height: 124px; filter: drop-shadow(0 0 18px rgba(57, 255, 106, .25)); }
+.nc-help .nc-group-lead { padding-right: 96px; }
+@media (max-width: 480px) { .nc-help-streamy { width: 84px; height: 100px; top: -26px; } .nc-help .nc-group-lead { padding-right: 76px; } }
 /* Formular zum Aufklappen unter den Karten */
 .nc-mail { margin-top: 18px; border: 1px solid var(--color-neutral-800); border-radius: 14px; background: color-mix(in srgb, var(--color-surface) 45%, transparent); }
 .nc-mail > summary { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 22px; cursor: pointer; list-style: none; font-family: var(--nc-font-heading); font-weight: 500; font-size: 16px; }

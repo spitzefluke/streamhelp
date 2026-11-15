@@ -709,6 +709,13 @@ a.pop-item { text-decoration: none; }
 .intro-close:hover, .intro-close:focus-visible { background: rgba(var(--acc-rgb), .14); color: var(--text); outline: none; }
 .intro-step { display: grid; gap: 32px; animation: intro-in .45s var(--ease-out); }
 .intro-head { display: grid; gap: 12px; }
+/* Streamy in der Einführung (js/intro.js) und Tour (js/tour.js) */
+.intro-step--welcome { position: relative; }
+.intro-streamy--welcome { position: absolute; top: -12px; right: 0; width: clamp(96px, 20vw, 170px); height: clamp(112px, 24vw, 200px); }
+.intro-step--welcome > .intro-head { padding-right: clamp(96px, 20vw, 170px); }
+.intro-streamy--done { width: 130px; height: 150px; margin-bottom: -10px; }
+.tour-streamy { --sz: 46px; flex: none; margin: -14px 0 -6px -4px; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .4)); }
+.tour-head .tour-tag { margin-right: auto; }
 .intro-eyebrow { margin: 0; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .intro-eyebrow.is-acc { color: var(--acc-ink); }
 .intro-title { margin: 0; font: 700 clamp(26px, 4vw, 38px)/1.1 var(--font-body); letter-spacing: -.02em; text-transform: none; color: var(--text-strong); text-wrap: balance; outline: none; }

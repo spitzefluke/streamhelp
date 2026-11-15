@@ -7,6 +7,7 @@
 // Die Antworten merkt sich dieser Browser (sh_intro_v2_<user>), gefragt wurde (sh_tour_<user>) einmal.
 import { h } from './extras-core.js';
 import { startTour } from './tour.js';
+import { mountStreamy } from './streamy.js';
 
 const QUESTIONS = [
   { id: 'exp', title: 'Wie viel Stream-Erfahrung hast du?', sub: 'Damit wir nichts erklären, was du schon kannst.', options: [
@@ -30,6 +31,13 @@ const PROMISES = [
   ['ph-flag-checkered', 'Startklar in 5 Schritten', 'Danach weißt du, wie dein erster Stream gut läuft.'],
 ];
 const ease = 380;
+
+// Streamy begrüßt und verabschiedet (js/streamy.js); eingehängt, sobald der Schritt in der Seite steht
+function streamyBox(cls, opts = {}) {
+  const box = h('div', { class: `intro-streamy ${cls}` });
+  queueMicrotask(() => { if (box.isConnected) { const s = mountStreamy(box, opts); if (opts.hop) setTimeout(() => s.hop(), 450); } });
+  return box;
+}
 
 const intro = {
   deps: null, step: 0, ans: { exp: null, goal: null, platform: null }, phase: 'flow', timer: 0,
@@ -199,6 +207,7 @@ function welcomeView(r) {
       streamer ? 'Los geht’s' : 'Tour starten', icon('ph-arrow-right')),
     h('span', { class: 'intro-hint' }, `Dauert ca. ${streamer ? '1 Minute' : '30 Sekunden'} · jederzeit links unter „Einführung“`));
   return h('section', { class: 'intro-step intro-step--welcome' },
+    streamyBox('intro-streamy--welcome', { label: 'Streamy, das Maskottchen von StreamHelp, begrüßt dich' }),
     h('div', { class: 'intro-head' },
       h('p', { class: 'intro-eyebrow is-acc' }, name ? `Willkommen, ${name}` : 'Willkommen'),
       h('h2', { class: 'intro-title intro-title--xl', id: 'intro-title', tabindex: '-1' },
@@ -253,7 +262,7 @@ function doneView(r) {
   const n = planSteps().length;
   const streamer = r === 'streamer';
   return h('section', { class: 'intro-step intro-step--done' },
-    h('span', { class: 'intro-done-ico', 'aria-hidden': 'true' }, icon('ph-check')),
+    streamyBox('intro-streamy--done', { pose: 'three', hop: true, label: 'Streamy freut sich mit dir' }),
     h('h2', { class: 'intro-title intro-title--lg', id: 'intro-title', tabindex: '-1' }, 'Du kennst dich aus.'),
     h('p', { class: 'intro-lead' }, streamer
       ? `Als Nächstes wartet „Dein Start“ auf den Content-Ideen – dein Plan hat ${n} Schritte${intro.ans.goal === 'affiliate' ? ', die Affiliate-Ziele behältst du in der Statistik im Blick' : ''}. Die Einführung findest du jederzeit links unter „Einführung“.`

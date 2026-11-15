@@ -43,7 +43,10 @@ export function startTour(steps, { onEnd } = {}) {
   const skip = h('button', { type: 'button', class: 'tour-skip', onclick: () => go(1) }, 'Überspringen');
   const next = h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: () => go(1) });
   const card = h('div', { class: 'tour-card', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'tour-title', 'aria-describedby': 'tour-text' },
-    h('div', { class: 'tour-head' }, tag,
+    h('div', { class: 'tour-head' },
+      // Streamy führt durch die Tour (feste Ansicht, wippt leicht – css/style.css .streamy-pic)
+      h('img', { class: 'streamy-pic tour-streamy', src: 'assets/streamy/three.webp', alt: '', width: '46', height: '51', decoding: 'async' }),
+      tag,
       h('button', { type: 'button', class: 'tour-close', 'aria-label': 'Einführung beenden', title: 'Beenden', onclick: () => end(false) }, icon('ph-x'))),
     title, text, ok,
     h('div', { class: 'tour-foot' }, count, h('span', { class: 'tour-btns' }, skip, back, next)));
