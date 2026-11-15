@@ -44,6 +44,7 @@ function setupChat(root) {
     busy = true;
     form.q.value = '';
     say(q, 'me');
+    streamy?.react('nod'); // überlegt
     const wait = say(t('Ich schau nach'), 'bot', 'is-wait');
     let answer = '';
     try {

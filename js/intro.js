@@ -35,7 +35,7 @@ const ease = 380;
 // Streamy begrüßt und verabschiedet (js/streamy.js); eingehängt, sobald der Schritt in der Seite steht
 function streamyBox(cls, opts = {}) {
   const box = h('div', { class: `intro-streamy ${cls}` });
-  queueMicrotask(() => { if (box.isConnected) { const s = mountStreamy(box, opts); if (opts.hop) setTimeout(() => s.hop(), 450); } });
+  queueMicrotask(() => { if (box.isConnected) { const s = mountStreamy(box, opts); if (opts.react) setTimeout(() => s.react(opts.react), 450); } });
   return box;
 }
 
@@ -207,7 +207,7 @@ function welcomeView(r) {
       streamer ? 'Los geht’s' : 'Tour starten', icon('ph-arrow-right')),
     h('span', { class: 'intro-hint' }, `Dauert ca. ${streamer ? '1 Minute' : '30 Sekunden'} · jederzeit links unter „Einführung“`));
   return h('section', { class: 'intro-step intro-step--welcome' },
-    streamyBox('intro-streamy--welcome', { label: 'Streamy, das Maskottchen von StreamHelp, begrüßt dich' }),
+    streamyBox('intro-streamy--welcome', { react: 'wiggle', label: 'Streamy, das Maskottchen von StreamHelp, begrüßt dich' }),
     h('div', { class: 'intro-head' },
       h('p', { class: 'intro-eyebrow is-acc' }, name ? `Willkommen, ${name}` : 'Willkommen'),
       h('h2', { class: 'intro-title intro-title--xl', id: 'intro-title', tabindex: '-1' },
@@ -262,7 +262,7 @@ function doneView(r) {
   const n = planSteps().length;
   const streamer = r === 'streamer';
   return h('section', { class: 'intro-step intro-step--done' },
-    streamyBox('intro-streamy--done', { pose: 'three', hop: true, label: 'Streamy freut sich mit dir' }),
+    streamyBox('intro-streamy--done', { react: 'spin', label: 'Streamy freut sich mit dir' }),
     h('h2', { class: 'intro-title intro-title--lg', id: 'intro-title', tabindex: '-1' }, 'Du kennst dich aus.'),
     h('p', { class: 'intro-lead' }, streamer
       ? `Als Nächstes wartet „Dein Start“ auf den Content-Ideen – dein Plan hat ${n} Schritte${intro.ans.goal === 'affiliate' ? ', die Affiliate-Ziele behältst du in der Statistik im Blick' : ''}. Die Einführung findest du jederzeit links unter „Einführung“.`

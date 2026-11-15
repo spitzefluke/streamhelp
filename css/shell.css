@@ -716,6 +716,8 @@ a.pop-item { text-decoration: none; }
 .intro-streamy--done { width: 130px; height: 150px; margin-bottom: -10px; }
 .tour-streamy { --sz: 46px; flex: none; margin: -14px 0 -6px -4px; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .4)); }
 .tour-head .tour-tag { margin-right: auto; }
+.tour-streamy.is-hop { animation: tour-streamy-hop .55s cubic-bezier(.3, 1.6, .5, 1) 1, streamy-bob 2.4s ease-in-out .55s infinite; }
+@keyframes tour-streamy-hop { 0% { transform: translateY(0) scale(1, 1); } 30% { transform: translateY(-14px) scale(.95, 1.06); } 70% { transform: translateY(0) scale(1.06, .94); } 100% { transform: translateY(0) scale(1, 1); } }
 .intro-eyebrow { margin: 0; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .intro-eyebrow.is-acc { color: var(--acc-ink); }
 .intro-title { margin: 0; font: 700 clamp(26px, 4vw, 38px)/1.1 var(--font-body); letter-spacing: -.02em; text-transform: none; color: var(--text-strong); text-wrap: balance; outline: none; }

@@ -231,11 +231,19 @@ html:has(.nct:not([hidden])) { scroll-behavior: smooth; }
 .nc-help-chips .nc-chip { padding: 8px 12px; font-size: 13px; }
 .nc-help-form input { min-height: 44px; }
 .nc-help-log:empty { display: none; }
-/* Streamy oben rechts in der KI-Hilfe (js/help.js → js/streamy.js) */
-.nc-help { position: relative; }
-.nc-help-streamy { position: absolute; top: -34px; right: 6px; width: 104px; height: 124px; filter: drop-shadow(0 0 18px rgba(57, 255, 106, .25)); }
-.nc-help .nc-group-lead { padding-right: 96px; }
-@media (max-width: 480px) { .nc-help-streamy { width: 84px; height: 100px; top: -26px; } .nc-help .nc-group-lead { padding-right: 76px; } }
+/* Streamy groß neben dem Chat der KI-Hilfe (js/help.js → js/streamy.js): linke Spalte, Antworten als Sprechblasen */
+.nc-help { position: relative; display: grid; grid-template-columns: clamp(120px, 28%, 170px) minmax(0, 1fr); column-gap: 18px; align-content: start; }
+.nc-help > * { grid-column: 2; }
+.nc-help > .nc-help-streamy { grid-column: 1; grid-row: 1 / span 7; align-self: start; position: sticky; top: 90px; width: 100%; aspect-ratio: 170 / 205; height: auto; filter: drop-shadow(0 0 22px rgba(57, 255, 106, .28)); }
+.nc-help-msg--bot { position: relative; }
+.nc-help-msg--bot::before { content: ""; position: absolute; left: -6px; bottom: 8px; border: 6px solid transparent; border-right-color: rgba(255, 255, 255, .06); border-left: 0; }
+/* Schmale Karte: Streamy neben Überschrift, Chat und Eingabe darunter in voller Breite */
+.nc-help { container-type: inline-size; }
+@container (max-width: 520px) {
+  .nc-help > .nc-help-streamy { grid-row: 1 / span 3; position: static; }
+  .nc-help > :is(.nc-help-log, .nc-help-chips, .nc-help-form, .nc-help-note) { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) { .nc-help { grid-template-columns: 96px minmax(0, 1fr); column-gap: 10px; } }
 /* Formular zum Aufklappen unter den Karten */
 .nc-mail { margin-top: 18px; border: 1px solid var(--color-neutral-800); border-radius: 14px; background: color-mix(in srgb, var(--color-surface) 45%, transparent); }
 .nc-mail > summary { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 22px; cursor: pointer; list-style: none; font-family: var(--nc-font-heading); font-weight: 500; font-size: 16px; }

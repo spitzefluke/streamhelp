@@ -120,6 +120,9 @@ export function startTour(steps, { onEnd } = {}) {
   function show() {
     const s = step();
     title.textContent = s.title;
+    // Streamy hüpft bei jedem neuen Schritt kurz (css/shell.css .tour-streamy.is-hop)
+    const pic = card.querySelector('.tour-streamy');
+    if (pic && !reduced) { pic.classList.remove('is-hop'); void pic.offsetWidth; pic.classList.add('is-hop'); }
     text.textContent = s.text;
     count.textContent = `${i + 1} / ${list.length}`;
     paint();

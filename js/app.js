@@ -37,6 +37,7 @@ import { applyI18n, initI18n, LANGS, langPicker, t as tr, watchI18n } from './i1
 import { avatarSrc } from './avatar.js';
 import { setupConsent } from './consent.js';
 import { setupHelp } from './help.js';
+import { mountDashboardGuide, mountLandingGuide } from './streamy-guide.js';
 import { botTrap, captchaToken, looksLikeBot, mfaGate, mountCaptcha, renderModSecurity, renderSecurityPage, resetCaptcha, setupSecurity } from './security.js';
 import { DEFAULT_GAMES, GAME_GROUPS, GAMES, activeGames, gameById, liveGameId, splitTiles } from './games.js';
 import { forgetSecret, loadSecret, saveSecret } from './secret-store.js';
@@ -395,6 +396,7 @@ function showLanding() {
   $('#landing').hidden = false;
   setupLanding($('#landing'), { stats: () => state.api.platformStats(), charity: () => state.api.charityPool(), facts: landingFacts() });
   setupHelp($('#landing'), state.api);
+  mountLandingGuide($('#landing')); // Streamy begleitet beim Scrollen
   renderLandingChannels();
   document.body.classList.remove('in-app');
   applyLook();
@@ -977,6 +979,7 @@ async function enterApp(user, { animate = false } = {}) {
   const appEl = $('#app');
   appEl.hidden = false;
   document.body.classList.add('in-app');
+  mountDashboardGuide(appEl, { userName: () => state.profile?.username ?? '' }); // Streamy als Helfer unten rechts
   applyLook();
   if (location.hash === '#login') history.replaceState(null, '', `${location.pathname}${location.search}`);
   if (animate && !reducedMotion) {
